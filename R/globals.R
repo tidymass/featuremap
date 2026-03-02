@@ -1,0 +1,33 @@
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(c(
+    ".", ".data", ".N",
+    "annotate_isotope",
+    "Annotated_fraction", "Annotated_nodes",
+    "base_prize", "bin",
+    "coalesce",
+    "Compound_ID", "Compound_name", "Compound.name",
+    "condition", "cost",
+    "degree",
+    "E", "E<-", "edge", "edge_freq", "edges",
+    "final_prize", "freq", "from", "functional_summary",
+    "furrr_options", "future_map_dfr",
+    "gsize",
+    "HHI",
+    "HMDB_ID", "HMDB.ID",
+    "if_else", "imap", "imap_dfr", "importance", "Importance",
+    "INCHI_From", "INCHI_ID", "INCHI_To", "induced_subgraph", "isotope",
+    "KEGG_ID", "KEGG.ID",
+    "Lab.ID", "Level",
+    "mean_weighted_score", "metabolite", "metabolite_feature_cluster", "module",
+    "Module", "Module_score", "Module_size",
+    "n", "N", "n_real", "name", "Node_freq", "nodes",
+    "p", "peakIndex", "penalty", "polarity", "prize", "pvalue",
+    "R6Class", "Robustness",
+    "score", "score_fc", "score_norm", "score_p", "sequential", "SS", "SS.ms2",
+    "str_detect",
+    "tibble", "to", "type", "Type",
+    "unique_variable_id",
+    "V", "V<-", "variable_id", "vcount",
+    "weighted_anno_score", "weighted_score"
+  ))
+}

@@ -1,0 +1,487 @@
+#' Annotate functional modules using database, literature, and LLM models
+#'
+#' Perform functional annotation of statistically significant metabolic
+#' modules by integrating:
+#' \itemize{
+#'   \item Database-derived metabolite annotations
+#'   \item Literature evidence from PubMed (optional)
+#'   \item Large language model (LLM)-based functional interpretation
+#' }
+#'
+#' @param res A result list returned from \code{identify_module()}.
+#'   Must contain \code{module_table}, \code{module_score}, and \code{refdata}.
+#' @param p Character. Column name in \code{res$module_score}
+#'   used for module significance filtering (e.g., "p" or "fdr").
+#' @param pcutoff Numeric. Significance threshold for selecting modules.
+#' @param ref_data Data frame containing metabolite annotation
+#'   information (e.g., HMDB or KEGG reference table).
+#' @param species Character. Species name (used only for biological plausibility assessment).
+#' @param biospecimen Character. Biospecimen type (e.g., plasma, tissue).
+#' @param phenotype Character. Study phenotype (used for confidence assessment only).
+#' @param pubmed Logical. Whether to perform PubMed-based annotation.
+#' @param top_compound Numeric. Proportion threshold used for selecting
+#'   top metabolites (currently reserved for future use).
+#' @param years Integer. Number of recent years for PubMed literature search.
+#' @param top_paper Integer. Number of top-ranked papers retained per metabolite.
+#' @param min_similarity Numeric. Similarity threshold for embedding-based
+#'   filtering of literature evidence.
+#' @param provider Character. LLM provider (e.g., "openai").
+#' @param embed_model Character. Embedding model name.
+#' @param llm_model Character. LLM model used for module interpretation.
+#' @param NCBI_api_key Character. PubMed API key. If NULL, retrieved from
+#'   environment variable \code{NCBI_API_KEY}.
+#' @param llm_api_key Character. API key for the selected LLM provider.
+#'
+#' @return A modified \code{res} object containing:
+#' \itemize{
+#'   \item \code{module_function}: LLM-based functional interpretation results
+#' }
+#'
+#' @details
+#' Module annotation proceeds in three stages:
+#' \enumerate{
+#'   \item Database-based metabolite annotation and ranking
+#'   \item Literature retrieval and embedding-based filtering (optional)
+#'   \item LLM-based functional summarization and confidence scoring
+#' }
+#'
+#' Only statistically significant modules (based on \code{p} and \code{pcutoff})
+#' are annotated. If no modules pass the threshold, an empty result is returned.
+#'
+#' @export
+annotate_module = function(res = res,
+                           p = "fdr",
+                           pcutoff = 0.05,
+                           ref_data = NULL,
+                           species = "human",
+                           biospecimen = NULL,
+                           phenotype = NULL,
+                           pubmed = TRUE,
+                           top_compound = 0.1,
+                           years = 5,
+                           top_paper = 3,
+                           min_similarity = 0.6,
+                           provider    = "openai",
+                           embed_model = "text-embedding-3-small",
+                           llm_model = "gpt-4.1-mini",
+                           NCBI_api_key = "", # https://account.ncbi.nlm.nih.gov/settings/
+                           llm_api_key = ""){
+
+
+  # Annotate metabolites via database ------------------------------------------
+  message("Step 1: Annotating the module via well-established database ...\n")
+
+  if(res$refdata == "hmdb"){
+
+    sig_module <- res$module_table %>%
+      mutate(Robustness = Node_freq) %>%
+      filter(Module %in% (res$module_score %>% filter(.data[[p]]<pcutoff) %>% pull(Module))) %>%
+      arrange(Module, desc(Importance), desc(Robustness), Type) %>%
+      left_join(ref_data, by = c("HMDB_ID" = "id"))
+
+    }else if(res$refdata == "kegg"){
+
+    sig_module <- res$module_table %>%
+      mutate(Robustness = Node_freq) %>%
+      filter(Module %in% (res$module_score %>% filter(.data[[p]]<pcutoff) %>% pull(Module))) %>%
+      arrange(Module, desc(Importance), desc(Robustness), Type) %>%
+      left_join(ref_data, by = c("KEGG_ID" = "id"))
+
+  }
+
+  if (is.null(sig_module) || nrow(sig_module) == 0) {
+
+    message("No significant modules passed the cutoff (", p, " < ", pcutoff, "). Returning empty module_function.\n")
+    res$module_function <- tibble::tibble()
+    return(res)
+
+  }
+
+  module_list <- sig_module %>%
+    split(.$Module) %>%
+    purrr::set_names(paste0("module", names(.)))
+
+  ## Top metabolite-level statistics summary -------
+  module_list_top <- lapply(module_list, function(module) {
+
+    module2 <- module %>%
+      dplyr::mutate(weighted_score = 0.7 * Importance + 0.3 * Robustness) %>%
+      dplyr::filter(is.finite(weighted_score)) %>%
+      dplyr::arrange(dplyr::desc(weighted_score))
+
+    s <- module2$weighted_score
+    n <- length(s)
+    if (n == 0) return(module2)
+
+    total <- sum(s)
+    if (!is.finite(total) || total <= 0) {
+      return(dplyr::slice_head(module2, n = min(3, n)))
+    }
+
+    share <- s / total
+    if (requireNamespace("mclust", quietly = TRUE) && n >= 8) {
+
+      fit <- mclust::Mclust(share, G = 1:3)  # BIC chooses K
+      cls <- fit$classification
+      k   <- max(cls)
+
+      if (k == 1) {
+        cum <- cumsum(s) / total
+        k_cov <- which(cum >= 0.20)[1]
+        if (is.na(k_cov)) k_cov <- n
+        topN <- min(max(5, k_cov), min(20, n))
+      } else {
+        means <- tapply(share, cls, mean)
+        head_comp <- which.max(means)
+        topN <- sum(cls == head_comp)
+
+        topN <- max(5, min(20, topN, n))
+      }
+
+    } else {
+      # fallback: coverage
+      cum <- cumsum(s) / total
+      k_cov <- which(cum >= 0.20)[1]
+      if (is.na(k_cov)) k_cov <- n
+      topN <- min(max(6, k_cov), min(20, n))
+    }
+
+    dplyr::slice_head(module2, n = topN)
+  })
+
+  ## Class-level statistics summary -----
+  if(res$refdata == "hmdb"){
+
+    module_class <- imap(
+      module_list,
+      ~ {
+        mod_non_top <- .x
+
+        if (nrow(mod_non_top) == 0) {
+          return(tibble())
+        }
+
+        out <- mod_non_top %>%
+          dplyr::group_by(class) %>%
+          dplyr::summarise(
+            n_metabolites = round(n()/nrow(mod_non_top), 2),
+            metabolites = paste(unique(Compound_name), collapse = "{}"),
+            HMDB_IDs = paste(unique(HMDB_ID), collapse = "{}"),
+            mean_importance = mean(Importance, na.rm = TRUE),
+            mean_robustness = mean(Robustness, na.rm = TRUE),
+            .groups = "drop"
+          ) %>%
+          dplyr::mutate(
+            importance_rank = dplyr::percent_rank(mean_importance),
+            robustness_rank = dplyr::percent_rank(mean_robustness),
+            importance_level = dplyr::case_when(
+              importance_rank >= 0.7 ~ "high",
+              importance_rank >= 0.3 ~ "medium",
+              TRUE ~ "low"
+            ),
+            robustness_level = dplyr::case_when(
+              robustness_rank >= 0.7 ~ "high",
+              robustness_rank >= 0.3 ~ "medium",
+              TRUE ~ "low"
+            )
+          ) %>%
+          dplyr::select(
+            class,
+            n_metabolites,
+            metabolites,
+            HMDB_IDs,
+            importance_level,
+            robustness_level
+          )
+
+        out
+      }
+    )
+
+  }else if(res$refdata == "kegg"){
+
+    module_class <- imap(
+      module_list,
+      ~ {
+        mod_non_top <- .x
+
+        if (nrow(mod_non_top) == 0) {
+          return(tibble())
+        }
+
+        out <- mod_non_top %>%
+          dplyr::group_by(class) %>%
+          dplyr::summarise(
+            n_metabolites = round(n()/nrow(mod_non_top), 2),
+            metabolites = paste(unique(Compound_name), collapse = "{}"),
+            KEGG_IDs = paste(unique(KEGG_ID), collapse = "{}"),
+            mean_importance = mean(Importance, na.rm = TRUE),
+            mean_robustness = mean(Robustness, na.rm = TRUE),
+            .groups = "drop"
+          ) %>%
+          dplyr::mutate(
+            importance_rank = dplyr::percent_rank(mean_importance),
+            robustness_rank = dplyr::percent_rank(mean_robustness),
+            importance_level = dplyr::case_when(
+              importance_rank >= 0.7 ~ "high",
+              importance_rank >= 0.3 ~ "medium",
+              TRUE ~ "low"
+            ),
+            robustness_level = dplyr::case_when(
+              robustness_rank >= 0.7 ~ "high",
+              robustness_rank >= 0.3 ~ "medium",
+              TRUE ~ "low"
+            )
+          ) %>%
+          dplyr::select(
+            class,
+            n_metabolites,
+            metabolites,
+            KEGG_IDs,
+            importance_level,
+            robustness_level
+          )
+
+        out
+      }
+    )
+
+  }
+
+
+  ## Module-level statistics summary ----
+  module_statistics <- {
+
+    full_module_table <- res$module_table %>%
+      mutate(Robustness = Node_freq)
+
+    module_list_all <- full_module_table %>%
+      split(.$Module) %>%
+      purrr::set_names(paste0("module", names(.)))
+
+    tmp_all <- purrr::imap_dfr(module_list_all, function(module, name) {
+      imp <- module$Importance
+      imp <- imp[is.finite(imp)]
+      hhi <- if (length(imp) == 0) {
+        NA_real_
+      } else {
+        share <- imp / sum(imp)
+        sum(share^2)
+      }
+
+      tibble::tibble(
+        Module = name,
+        HHI = hhi,
+        Robustness = mean(module$Robustness, na.rm = TRUE),
+        Annotated_fraction = mean(module$Type == "annotated", na.rm = TRUE)
+      )
+    })
+
+    q_hhi  <- quantile(tmp_all$HHI, probs = c(0.3, 0.7), na.rm = TRUE)
+    q_rob  <- quantile(tmp_all$Robustness, probs = c(0.3, 0.7), na.rm = TRUE)
+    q_ann  <- quantile(tmp_all$Annotated_fraction, probs = c(0.3, 0.7), na.rm = TRUE)
+
+    level3 <- function(x, qs) {
+      dplyr::case_when(
+        is.na(x) ~ "NA",
+        x >= qs[2] ~ "high",
+        x >= qs[1] ~ "medium",
+        TRUE ~ "low"
+      )
+    }
+
+    tmp_all <- tmp_all %>%
+      dplyr::mutate(
+        Signal_concentration = level3(HHI, q_hhi),
+        Structural_stability = level3(Robustness, q_rob),
+        Annotation_completeness = level3(Annotated_fraction, q_ann)
+      )
+
+    tmp_sig <- tmp_all %>%
+      dplyr::filter(Module %in% names(module_list))
+
+    split(tmp_sig, tmp_sig$Module) %>%
+      purrr::map(function(df) {
+        list(
+          Signal_concentration = df$Signal_concentration,
+          Structural_stability = df$Structural_stability,
+          Annotation_completeness = df$Annotation_completeness
+        )
+      })
+  }
+
+  message("Step 1 has finished!\n")
+
+
+
+  # Annotate metabolites via pubmed --------------------------------------------
+
+  if(pubmed){
+
+    message("Step 2: Annotating the module via pubmed literatures...\n")
+
+    rentrez::set_entrez_key(NCBI_api_key)
+
+    message("-Searching related literatures via PubMed...")
+
+    module_pubmed <- lapply(names(module_list_top), function(mod) {
+
+      message("--Searching literatures for: ", mod)
+
+      module_df  <- module_list_top[[mod]]
+      module_anno <- convert_module_to_met_list(module_df, refdata = res$refdata)
+      annotate_pubmed_for_module(module_anno  = module_anno,
+                                 phenotype    = phenotype,
+                                 NCBI_api_key = NCBI_api_key,
+                                 retmax       = 10,
+                                 years        = years)
+    })
+
+    names(module_pubmed) <- names(module_list_top)
+
+    # Embed pubmed-based annotation results and choose those with similarity > cutoff -------
+
+    message("\n-Embedding the literatures via ", embed_model, "...")
+
+    embedding_dim <- get_embedding_dim(
+      embed_model = embed_model,
+      llm_api_key = llm_api_key,
+      provider    = provider
+    )
+
+
+    module_pubmed_embed <- lapply(names(module_pubmed), function(mod) {
+
+      message("--Embedding for ", mod)
+
+      emb_cache_mod <- precompute_pubmed_embeddings_for_module(
+        module_pub  = module_pubmed[[mod]],
+        llm_api_key = llm_api_key,
+        embed_model = embed_model,
+        provider    = provider,
+        embedding_dim = embedding_dim)
+
+      embed_module_pubmed(
+        module_pub  = module_pubmed[[mod]],
+        module_df   = module_list_top[[mod]],
+        llm_api_key = llm_api_key,
+        provider    = provider,
+        embed_model = embed_model,
+        emb_cache   = emb_cache_mod,
+        embedding_dim = embedding_dim,
+        top_score   = 5,
+        refdata = res$refdata,
+        min_similarity = min_similarity)
+
+    })
+
+    names(module_pubmed_embed) <- names(module_pubmed)
+
+
+    # Re-rank and Summarize the pubmed-based annotation ------------------------
+    message("\n-Reranking the related literatures via ", llm_model, "...")
+
+    module_pubmed_embed_refined <- refine_module_pubmed_with_llm(
+      module_pubmed_embed = module_pubmed_embed,
+      llm_api_key         = llm_api_key,
+      llm_model           = llm_model,
+      provider            = provider,
+      top_paper           = top_paper,
+      max_chars_abstract  = 1500,
+      sleep_seconds       = 1)
+
+    names(module_pubmed_embed_refined) <- names(module_pubmed_embed)
+
+    message("\n-Summarizing the top related literatures for final pubmed-based annotation...")
+
+    module_pubmed_embed_refined <- add_metabolite_summaries_to_modules(
+      module_pubmed_embed_refined,
+      provider = provider,
+      llm_api_key = llm_api_key,
+      llm_model   = llm_model)
+
+    message("\nStep 2 has finished!\n")
+
+    message("Step 3: Generating prompt for LLM-based functional annotation...\n")
+
+  }else{
+
+    module_pubmed_embed_refined = NULL
+
+    message("Step 2: Generating prompt for LLM-based functional annotation...\n")
+  }
+
+  # Generate input prompt to LLM module ----------------------------------------
+  all_modules_ready <- lapply(
+    seq_along(module_list_top),
+    function(i) {
+      prepare_module(
+        k = i,
+        module_list_top = module_list_top,
+        module_list = module_list,
+        module_class = module_class,
+        module_pubmed_embed_refined = module_pubmed_embed_refined,
+        module_statistics = module_statistics,
+        pubmed = pubmed
+      )
+    }
+  )
+
+  names(all_modules_ready) <- names(module_list_top)
+
+  study_context <- list(
+    species = species,
+    biospecimen = biospecimen,
+    phenotype = phenotype
+  )
+
+  all_module_prompts <- lapply(
+    all_modules_ready,
+    build_module_prompt,
+    study_context = study_context)
+
+  names(all_module_prompts) <- names(all_modules_ready)
+
+  if(pubmed){
+    message("Step 3 has finished!\n")
+  }else{
+    message("Step 2 has finished!\n")
+  }
+
+
+  # Use LLM module to annotate functional module -------------------------------
+  if(pubmed){
+    message("Step 4: Annotating the module via large language model...\n")
+  }else{
+    message("Step 3: Annotating the module via large language model...\n")
+  }
+
+  if (length(all_modules_ready) == 0) {
+    message("No modules to annotate. Returning empty module_function.\n")
+    res$module_function <- tibble::tibble()
+    return(res)
+  }
+
+  all_results <- annotate_all_modules(
+    all_modules_ready = all_modules_ready,
+    study_context     = study_context,
+    provider          = provider,
+    llm_api_key       = llm_api_key,
+    model             = llm_model,
+    max_tokens        = 2000,
+    temperature       = 0,
+    sleep_sec         = 0)
+
+
+  res$module_function = all_results
+
+  if(pubmed){
+    message("\nStep 4 has finished!\n")
+  }else{
+    message("\nStep 3 has finished!\n")
+  }
+
+  return(res)
+
+}
+

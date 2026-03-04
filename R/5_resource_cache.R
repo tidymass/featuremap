@@ -9,7 +9,7 @@ featuremap_resource_base_url <- function() {
 featuremap_cache_dir <- function() {
   dir <- getOption("featuremap.resources.cache_dir")
   if (is.null(dir) || !nzchar(dir)) {
-    dir <- tools::R_user_dir("featureMAP", which = "cache")
+    dir <- tools::R_user_dir("featuremap", which = "cache")
   }
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   if (!dir.exists(dir)) {

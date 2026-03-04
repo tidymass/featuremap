@@ -3,7 +3,7 @@
 \docType{data}
 \name{demo_feature_table}
 \alias{demo_feature_table}
-\title{Demo Feature Table for featureMAP}
+\title{Demo Feature Table for featuremap}
 \format{
 A data frame with 7 variables:
 \describe{
@@ -23,10 +23,10 @@ Internal demo dataset for package examples.
 data(demo_feature_table)
 }
 \description{
-A small example feature table used to demonstrate the featureMAP workflow.
+A small example feature table used to demonstrate the featuremap workflow.
 }
 \examples{
-data("demo_feature_table", package = "featureMAP")
+data("demo_feature_table", package = "featuremap")
 head(demo_feature_table)
 
 check_feature_table(demo_feature_table)

@@ -1,4 +1,4 @@
-#' featureMAP package
+#' featuremap package
 #'
 #' @keywords internal
 "_PACKAGE"

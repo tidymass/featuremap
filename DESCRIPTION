@@ -1,4 +1,4 @@
-Package: featureMAP
+Package: featuremap
 Title: Network-Based Functional Module Identification in Metabolomics
 Version: 0.0.0.9000
 Authors@R: c(
@@ -12,7 +12,7 @@ Authors@R: c(
 Author: Yuting Wang [aut, cre], Xiaotao Shen [aut, cph]
 Maintainer: Yuting Wang <ytwangzero@outlook.com>
 Description: 
-    featureMAP provides a network-based framework for identifying and 
+    featuremap provides a network-based framework for identifying and 
     interpreting functional metabolic modules from metabolomics data. 
     The package integrates feature-level statistical scoring, 
     prize-collecting Steiner forest (PCSF) network optimization, 

@@ -6,26 +6,57 @@
 #' accuracy, retention time tolerance, isotope patterns, and optional
 #' MS2 confirmation.
 #'
-#' @param feature_table A data frame containing raw MS1 feature information,
-#'   including m/z and retention time columns.
-#' @param ms2_table Optional data frame containing MS2 spectra information
-#'   for feature-level confirmation. Can be NULL if MS2 is not available.
-#' @param metabolite_database A data frame of candidate metabolites with
-#'   theoretical m/z, formula, and other annotation fields. If NULL,
-#'   a cached GitHub resource will be loaded based on `refdata`.
-#' @param refdata Character. Name of the reference database
-#'   (e.g., "hmdb" or "kegg").
-#' @param column Character. Name of the m/z column in `feature_table`.
-#' @param ms1_match_ppm Numeric. Mass tolerance in parts-per-million (ppm)
-#'   used for MS1 matching.
-#' @param mfc_rt_tol Numeric. Retention time tolerance used for filtering
-#'   candidate matches.
-#' @param isotope_number Integer. Number of isotopic peaks considered
-#'   during isotope pattern validation.
-#' @param workers Integer. Number of parallel workers used for computation.
+#' @param feature_table A feature-level data frame to annotate. Must satisfy
+#'   \code{\link{check_feature_table}} requirements, including columns:
+#'   \code{variable_id}, \code{mz}, \code{rt}, \code{polarity},
+#'   \code{mean_intensity}, \code{condition}, and \code{pvalue}.
+#' @param ms2_table Optional MS2 annotation table. Can be \code{NULL}.
+#'   If provided, it should be compatible with
+#'   \code{\link{check_annotation_table_ms2}}.
+#' @param metabolite_database A \code{metid} database object (typically
+#'   \code{databaseClass}) used for MS1 annotation. If \code{NULL},
+#'   the function auto-loads a cached/reference database from the
+#'   featuremap resource repository according to \code{refdata}.
+#' @param refdata Character. Reference namespace for downstream ID mapping.
+#'   Must be one of \code{"kegg"} or \code{"hmdb"}.
+#' @param column Character. LC column mode used by \code{metid} adduct/matching
+#'   rules. Must be one of \code{"rp"} or \code{"hilic"}.
+#' @param ms1_match_ppm Numeric. MS1 mass tolerance (ppm) used in candidate
+#'   matching.
+#' @param mfc_rt_tol Numeric. Retention-time tolerance (same unit as
+#'   \code{feature_table$rt}) used in metabolite-feature-cluster scoring
+#'   and isotope consistency checks.
+#' @param isotope_number Integer. Maximum isotope depth used in isotope
+#'   annotation.
+#' @param workers Integer. Number of workers for parallel steps (isotope
+#'   annotation) and threads passed to \code{metid::annotate_metabolites()}.
 #'
-#' @return A data frame containing annotated features with candidate
-#'   metabolite matches and associated scoring metrics.
+#' @return A \code{featuremap_result} R6 object containing at least:
+#'   \itemize{
+#'     \item \code{feature_table}: input feature table (with derived fields added later in pipeline)
+#'     \item \code{refdata}: selected reference tag (\code{"kegg"} or \code{"hmdb"})
+#'     \item \code{anno_feature_table1}: feature-metabolite annotation table after redundancy removal
+#'     \item \code{anno_redundancy}: redundancy summary before/after filtering
+#'     \item \code{object_type}: \code{"featuremap_result"}
+#'     \item \code{stage}: \code{"feature_annotated"}
+#'   }
+#'
+#' @examples
+#' \dontrun{
+#' data("demo_feature_table", package = "featuremap")
+#'
+#' res <- annotate_feature(
+#'   feature_table = demo_feature_table,
+#'   ms2_table = NULL,
+#'   metabolite_database = NULL,
+#'   refdata = "kegg",
+#'   column = "rp",
+#'   ms1_match_ppm = 15,
+#'   mfc_rt_tol = 5,
+#'   isotope_number = 3,
+#'   workers = 4
+#' )
+#' }
 #'
 #' @export
 

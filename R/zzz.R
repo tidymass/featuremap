@@ -1,8 +1,20 @@
 .onAttach <- function(libname, pkgname) {
   version <- as.character(utils::packageVersion(pkgname))
-  
-  cli::cli_h1("featuremap v{0.99}")
-  
+
+  # Silence startup banner in non-interactive sessions (e.g. future workers)
+  # or when users explicitly disable it.
+  if (!interactive() || isTRUE(getOption("featuremap.quiet", FALSE))) {
+    return(invisible())
+  }
+
+  # Avoid repeated banner printing in the same R session.
+  if (isTRUE(getOption("featuremap.banner_shown", FALSE))) {
+    return(invisible())
+  }
+  options(featuremap.banner_shown = TRUE)
+
+  cli::cli_h1("featuremap v{version}")
+
   cli::cli_alert_success("Decode metabolic signals, module by module")
   cli::cli_alert_success("{.strong Follow pipeline below:}")
   cli::cli_ul(c(

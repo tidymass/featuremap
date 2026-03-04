@@ -16,8 +16,7 @@
 #' @examples
 #' data("demo_feature_table", package = "featuremap")
 #' head(demo_feature_table)
-#'
-#' check_feature_table(demo_feature_table)
+#' colnames(demo_feature_table)
 #' @docType data
 #' @name demo_feature_table
 #' @usage data(demo_feature_table)

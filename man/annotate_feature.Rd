@@ -2,7 +2,7 @@
 % Please edit documentation in R/1_annotate_feature.R
 \name{annotate_feature}
 \alias{annotate_feature}
-\title{Annotate raw MS1 features using m/z and retention time information}
+\title{Annotate raw features via MS1 or MS2 information}
 \usage{
 annotate_feature(
   feature_table,
@@ -70,18 +70,17 @@ MS2 confirmation.
 \examples{
 \dontrun{
 data("demo_feature_table", package = "featuremap")
-data("msDatabase_rplc0.0.2", package = "metid")
 
 res <- annotate_feature(
   feature_table = demo_feature_table,
   ms2_table = NULL,
-  metabolite_database = msDatabase_rplc0.0.2,
+  metabolite_database = NULL,
   refdata = "kegg",
   column = "rp",
   ms1_match_ppm = 15,
-  mfc_rt_tol = 5, # same unit as feature_table$rt
+  mfc_rt_tol = 5,
   isotope_number = 3,
-  workers = 1
+  workers = 4
 )
 }
 

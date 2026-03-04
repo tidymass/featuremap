@@ -9,41 +9,73 @@
 #' through repeated PCSF optimization. Optional grid tuning of
 #' parameters `b` and `w` is supported.
 #'
-#' @param res A list object containing analysis results. Must include
-#'   `feature_table`, `anno_feature_table1`, and `refdata`.
-#' @param feature Character. Either `"all"` or `"sig"`.
-#'   If `"sig"`, only features with p-value < `pcutoff` are used.
-#' @param pcutoff Numeric. Significance threshold used when
-#'   `feature = "sig"`.
-#' @param mrn An igraph object representing the metabolic reaction network.
-#'   If NULL, a cached GitHub resource will be loaded.
-#' @param workers Integer. Number of parallel workers for PCSF iterations.
-#' @param times Integer. Number of PCSF iterations for final subnetwork construction.
-#' @param b Numeric. Node prize scaling parameter in PCSF.
-#' @param mu Numeric. Hub penalty scaling factor.
-#' @param w Numeric. Dummy edge cost parameter in PCSF.
-#' @param r Numeric. Random perturbation factor applied to edge weights.
-#' @param grid_tune Logical. Whether to perform grid search tuning for `b` and `w`.
-#' @param b_grid Numeric vector. Candidate values of `b` for grid tuning.
-#' @param w_grid Numeric vector. Candidate values of `w` for grid tuning.
-#' @param times_tune Integer. Number of iterations used during grid tuning.
+#' @param res A \code{featuremap_result} object returned by
+#'   \code{\link{annotate_feature}} (or a later stage). It must contain at
+#'   least \code{feature_table}, \code{anno_feature_table1}, and \code{refdata},
+#'   and should be at stage \code{"feature_annotated"} or later.
+#' @param feature Character. Feature selection mode:
+#'   \itemize{
+#'   \item \code{"all"}: use all rows in \code{res$feature_table}
+#'   \item \code{"sig"}: use only rows with \code{pvalue < pcutoff}
+#'   }
+#' @param pcutoff Numeric. Significance threshold used only when
+#'   \code{feature = "sig"} to filter \code{res$feature_table$pvalue}.
+#' @param mrn An \code{igraph} object for the metabolic reaction network.
+#'   If \code{NULL}, a cached/default MRN resource will be loaded based on
+#'   \code{res$refdata}.
+#' @param workers Integer. Number of parallel workers used in repeated PCSF runs.
+#' @param times Integer. Number of PCSF repeats for final subnetwork construction.
+#'   Larger values usually improve robustness but increase runtime.
+#' @param b Numeric. Prize scaling factor for terminal nodes in PCSF.
+#' @param mu Numeric. Hub penalty coefficient. Larger values penalize high-degree
+#'   nodes more strongly.
+#' @param w Numeric. Dummy edge cost in PCSF.
+#' @param r Numeric. Random perturbation magnitude applied to edge weights across
+#'   repeats (robustness resampling factor).
+#' @param grid_tune Logical. Whether to tune \code{b} and \code{w} on a grid
+#'   before the final run.
+#' @param b_grid Numeric vector of candidate \code{b} values when
+#'   \code{grid_tune = TRUE}.
+#' @param w_grid Numeric vector of candidate \code{w} values when
+#'   \code{grid_tune = TRUE}.
+#' @param times_tune Integer. Number of repeats per \code{(b, w)} pair during
+#'   grid tuning.
 #'
-#' @return A modified `res` object containing:
+#' @return The input \code{res} object updated in-place with:
 #' \itemize{
-#'   \item \code{pcsf_subnet}: The final PCSF-derived subnetwork (igraph object).
-#'   \item \code{node_frequency}: Node appearance frequency across runs.
-#'   \item \code{edge_frequency}: Edge appearance frequency across runs.
-#'   \item \code{anno_feature_table2}: Updated feature-metabolite annotation table
-#'         incorporating network-based refinement.
+#'   \item \code{feature_table}: with derived \code{importance} score columns
+#'   \item \code{pcsf_subnet}: final PCSF-derived subnetwork (\code{igraph})
+#'   \item \code{node_frequency}: node appearance frequency across repeats
+#'   \item \code{edge_frequency}: edge appearance frequency across repeats
+#'   \item \code{anno_feature_table2}: network-refined feature-metabolite table
 #'   \item \code{tuning_grid} and \code{tuning_best}: (if \code{grid_tune = TRUE})
-#'         Results of parameter tuning.
+#'         tuning summary
+#'   \item \code{stage}: updated to \code{"subnetwork_extracted"}
 #' }
 #'
 #' @details
-#' Feature importance scores are derived from fold change and p-value.
+#' Feature importance scores are derived from effects value and p-value.
 #' The PCSF algorithm is executed multiple times with randomized edge
 #' perturbation to ensure robustness. Final subnetworks are constructed
 #' based on node and edge frequency across runs.
+#'
+#' @examples
+#' \dontrun{
+#' # res should be generated from annotate_feature() first
+#' res <- extract_subnetwork(
+#'   res = res,
+#'   feature = "sig",
+#'   pcutoff = 0.05,
+#'   mrn = NULL,
+#'   workers = 4,
+#'   times = 100,
+#'   b = 40,
+#'   mu = 1e-4,
+#'   w = 35,
+#'   r = 0.30,
+#'   grid_tune = FALSE
+#' )
+#' }
 #'
 #' @export
 

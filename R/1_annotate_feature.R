@@ -1,5 +1,5 @@
 
-#' Annotate raw MS1 features using m/z and retention time information
+#' Annotate raw features via MS1 or MS2 information
 #'
 #' Perform preliminary metabolite annotation for raw MS1 features
 #' by matching against a reference metabolite database using mass

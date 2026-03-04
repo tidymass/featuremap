@@ -133,21 +133,31 @@ annotate_module = function(res = res,
     share <- s / total
     if (requireNamespace("mclust", quietly = TRUE) && n >= 8) {
 
-      fit <- mclust::Mclust(share, G = 1:3)  # BIC chooses K
-      cls <- fit$classification
-      k   <- max(cls)
+      fit <- tryCatch(
+        suppressWarnings(mclust::Mclust(share, G = 1:3)), # BIC chooses K
+        error = function(e) NULL
+      )
+      cls <- if (!is.null(fit)) fit$classification else NULL
 
-      if (k == 1) {
+      if (is.null(cls) || length(cls) != n || any(is.na(cls))) {
+        # fallback: coverage
         cum <- cumsum(s) / total
         k_cov <- which(cum >= 0.20)[1]
         if (is.na(k_cov)) k_cov <- n
-        topN <- min(max(5, k_cov), min(20, n))
+        topN <- min(max(6, k_cov), min(20, n))
       } else {
-        means <- tapply(share, cls, mean)
-        head_comp <- which.max(means)
-        topN <- sum(cls == head_comp)
-
-        topN <- max(5, min(20, topN, n))
+        k <- max(cls)
+        if (k == 1) {
+          cum <- cumsum(s) / total
+          k_cov <- which(cum >= 0.20)[1]
+          if (is.na(k_cov)) k_cov <- n
+          topN <- min(max(5, k_cov), min(20, n))
+        } else {
+          means <- tapply(share, cls, mean)
+          head_comp <- which.max(means)
+          topN <- sum(cls == head_comp)
+          topN <- max(5, min(20, topN, n))
+        }
       }
 
     } else {

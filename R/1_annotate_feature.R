@@ -11,7 +11,8 @@
 #' @param ms2_table Optional data frame containing MS2 spectra information
 #'   for feature-level confirmation. Can be NULL if MS2 is not available.
 #' @param metabolite_database A data frame of candidate metabolites with
-#'   theoretical m/z, formula, and other annotation fields.
+#'   theoretical m/z, formula, and other annotation fields. If NULL,
+#'   a cached GitHub resource will be loaded based on `refdata`.
 #' @param refdata Character. Name of the reference database
 #'   (e.g., "hmdb" or "kegg").
 #' @param column Character. Name of the m/z column in `feature_table`.
@@ -30,7 +31,7 @@
 
 annotate_feature <- function(feature_table,
                              ms2_table = NULL,
-                             metabolite_database,
+                             metabolite_database = NULL,
                              refdata = c("kegg","hmdb"),
                              column = c("rp", "hilic"),
                              ms1_match_ppm = 15,
@@ -38,10 +39,18 @@ annotate_feature <- function(feature_table,
                              isotope_number = 3,
                              workers = 4
 ){
+  refdata <- match.arg(refdata)
+  column <- match.arg(column)
+  if (is.null(metabolite_database)) {
+    resource_name <- featuremap_default_resource_name("metabolite_database", refdata = refdata)
+    message("metabolite_database is NULL. Loading resource from cache/GitHub: ", resource_name)
+    metabolite_database <- featuremap_load_resource(resource_name)
+  }
 
   start_time <- Sys.time()
 
   res <- R6Class("featureFMA_result", public = list(initialize = function(...) {}))
+  res <- set_featuremap_stage(res, "initialized")
 
   res$feature_table = feature_table
   res$refdata = refdata
@@ -78,6 +87,7 @@ annotate_feature <- function(feature_table,
   )
 
   rownames(res$anno_redundancy) = c("before", "after")
+  res <- set_featuremap_stage(res, "feature_annotated")
 
   message("\nStep 1: Feature annotation has finished!\n")
 

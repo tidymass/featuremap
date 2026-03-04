@@ -732,6 +732,7 @@ embed_module_pubmed <- function(
     min_similarity = NULL,
     embedding_dim  = NULL
 ) {
+  refdata <- match.arg(refdata)
   
   mets <- names(module_pub)
   rak  <- list()

@@ -7,7 +7,7 @@
 annotate_feature(
   feature_table,
   ms2_table = NULL,
-  metabolite_database,
+  metabolite_database = NULL,
   refdata = c("kegg", "hmdb"),
   column = c("rp", "hilic"),
   ms1_match_ppm = 15,
@@ -24,7 +24,8 @@ including m/z and retention time columns.}
 for feature-level confirmation. Can be NULL if MS2 is not available.}
 
 \item{metabolite_database}{A data frame of candidate metabolites with
-theoretical m/z, formula, and other annotation fields.}
+theoretical m/z, formula, and other annotation fields. If NULL,
+a cached GitHub resource will be loaded based on \code{refdata}.}
 
 \item{refdata}{Character. Name of the reference database
 (e.g., "hmdb" or "kegg").}

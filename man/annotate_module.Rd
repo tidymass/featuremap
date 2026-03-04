@@ -13,7 +13,6 @@ annotate_module(
   biospecimen = NULL,
   phenotype = NULL,
   pubmed = TRUE,
-  top_compound = 0.1,
   years = 5,
   top_paper = 3,
   min_similarity = 0.6,
@@ -34,7 +33,8 @@ used for module significance filtering (e.g., "p" or "fdr").}
 \item{pcutoff}{Numeric. Significance threshold for selecting modules.}
 
 \item{ref_data}{Data frame containing metabolite annotation
-information (e.g., HMDB or KEGG reference table).}
+information (e.g., HMDB or KEGG reference table). If NULL,
+a cached GitHub resource will be loaded based on \code{res$refdata}.}
 
 \item{species}{Character. Species name (used only for biological plausibility assessment).}
 
@@ -43,9 +43,6 @@ information (e.g., HMDB or KEGG reference table).}
 \item{phenotype}{Character. Study phenotype (used for confidence assessment only).}
 
 \item{pubmed}{Logical. Whether to perform PubMed-based annotation.}
-
-\item{top_compound}{Numeric. Proportion threshold used for selecting
-top metabolites (currently reserved for future use).}
 
 \item{years}{Integer. Number of recent years for PubMed literature search.}
 

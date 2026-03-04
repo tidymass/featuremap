@@ -2,11 +2,12 @@
 #'
 #' Performs a series of checks on a feature table to ensure it meets
 #' the expected structure and content required for downstream analysis.
-#' The table must contain exactly six columns with specific names and types.
+#' The table must contain required columns with specific names and types.
 #'
-#' @param feature_table A `data.frame` with exactly six columns named:
-#'   `variable_id`, `mz`, `rt`, `polarity`, `condition`, and `pvalue`.
-#'   Each column must conform to specific data types and constraints.
+#' @param feature_table A `data.frame` containing at least these columns:
+#'   `variable_id`, `mz`, `rt`, `polarity`, `mean_intensity`, `condition`,
+#'   and `pvalue`. Additional columns are allowed.
+#'   Required columns must conform to specific data types and constraints.
 #'
 #' @return Returns `TRUE` (invisibly) if all checks pass. Otherwise, the function
 #'   stops with an informative error message.
@@ -15,8 +16,7 @@
 #' The function checks:
 #' \itemize{
 #'   \item That `feature_table` is a `data.frame`
-#'   \item That it has exactly six columns
-#'   \item That column names and order match the expected names
+#'   \item That required columns are present
 #'   \item That data types are correct for each column
 #'   \item That `variable_id` values are unique
 #'   \item That `polarity` only contains "positive" or "negative"
@@ -33,7 +33,8 @@
 #'   rt = c(300, 400),
 #'   polarity = c("positive", "negative"),
 #'   condition = c(1, 2),
-#'   pvalue = c(0.01, 0.2)
+#'   pvalue = c(0.01, 0.2),
+#'   mean_intensity = c(12000, 8000)
 #' )
 #'
 #' check_feature_table(feature_table)
@@ -48,22 +49,21 @@ check_feature_table <-
       stop("feature_table must be a data.frame.")
     }
 
-    # # Check number of columns
-    # if (ncol(feature_table) != 6) {
-    #   stop("feature_table must have exactly 5 columns.")
-    # }
-
-    # Expected column names
-    expected_names <- c("variable_id",
-                        "mz",
-                        "rt",
-                        "polarity",
-                        "condition",
-                        "pvalue")
-    if (!all(expected_names == colnames(feature_table))) {
+    # Required columns
+    required_cols <- c(
+      "variable_id",
+      "mz",
+      "rt",
+      "polarity",
+      "mean_intensity",
+      "condition",
+      "pvalue"
+    )
+    missing_cols <- setdiff(required_cols, colnames(feature_table))
+    if (length(missing_cols) > 0) {
       stop(paste0(
-        "feature_table columns must be named: ",
-        paste(expected_names, collapse = ",")
+        "feature_table is missing required columns: ",
+        paste(missing_cols, collapse = ", ")
       ))
     }
 
@@ -98,6 +98,11 @@ check_feature_table <-
     # Check pvalue
     if (!is.numeric(feature_table$pvalue)) {
       stop("pvalue column must be numeric.")
+    }
+
+    # Check mean_intensity
+    if (!is.numeric(feature_table$mean_intensity)) {
+      stop("mean_intensity column must be numeric.")
     }
 
     allowed_polarities <- c("positive", "negative")

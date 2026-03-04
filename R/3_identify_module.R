@@ -55,10 +55,15 @@ identify_module = function(res = res,
                            node_freq = 0.05,
                            louvain_resolution = 1,
                            walktrap_steps = 4){
+  method <- match.arg(method)
 
   if (is.null(res)){
     stop("[Error] res cannot be NULL.")
   }
+  res <- ensure_featuremap_object(
+    res,
+    expected_stages = c("subnetwork_extracted", "module_identified", "module_annotated")
+  )
 
   start_time <- Sys.time()
 
@@ -255,6 +260,7 @@ identify_module = function(res = res,
   if(nrow(res$module_score) == 0){
     message("\nNo module was detected successfully!\n")
   }
+  res <- set_featuremap_stage(res, "module_identified")
 
   end_time <- Sys.time()
   cat("Execution time:", round(as.numeric(end_time - start_time, units = "mins"), 2), "minutes\n")
@@ -263,8 +269,6 @@ identify_module = function(res = res,
   return(res)
 
 }
-
-
 
 
 

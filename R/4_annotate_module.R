@@ -14,13 +14,12 @@
 #'   used for module significance filtering (e.g., "p" or "fdr").
 #' @param pcutoff Numeric. Significance threshold for selecting modules.
 #' @param ref_data Data frame containing metabolite annotation
-#'   information (e.g., HMDB or KEGG reference table).
+#'   information (e.g., HMDB or KEGG reference table). If NULL,
+#'   a cached GitHub resource will be loaded based on `res$refdata`.
 #' @param species Character. Species name (used only for biological plausibility assessment).
 #' @param biospecimen Character. Biospecimen type (e.g., plasma, tissue).
 #' @param phenotype Character. Study phenotype (used for confidence assessment only).
 #' @param pubmed Logical. Whether to perform PubMed-based annotation.
-#' @param top_compound Numeric. Proportion threshold used for selecting
-#'   top metabolites (currently reserved for future use).
 #' @param years Integer. Number of recent years for PubMed literature search.
 #' @param top_paper Integer. Number of top-ranked papers retained per metabolite.
 #' @param min_similarity Numeric. Similarity threshold for embedding-based
@@ -57,7 +56,6 @@ annotate_module = function(res = res,
                            biospecimen = NULL,
                            phenotype = NULL,
                            pubmed = TRUE,
-                           top_compound = 0.1,
                            years = 5,
                            top_paper = 3,
                            min_similarity = 0.6,
@@ -66,6 +64,19 @@ annotate_module = function(res = res,
                            llm_model = "gpt-4.1-mini",
                            NCBI_api_key = "", # https://account.ncbi.nlm.nih.gov/settings/
                            llm_api_key = ""){
+  if (is.null(res)) {
+    stop("[Error] res cannot be NULL.")
+  }
+  res <- ensure_featuremap_object(
+    res,
+    expected_stages = c("module_identified", "module_annotated")
+  )
+  if (is.null(ref_data)) {
+    ref_tag <- if (!is.null(res$refdata)) as.character(res$refdata) else NULL
+    resource_name <- featuremap_default_resource_name("functional_reference", refdata = ref_tag)
+    message("ref_data is NULL. Loading resource from cache/GitHub: ", resource_name)
+    ref_data <- featuremap_load_resource(resource_name)
+  }
 
 
   # Annotate metabolites via database ------------------------------------------
@@ -93,6 +104,7 @@ annotate_module = function(res = res,
 
     message("No significant modules passed the cutoff (", p, " < ", pcutoff, "). Returning empty module_function.\n")
     res$module_function <- tibble::tibble()
+    res <- set_featuremap_stage(res, "module_annotated")
     return(res)
 
   }
@@ -435,13 +447,6 @@ annotate_module = function(res = res,
     phenotype = phenotype
   )
 
-  all_module_prompts <- lapply(
-    all_modules_ready,
-    build_module_prompt,
-    study_context = study_context)
-
-  names(all_module_prompts) <- names(all_modules_ready)
-
   if(pubmed){
     message("Step 3 has finished!\n")
   }else{
@@ -459,6 +464,7 @@ annotate_module = function(res = res,
   if (length(all_modules_ready) == 0) {
     message("No modules to annotate. Returning empty module_function.\n")
     res$module_function <- tibble::tibble()
+    res <- set_featuremap_stage(res, "module_annotated")
     return(res)
   }
 
@@ -480,8 +486,8 @@ annotate_module = function(res = res,
   }else{
     message("\nStep 3 has finished!\n")
   }
+  res <- set_featuremap_stage(res, "module_annotated")
 
   return(res)
 
 }
-

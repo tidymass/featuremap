@@ -16,6 +16,7 @@
 #' @param pcutoff Numeric. Significance threshold used when
 #'   `feature = "sig"`.
 #' @param mrn An igraph object representing the metabolic reaction network.
+#'   If NULL, a cached GitHub resource will be loaded.
 #' @param workers Integer. Number of parallel workers for PCSF iterations.
 #' @param times Integer. Number of PCSF iterations for final subnetwork construction.
 #' @param b Numeric. Node prize scaling parameter in PCSF.
@@ -60,18 +61,23 @@ extract_subnetwork = function(res = NULL,
                               b_grid = seq(20, 40, by = 5),
                               w_grid = seq(25, 40, by = 5),
                               times_tune = 10){
+  feature <- match.arg(feature)
 
   if (is.null(res)){
     stop("[Error] res cannot be NULL.")
   }
+  res <- ensure_featuremap_object(
+    res,
+    expected_stages = c("feature_annotated", "subnetwork_extracted", "module_identified", "module_annotated")
+  )
   if (!"feature_table" %in% names(res)){
     stop("[Error] res$feature_table is missing.")
   }
-  if (!feature %in% c("sig", "all")){
-    stop("[Error] feature must be 'sig' or 'all'.")
-  }
   if (is.null(mrn)){
-    stop("[Error] mrn cannot be NULL; please supply a metabolic reaction network (igraph object).")
+    ref_tag <- if (!is.null(res$refdata)) as.character(res$refdata) else NULL
+    resource_name <- featuremap_default_resource_name("mrn", refdata = ref_tag)
+    message("mrn is NULL. Loading resource from cache/GitHub: ", resource_name)
+    mrn <- featuremap_load_resource(resource_name)
   }
 
   start_time <- Sys.time()
@@ -468,6 +474,7 @@ extract_subnetwork = function(res = NULL,
 
   message("\nStep 2: Union PCSF-based subnetwork has been constructed: ",
           igraph::gorder(res$pcsf_subnet), " nodes and ", igraph::gsize(res$pcsf_subnet), " edges.")
+  res <- set_featuremap_stage(res, "subnetwork_extracted")
 
   end_time <- Sys.time()
   cat("Execution time:", round(as.numeric(end_time - start_time, units = "mins"), 2), "minutes\n")

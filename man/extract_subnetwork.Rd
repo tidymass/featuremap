@@ -31,7 +31,8 @@ If \code{"sig"}, only features with p-value < \code{pcutoff} are used.}
 \item{pcutoff}{Numeric. Significance threshold used when
 \code{feature = "sig"}.}
 
-\item{mrn}{An igraph object representing the metabolic reaction network.}
+\item{mrn}{An igraph object representing the metabolic reaction network.
+If NULL, a cached GitHub resource will be loaded.}
 
 \item{workers}{Integer. Number of parallel workers for PCSF iterations.}
 

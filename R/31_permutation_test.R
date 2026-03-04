@@ -64,7 +64,8 @@ permutation_test_gamma <- function(subnet,
   
 
   # perform permutation test ------
-  plan(multisession, workers = workers)
+  future::plan(future::multisession, workers = workers)
+  on.exit(future::plan(future::sequential), add = TRUE)
   
   perm_results <- future_map_dfr(1:n_perm, function(i) {
     
@@ -185,7 +186,7 @@ permutation_test_gamma <- function(subnet,
     packages = c("igraph","dplyr","tibble","tidyr","MASS")
   ))
   
-  plan(sequential)
+  future::plan(future::sequential)
   
   # Remove invalid results
   perm_results <- perm_results %>% 

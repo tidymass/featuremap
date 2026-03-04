@@ -49,7 +49,11 @@ annotate_feature <- function(feature_table,
 
   start_time <- Sys.time()
 
-  res <- R6Class("featureFMA_result", public = list(initialize = function(...) {}))
+  res <- R6Class(
+    "featuremap_result",
+    public = list(initialize = function(...) {}),
+    lock_objects = FALSE
+  )$new()
   res <- set_featuremap_stage(res, "initialized")
 
   res$feature_table = feature_table

@@ -53,8 +53,6 @@
 #' @importFrom furrr future_map
 #' @importFrom data.table as.data.table rbindlist
 #'
-
-
 annotate_feature_table <-
   function(feature_table,
            ms2_table,
@@ -116,8 +114,13 @@ annotate_feature_table <-
           ms1.match.ppm = ms1_match_ppm,
           column = column,
           polarity = "positive",
+          adduct.table = featuremap_load_metid_adduct_table(
+            polarity = "positive",
+            column = column
+          ),
           database = metabolite_database,
-          candidate.num = 1000
+          candidate.num = 1000,
+          threads = max(1L, as.integer(workers))
         )
 
       annotation_table_ms1_pos <-
@@ -149,8 +152,13 @@ annotate_feature_table <-
           ms1.match.ppm = ms1_match_ppm,
           column = column,
           polarity = "negative",
+          adduct.table = featuremap_load_metid_adduct_table(
+            polarity = "negative",
+            column = column
+          ),
           database = metabolite_database,
-          candidate.num = 1000
+          candidate.num = 1000,
+          threads = max(1L, as.integer(workers))
         )
 
       annotation_table_ms1_neg <-
@@ -524,3 +532,31 @@ score_annotation_table <-
 
     return(annotation_table)
   }
+
+
+# Internal helper: load metid adduct tables without requiring library(metid)
+featuremap_load_metid_adduct_table <- function(polarity = c("positive", "negative"),
+                                               column = c("rp", "hilic")) {
+  polarity <- match.arg(polarity)
+  column <- match.arg(column)
+
+  data_name <- switch(
+    paste(column, polarity, sep = "."),
+    "rp.positive" = "rp.pos",
+    "rp.negative" = "rp.neg",
+    "hilic.positive" = "hilic.pos",
+    "hilic.negative" = "hilic.neg",
+    stop("[Error] Unsupported adduct table combination: ", column, "/", polarity)
+  )
+
+  e <- new.env(parent = emptyenv())
+  utils::data(list = data_name, package = "metid", envir = e)
+  if (!exists(data_name, envir = e, inherits = FALSE)) {
+    stop(
+      "[Error] Failed to load default adduct table '", data_name, "' from package 'metid'. ",
+      "Please reinstall metid and retry."
+    )
+  }
+
+  get(data_name, envir = e, inherits = FALSE)
+}

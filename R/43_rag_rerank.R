@@ -54,7 +54,8 @@ chat_gemini_call <- function(
     api_key,
     model = "gemini-2.0-pro",
     max_tokens = 2000,
-    temperature = 0
+    temperature = 0,
+    response_schema = NULL
 ) {
   role_vec <- vapply(messages, function(m) {
     if (is.null(m$role)) return("user")
@@ -84,6 +85,10 @@ chat_gemini_call <- function(
       responseMimeType = "application/json"
     )
   )
+
+  if (!is.null(response_schema)) {
+    body$generationConfig$responseSchema <- response_schema
+  }
 
   if (nzchar(sys_prompt)) {
     body$systemInstruction <- list(
@@ -142,7 +147,8 @@ chat_api_call <- function(
     api_key,
     model,
     max_tokens = 2000,
-    temperature = 0
+    temperature = 0,
+    response_schema = NULL
 ) {
   
   provider <- match.arg(provider)
@@ -175,7 +181,8 @@ chat_api_call <- function(
       api_key = api_key,
       model = model,
       max_tokens = max_tokens,
-      temperature = temperature
+      temperature = temperature,
+      response_schema = response_schema
     ))
   }
   

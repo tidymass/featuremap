@@ -50,6 +50,8 @@ annotate_one_module <- function(module_obj,
   user_prompt <- build_module_prompt(module_obj, study_context)
   
   parse_json_response <- function(txt) {
+    direct <- tryCatch(jsonlite::fromJSON(txt), error = function(e) NULL)
+    if (!is.null(direct)) return(direct)
     json_txt <- extract_json_object(txt)
     if (is.null(json_txt)) return(NULL)
     tryCatch(jsonlite::fromJSON(json_txt), error = function(e) NULL)
@@ -59,6 +61,19 @@ annotate_one_module <- function(module_obj,
     list(role = "system", content = system_prompt),
     list(role = "user",   content = user_prompt)
   )
+  gemini_schema <- NULL
+  if (identical(provider, "gemini")) {
+    gemini_schema <- list(
+      type = "OBJECT",
+      properties = list(
+        title = list(type = "STRING"),
+        summary = list(type = "STRING"),
+        confidence_label = list(type = "STRING", enum = c("high", "medium", "low")),
+        rationale = list(type = "STRING")
+      ),
+      required = c("title", "summary", "confidence_label", "rationale")
+    )
+  }
 
   parsed <- NULL
   raw_text <- NA_character_
@@ -70,7 +85,8 @@ annotate_one_module <- function(module_obj,
       api_key = llm_api_key,
       model = model,
       max_tokens = max_tokens,
-      temperature = temperature
+      temperature = temperature,
+      response_schema = gemini_schema
     )
 
     if (is.null(res_call) ||
@@ -218,4 +234,3 @@ annotate_all_modules <- function(all_modules_ready,
   
   dplyr::bind_rows(results_list)
 }
-

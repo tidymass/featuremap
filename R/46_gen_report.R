@@ -49,12 +49,85 @@ annotate_one_module <- function(module_obj,
   # 2) Build user prompt with module-specific data
   user_prompt <- build_module_prompt(module_obj, study_context)
   
+  normalize_parsed <- function(x) {
+    if (is.null(x)) return(NULL)
+    if (is.data.frame(x) && nrow(x) >= 1) return(as.list(x[1, , drop = FALSE]))
+    if (is.list(x) && !is.null(names(x))) return(x)
+    if (is.list(x) && length(x) >= 1 && is.list(x[[1]]) && !is.null(names(x[[1]]))) {
+      return(x[[1]])
+    }
+    NULL
+  }
+
   parse_json_response <- function(txt) {
-    direct <- tryCatch(jsonlite::fromJSON(txt), error = function(e) NULL)
+    direct <- tryCatch(
+      jsonlite::fromJSON(txt, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+    direct <- normalize_parsed(direct)
     if (!is.null(direct)) return(direct)
-    json_txt <- extract_json_object(txt)
-    if (is.null(json_txt)) return(NULL)
-    tryCatch(jsonlite::fromJSON(json_txt), error = function(e) NULL)
+
+    json_obj_txt <- extract_json_object(txt)
+    if (!is.null(json_obj_txt)) {
+      obj <- tryCatch(
+        jsonlite::fromJSON(json_obj_txt, simplifyVector = FALSE),
+        error = function(e) NULL
+      )
+      obj <- normalize_parsed(obj)
+      if (!is.null(obj)) return(obj)
+    }
+
+    json_fence <- regmatches(txt, regexpr("```\\s*[\\s\\S]*?\\s*```", txt, perl = TRUE))
+    if (length(json_fence) > 0 && nzchar(json_fence[1])) {
+      inner <- sub("^```[a-zA-Z]*\\s*", "", json_fence[1], perl = TRUE)
+      inner <- sub("\\s*```$", "", inner, perl = TRUE)
+      fobj <- tryCatch(
+        jsonlite::fromJSON(inner, simplifyVector = FALSE),
+        error = function(e) NULL
+      )
+      fobj <- normalize_parsed(fobj)
+      if (!is.null(fobj)) return(fobj)
+    }
+
+    NULL
+  }
+
+  parse_labeled_fallback <- function(txt) {
+    if (is.null(txt) || !nzchar(txt)) return(NULL)
+    lines <- unlist(strsplit(txt, "\n", fixed = TRUE))
+    lines <- trimws(lines)
+    lines <- lines[nzchar(lines)]
+    if (length(lines) == 0) return(NULL)
+
+    get_value <- function(pattern) {
+      hit <- grep(pattern, lines, perl = TRUE, ignore.case = TRUE)
+      if (length(hit) == 0) return(NA_character_)
+      val <- sub(pattern, "", lines[hit[1]], perl = TRUE, ignore.case = TRUE)
+      val <- trimws(val)
+      if (!nzchar(val)) NA_character_ else val
+    }
+
+    title <- get_value("^\\s*(title|module\\s*title)\\s*[:：]\\s*")
+    summary <- get_value("^\\s*summary\\s*[:：]\\s*")
+    rationale <- get_value("^\\s*rationale\\s*[:：]\\s*")
+    conf_line <- get_value("^\\s*confidence(_label)?\\s*[:：]\\s*")
+
+    confidence_label <- NA_character_
+    if (!is.na(conf_line)) {
+      if (grepl("\\bhigh\\b", conf_line, ignore.case = TRUE)) confidence_label <- "high"
+      if (grepl("\\bmedium\\b", conf_line, ignore.case = TRUE)) confidence_label <- "medium"
+      if (grepl("\\blow\\b", conf_line, ignore.case = TRUE)) confidence_label <- "low"
+    }
+
+    found_n <- sum(!is.na(c(title, summary, confidence_label, rationale)))
+    if (found_n == 0) return(NULL)
+
+    list(
+      title = title,
+      summary = summary,
+      confidence_label = confidence_label,
+      rationale = rationale
+    )
   }
 
   messages <- list(
@@ -114,6 +187,10 @@ annotate_one_module <- function(module_obj,
   }
   
   # Handle JSON parsing failure
+  if (is.null(parsed)) {
+    parsed <- parse_labeled_fallback(raw_text)
+  }
+
   if (is.null(parsed)) {
     return(
       data.frame(

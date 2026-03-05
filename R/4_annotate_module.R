@@ -472,58 +472,86 @@ annotate_module = function(res = res,
   }
 
   if (pubmed) {
-    id_col <- if (identical(res$refdata, "hmdb")) "HMDB_ID" else "KEGG_ID"
+    empty_module_pmid_tbl <- tibble::tibble(
+      Module = character(),
+      Module_label = character(),
+      Compound_ID = character(),
+      Compound_name = character(),
+      PMID_rank = integer(),
+      PMID = character()
+    )
 
-    top_metabolite_map <- purrr::imap_dfr(module_list_top, function(module_df, module_label) {
-      compound_name_col <- if ("name" %in% colnames(module_df)) "name" else "Compound_name"
+    res$module_top_metabolite_pmids <- tryCatch({
+      id_col <- if (identical(res$refdata, "hmdb")) "HMDB_ID" else "KEGG_ID"
+      empty_pmid_tbl <- tibble::tibble(
+        Module_label = character(),
+        Compound_ID = character(),
+        PMID_rank = integer(),
+        PMID = character()
+      )
 
-      module_df %>%
-        dplyr::transmute(
-          Module_label = module_label,
-          Module = as.character(Module),
-          Compound_ID = as.character(.data[[id_col]]),
-          Compound_name = as.character(.data[[compound_name_col]])
-        )
-    })
+      top_metabolite_map <- purrr::imap_dfr(module_list_top, function(module_df, module_label) {
+        compound_name_col <- if ("name" %in% colnames(module_df)) "name" else "Compound_name"
 
-    pmid_map <- purrr::imap_dfr(module_pubmed_embed_refined, function(module_res, module_label) {
-      if (is.null(module_res) || length(module_res) == 0) {
-        return(tibble::tibble())
-      }
-
-      purrr::imap_dfr(module_res, function(res_single, compound_id) {
-        pmids <- as.character(res_single$pmids)
-        if (length(pmids) == 0) {
-          return(
-            tibble::tibble(
-              Module_label = module_label,
-              Compound_ID = as.character(compound_id),
-              PMID_rank = NA_integer_,
-              PMID = NA_character_
-            )
+        module_df %>%
+          dplyr::transmute(
+            Module_label = module_label,
+            Module = as.character(Module),
+            Compound_ID = as.character(.data[[id_col]]),
+            Compound_name = as.character(.data[[compound_name_col]])
           )
+      })
+
+      pmid_map <- purrr::imap_dfr(module_pubmed_embed_refined, function(module_res, module_label) {
+        if (is.null(module_res) || length(module_res) == 0) {
+          return(empty_pmid_tbl)
         }
 
-        tibble::tibble(
-          Module_label = module_label,
-          Compound_ID = as.character(compound_id),
-          PMID_rank = seq_along(pmids),
-          PMID = pmids
-        )
-      })
-    })
+        purrr::imap_dfr(module_res, function(res_single, compound_id) {
+          pmids <- as.character(res_single$pmids)
+          if (length(pmids) == 0) {
+            return(
+              tibble::tibble(
+                Module_label = module_label,
+                Compound_ID = as.character(compound_id),
+                PMID_rank = NA_integer_,
+                PMID = NA_character_
+              )
+            )
+          }
 
-    res$module_top_metabolite_pmids <- top_metabolite_map %>%
-      dplyr::left_join(pmid_map, by = c("Module_label", "Compound_ID")) %>%
-      dplyr::arrange(Module_label, Compound_name, PMID_rank) %>%
-      dplyr::select(
-        Module,
-        Module_label,
-        Compound_ID,
-        Compound_name,
-        PMID_rank,
-        PMID
-      )
+          tibble::tibble(
+            Module_label = module_label,
+            Compound_ID = as.character(compound_id),
+            PMID_rank = seq_along(pmids),
+            PMID = pmids
+          )
+        })
+      })
+
+      required_pmid_cols <- c("Module_label", "Compound_ID", "PMID_rank", "PMID")
+      if (!is.data.frame(pmid_map) || !all(required_pmid_cols %in% colnames(pmid_map))) {
+        pmid_map <- empty_pmid_tbl
+      } else {
+        pmid_map <- pmid_map %>%
+          dplyr::select(dplyr::any_of(required_pmid_cols))
+      }
+
+      top_metabolite_map %>%
+        dplyr::left_join(pmid_map, by = c("Module_label", "Compound_ID")) %>%
+        dplyr::arrange(Module_label, Compound_name, PMID_rank) %>%
+        dplyr::select(
+          Module,
+          Module_label,
+          Compound_ID,
+          Compound_name,
+          PMID_rank,
+          PMID
+        )
+    }, error = function(e) {
+      warning("Failed to build module_top_metabolite_pmids: ", e$message)
+      empty_module_pmid_tbl
+    })
   }
 
   # Generate input prompt to LLM module ----------------------------------------

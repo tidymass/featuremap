@@ -49,63 +49,53 @@ annotate_one_module <- function(module_obj,
   # 2) Build user prompt with module-specific data
   user_prompt <- build_module_prompt(module_obj, study_context)
   
-  # 3) Make API call to LLM
-  res_call <- chat_api_call(
-    messages = list(
-      list(role = "system", content = system_prompt),
-      list(role = "user",   content = user_prompt)
-    ),
-    provider    = provider,     
-    api_key     = llm_api_key,
-    model       = model,
-    max_tokens  = max_tokens,
-    temperature = temperature
+  parse_json_response <- function(txt) {
+    json_txt <- extract_json_object(txt)
+    if (is.null(json_txt)) return(NULL)
+    tryCatch(jsonlite::fromJSON(json_txt), error = function(e) NULL)
+  }
+
+  messages <- list(
+    list(role = "system", content = system_prompt),
+    list(role = "user",   content = user_prompt)
   )
 
-  # Handle empty or NULL responses
-  if (is.null(res_call) ||
-      is.null(res_call$content) ||
-      !is.character(res_call$content) ||
-      length(res_call$content) != 1 ||
-      !nzchar(res_call$content)) {
-    message("Empty or NULL response for module ", module_obj$module_id)
-    return(
-      data.frame(
-        module_id        = module_obj$module_id,
-        title            = NA_character_,
-        summary          = NA_character_,
-        confidence_label = NA_character_,
-        rationale        = NA_character_,
-        raw_response     = NA_character_,
-        stringsAsFactors = FALSE
-      )
+  parsed <- NULL
+  raw_text <- NA_character_
+
+  for (attempt in 1:2) {
+    res_call <- safe_chat_call(
+      messages = messages,
+      provider = provider,
+      api_key = llm_api_key,
+      model = model,
+      max_tokens = max_tokens,
+      temperature = temperature
     )
-  }
-  
-  # Extract raw text response 
-  raw_text <- res_call$content
-  json_txt <- extract_json_object(raw_text)
-  parsed <- tryCatch(
-    {
-      if (is.null(json_txt)) {
-        message("No JSON found for module ", module_obj$module_id)
-        return(data.frame(
-          module_id        = module_obj$module_id,
-          title            = NA_character_,
-          summary          = NA_character_,
-          confidence_label = NA_character_,
-          rationale        = NA_character_,
-          raw_response     = raw_text,
-          stringsAsFactors = FALSE
-        ))
-      }
-      jsonlite::fromJSON(json_txt)
-    },
-    error = function(e) {
-      message("JSON parse error for module ", module_obj$module_id, ": ", e$message)
-      NULL
+
+    if (is.null(res_call) ||
+        is.null(res_call$content) ||
+        !is.character(res_call$content) ||
+        length(res_call$content) != 1 ||
+        !nzchar(res_call$content)) {
+      message("Empty or NULL response for module ", module_obj$module_id, " (attempt ", attempt, ")")
+    } else {
+      raw_text <- res_call$content
+      parsed <- parse_json_response(raw_text)
+      if (!is.null(parsed)) break
+      message("No JSON found for module ", module_obj$module_id, " (attempt ", attempt, ")")
     }
-  )
+
+    if (attempt == 1) {
+      messages <- c(
+        messages,
+        list(list(
+          role = "user",
+          content = "Return ONLY a valid JSON object with keys: title, summary, confidence_label, rationale."
+        ))
+      )
+    }
+  }
   
   # Handle JSON parsing failure
   if (is.null(parsed)) {
@@ -228,5 +218,4 @@ annotate_all_modules <- function(all_modules_ready,
   
   dplyr::bind_rows(results_list)
 }
-
 

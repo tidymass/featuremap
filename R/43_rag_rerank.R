@@ -56,10 +56,17 @@ chat_gemini_call <- function(
     max_tokens = 2000,
     temperature = 0
 ) {
-  prompt <- paste(
-    vapply(messages, function(m) m$content, character(1)),
-    collapse = "\n\n"
-  )
+  role_vec <- vapply(messages, function(m) {
+    if (is.null(m$role)) return("user")
+    as.character(m$role)
+  }, character(1))
+  content_vec <- vapply(messages, function(m) {
+    if (is.null(m$content)) return("")
+    as.character(m$content)
+  }, character(1))
+
+  sys_prompt <- paste(content_vec[role_vec == "system"], collapse = "\n\n")
+  user_prompt <- paste(content_vec[role_vec != "system"], collapse = "\n\n")
   
   url <- sprintf(
     "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
@@ -69,13 +76,20 @@ chat_gemini_call <- function(
   body <- list(
     contents = list(list(
       role = "user",
-      parts = list(list(text = prompt))
+      parts = list(list(text = user_prompt))
     )),
     generationConfig = list(
       temperature     = temperature,
-      maxOutputTokens = max_tokens
+      maxOutputTokens = max_tokens,
+      responseMimeType = "application/json"
     )
   )
+
+  if (nzchar(sys_prompt)) {
+    body$systemInstruction <- list(
+      parts = list(list(text = sys_prompt))
+    )
+  }
   
   res <- tryCatch({
     httr::POST(

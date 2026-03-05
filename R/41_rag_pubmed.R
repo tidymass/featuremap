@@ -188,18 +188,15 @@ convert_module_to_met_list <- function(module_df, refdata = c("hmdb", "kegg")) {
 #'
 #' Constructs a structured PubMed Boolean query for a given metabolite
 #' by combining its primary name, optional synonyms, metabolism-related
-#' topic terms, an optional phenotype constraint, and a publication date
-#' range.
+#' topic terms (including MeSH), and a publication date range.
 #'
 #' @param met_name Character string. Primary name of the metabolite
 #'   (e.g. \code{"glucose"}). Always included in the name search block.
 #' @param synonyms Character vector or \code{NULL}. Alternative names or
 #'   synonyms for the metabolite. Passed through \code{filter_safe_synonyms}
 #'   before use; \code{NULL} or empty vectors are silently ignored.
-#' @param phenotype Character string or \code{NULL}. Optional disease or
-#'   phenotype term to restrict results (e.g. \code{"type 2 diabetes"}).
-#'   When provided and longer than one character, added as an
-#'   \code{AND "[Title/Abstract]"} constraint. Ignored when \code{NULL}.
+#' @param phenotype Character string or \code{NULL}. Reserved for backward
+#'   compatibility and ignored in Function-channel retrieval.
 #' @param years Numeric scalar. Number of years to look back from the
 #'   current calendar year when setting the \code{pdat} (publication date)
 #'   filter. For example, \code{years = 5} retrieves articles published
@@ -209,15 +206,13 @@ convert_module_to_met_list <- function(module_df, refdata = c("hmdb", "kegg")) {
 #'   ready to pass to \code{rentrez::entrez_search}.
 #'
 #' @details
-#' The query is assembled from up to four AND-joined blocks:
+#' The query is assembled from up to three AND-joined blocks:
 #' \enumerate{
 #'   \item \strong{Name block}: metabolite name and synonyms joined with OR,
-#'     each wrapped in \code{"..."[Title/Abstract]}.
+#'     using exact-phrase matching in \code{[Title/Abstract]} and MeSH for
+#'     primary metabolite name.
 #'   \item \strong{Topic block}: fixed metabolism-related terms
-#'     (\code{metabolism}, \code{biochemical}, \code{pathway},
-#'     \code{reaction}) joined with OR.
-#'   \item \strong{Phenotype block} (optional): single
-#'     \code{"phenotype"[Title/Abstract]} term.
+#'     in \code{[Title/Abstract]} plus metabolism-related MeSH terms.
 #'   \item \strong{Date block}: \code{(start_year:current_year[pdat])}.
 #' }
 #'
@@ -235,23 +230,25 @@ build_pubmed_query <- function(met_name,
 
   ## --- metabolite name block ---
   synonyms  <- filter_safe_synonyms(synonyms)
-  name_part <- c(met_name, synonyms) %>%
-    unique() %>%
-    purrr::map_chr(~ sprintf('"%s"[Title/Abstract]', .x)) %>%
-    paste(collapse = " OR ")
+  name_terms <- unique(c(
+    sprintf('"%s"[Title/Abstract]', met_name),
+    sprintf('"%s"[MeSH Terms]', met_name),
+    purrr::map_chr(synonyms, ~ sprintf('"%s"[Title/Abstract]', .x))
+  ))
+  name_part <- paste(name_terms, collapse = " OR ")
 
   ## --- metabolism-related topic block ---
   topic_part <- paste(
-    c("metabolism", "biochemical", "pathway", "reaction") %>%
-      sprintf('%s[Title/Abstract]', .),
+    c(
+      '"Metabolism"[MeSH Terms]',
+      '"Metabolic Networks and Pathways"[MeSH Terms]',
+      '"metabolism"[Title/Abstract]',
+      '"biochemical"[Title/Abstract]',
+      '"pathway"[Title/Abstract]',
+      '"reaction"[Title/Abstract]'
+    ),
     collapse = " OR "
   )
-
-  ## --- optional phenotype constraint ---
-  phenotype_part <- NULL
-  if (!is.null(phenotype) && nchar(phenotype) > 1) {
-    phenotype_part <- sprintf('"%s"[Title/Abstract]', phenotype)
-  }
 
   ## --- publication date range ---
   start_year <- as.numeric(format(Sys.Date(), "%Y")) - years
@@ -263,7 +260,6 @@ build_pubmed_query <- function(met_name,
   query_parts <- c(
     sprintf("(%s)", name_part),
     sprintf("(%s)", topic_part),
-    phenotype_part,
     year_part
   )
   query_parts <- query_parts[!is.null(query_parts)]

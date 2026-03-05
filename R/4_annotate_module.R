@@ -51,6 +51,8 @@
 #'         returned by LLM helpers (or empty tibble when no modules pass filter)
 #'   \item \code{module_top_metabolite_pmids}: tidy mapping table of top
 #'         metabolites to PubMed IDs (PMIDs) retained after reranking
+#'   \item \code{module_top_metabolite_pubmed_evidence}: auditable evidence
+#'         table for top metabolites with PMID, title, embedding score, and rank
 #'   \item \code{stage}: updated to \code{"module_annotated"}
 #' }
 #'
@@ -141,6 +143,7 @@ annotate_module = function(res = res,
     message("No significant modules passed the cutoff (", p, " < ", pcutoff, "). Returning empty module_function.\n")
     res$module_function <- tibble::tibble()
     res$module_top_metabolite_pmids <- tibble::tibble()
+    res$module_top_metabolite_pubmed_evidence <- tibble::tibble()
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
 
@@ -390,7 +393,7 @@ annotate_module = function(res = res,
       module_df  <- module_list_top[[mod]]
       module_anno <- convert_module_to_met_list(module_df, refdata = res$refdata)
       annotate_pubmed_for_module(module_anno  = module_anno,
-                                 phenotype    = phenotype,
+                                 phenotype    = NULL,
                                  NCBI_api_key = NCBI_api_key,
                                  retmax       = 10,
                                  years        = years)
@@ -468,27 +471,32 @@ annotate_module = function(res = res,
 
     module_pubmed_embed_refined = NULL
     res$module_top_metabolite_pmids <- tibble::tibble()
+    res$module_top_metabolite_pubmed_evidence <- tibble::tibble()
 
     message("Step 2: Generating prompt for LLM-based functional annotation...\n")
   }
 
   if (pubmed) {
-    empty_module_pmid_tbl <- tibble::tibble(
+    empty_module_evidence_tbl <- tibble::tibble(
       Module = character(),
       Module_label = character(),
       Compound_ID = character(),
       Compound_name = character(),
-      PMID_rank = integer(),
-      PMID = character()
+      rank = integer(),
+      pmid = character(),
+      title = character(),
+      score_embed = numeric()
     )
 
-    res$module_top_metabolite_pmids <- tryCatch({
+    res$module_top_metabolite_pubmed_evidence <- tryCatch({
       id_col <- if (identical(res$refdata, "hmdb")) "HMDB_ID" else "KEGG_ID"
-      empty_pmid_tbl <- tibble::tibble(
+      empty_evidence_tbl <- tibble::tibble(
         Module_label = character(),
         Compound_ID = character(),
-        PMID_rank = integer(),
-        PMID = character()
+        rank = integer(),
+        pmid = character(),
+        title = character(),
+        score_embed = numeric()
       )
 
       top_metabolite_map <- purrr::imap_dfr(module_list_top, function(module_df, module_label) {
@@ -503,56 +511,67 @@ annotate_module = function(res = res,
           )
       })
 
-      pmid_map <- purrr::imap_dfr(module_pubmed_embed_refined, function(module_res, module_label) {
+      evidence_map <- purrr::imap_dfr(module_pubmed_embed_refined, function(module_res, module_label) {
         if (is.null(module_res) || length(module_res) == 0) {
-          return(empty_pmid_tbl)
+          return(empty_evidence_tbl)
         }
 
         purrr::imap_dfr(module_res, function(res_single, compound_id) {
-          pmids <- as.character(res_single$pmids)
-          if (length(pmids) == 0) {
-            return(
-              tibble::tibble(
-                Module_label = module_label,
-                Compound_ID = as.character(compound_id),
-                PMID_rank = NA_integer_,
-                PMID = NA_character_
-              )
-            )
+          pmids <- if (is.null(res_single$pmids)) character(0) else as.character(res_single$pmids)
+          titles <- if (is.null(res_single$titles)) character(0) else as.character(res_single$titles)
+          scores <- if (is.null(res_single$scores)) numeric(0) else as.numeric(res_single$scores)
+          n_keep <- min(length(pmids), length(titles), length(scores))
+
+          if (n_keep == 0) {
+            return(tibble::tibble())
           }
 
           tibble::tibble(
             Module_label = module_label,
             Compound_ID = as.character(compound_id),
-            PMID_rank = seq_along(pmids),
-            PMID = pmids
+            rank = seq_len(n_keep),
+            pmid = pmids[seq_len(n_keep)],
+            title = titles[seq_len(n_keep)],
+            score_embed = scores[seq_len(n_keep)]
           )
         })
       })
 
-      required_pmid_cols <- c("Module_label", "Compound_ID", "PMID_rank", "PMID")
-      if (!is.data.frame(pmid_map) || !all(required_pmid_cols %in% colnames(pmid_map))) {
-        pmid_map <- empty_pmid_tbl
+      required_evidence_cols <- c("Module_label", "Compound_ID", "rank", "pmid", "title", "score_embed")
+      if (!is.data.frame(evidence_map) || !all(required_evidence_cols %in% colnames(evidence_map))) {
+        evidence_map <- empty_evidence_tbl
       } else {
-        pmid_map <- pmid_map %>%
-          dplyr::select(dplyr::any_of(required_pmid_cols))
+        evidence_map <- evidence_map %>%
+          dplyr::select(dplyr::any_of(required_evidence_cols))
       }
 
       top_metabolite_map %>%
-        dplyr::left_join(pmid_map, by = c("Module_label", "Compound_ID")) %>%
-        dplyr::arrange(Module_label, Compound_name, PMID_rank) %>%
+        dplyr::left_join(evidence_map, by = c("Module_label", "Compound_ID")) %>%
+        dplyr::arrange(Module_label, Compound_name, rank) %>%
         dplyr::select(
           Module,
           Module_label,
           Compound_ID,
           Compound_name,
-          PMID_rank,
-          PMID
+          rank,
+          pmid,
+          title,
+          score_embed
         )
     }, error = function(e) {
-      warning("Failed to build module_top_metabolite_pmids: ", e$message)
-      empty_module_pmid_tbl
+      warning("Failed to build module_top_metabolite_pubmed_evidence: ", e$message)
+      empty_module_evidence_tbl
     })
+
+    res$module_top_metabolite_pmids <- res$module_top_metabolite_pubmed_evidence %>%
+      dplyr::transmute(
+        Module,
+        Module_label,
+        Compound_ID,
+        Compound_name,
+        PMID_rank = rank,
+        PMID = pmid
+      )
   }
 
   # Generate input prompt to LLM module ----------------------------------------
@@ -598,6 +617,9 @@ annotate_module = function(res = res,
     res$module_function <- tibble::tibble()
     if (is.null(res$module_top_metabolite_pmids)) {
       res$module_top_metabolite_pmids <- tibble::tibble()
+    }
+    if (is.null(res$module_top_metabolite_pubmed_evidence)) {
+      res$module_top_metabolite_pubmed_evidence <- tibble::tibble()
     }
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)

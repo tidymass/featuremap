@@ -43,7 +43,6 @@ Using ONLY the metabolite information (top metabolite names, classes, literature
    - The TITLE should describe a specific biochemical process or mechanistic role, not a broad category label.
    - Avoid generic naming that only states a metabolite family without further functional qualification.
    - Prefer a single dominant function; do NOT list multiple functions or themes in parallel.
-   - Treat Importance-related signals as primary and Robustness-related signals as supportive.
    - Interpret Signal_concentration appropriately (hub-like vs diffuse structure), but do NOT assume that high or low is inherently better.
 
 2) Provide a short SUMMARY (5-8 sentences) of the likely biological function of this module.

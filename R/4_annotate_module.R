@@ -633,7 +633,7 @@ annotate_module = function(res = res,
     provider          = provider,
     llm_api_key       = llm_api_key,
     model             = llm_model,
-    max_tokens        = 2000,
+    max_tokens        = if (identical(provider, "gemini")) 4000 else 2000,
     temperature       = 0,
     sleep_sec         = 0)
 

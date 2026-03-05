@@ -41,12 +41,13 @@ chat_openai_silicon_call <- function(
   cont <- tryCatch(httr::content(res, encoding = "UTF-8"), error = function(e) NULL)
   if (is.null(cont)) return(NULL)
   content_txt <- tryCatch(cont$choices[[1]]$message$content, error = function(e) NULL)
+  finish_reason <- tryCatch(cont$choices[[1]]$finish_reason, error = function(e) NA_character_)
   if (is.null(content_txt)) {
     message("Failed to extract assistant content.")
     return(NULL)
   }
   
-  list(content = content_txt, raw = cont)
+  list(content = content_txt, raw = cont, finish_reason = finish_reason)
 }
 
 chat_gemini_call <- function(
@@ -130,6 +131,7 @@ chat_gemini_call <- function(
       collapse = ""
     )
   }, error = function(e) NULL)
+  finish_reason <- tryCatch(cont$candidates[[1]]$finishReason, error = function(e) NA_character_)
   
   
   if (is.null(txt)) {
@@ -137,7 +139,7 @@ chat_gemini_call <- function(
     return(NULL)
   }
   
-  list(content = txt, raw = cont)
+  list(content = txt, raw = cont, finish_reason = finish_reason)
 }
 
 

@@ -130,6 +130,69 @@ annotate_one_module <- function(module_obj,
     )
   }
 
+  parse_partial_json_fallback <- function(txt) {
+    if (is.null(txt) || !nzchar(txt)) return(NULL)
+
+    extract_json_string_value <- function(key) {
+      pattern <- paste0('"', key, '"\\s*:\\s*"')
+      m <- regexpr(pattern, txt, perl = TRUE)
+      if (m[1] == -1) return(NA_character_)
+
+      start <- m[1] + attr(m, "match.length")
+      if (start > nchar(txt)) return(NA_character_)
+
+      chars <- strsplit(substr(txt, start, nchar(txt)), "", fixed = TRUE)[[1]]
+      if (length(chars) == 0) return(NA_character_)
+
+      out <- character(0)
+      esc <- FALSE
+      closed <- FALSE
+      for (ch in chars) {
+        if (!esc && ch == "\\") {
+          esc <- TRUE
+          out <- c(out, ch)
+          next
+        }
+        if (!esc && ch == "\"") {
+          closed <- TRUE
+          break
+        }
+        out <- c(out, ch)
+        esc <- FALSE
+      }
+
+      val <- paste(out, collapse = "")
+      val <- gsub("\\\\n", " ", val, perl = TRUE)
+      val <- gsub("\\\\\"", "\"", val, perl = TRUE)
+      val <- trimws(val)
+      if (!nzchar(val)) return(NA_character_)
+      if (!closed && nchar(val) < 5) return(NA_character_)
+      val
+    }
+
+    title <- extract_json_string_value("title")
+    summary <- extract_json_string_value("summary")
+    rationale <- extract_json_string_value("rationale")
+    confidence_label <- extract_json_string_value("confidence_label")
+
+    if (!is.na(confidence_label)) {
+      if (grepl("\\bhigh\\b", confidence_label, ignore.case = TRUE)) confidence_label <- "high"
+      if (grepl("\\bmedium\\b", confidence_label, ignore.case = TRUE)) confidence_label <- "medium"
+      if (grepl("\\blow\\b", confidence_label, ignore.case = TRUE)) confidence_label <- "low"
+      if (!confidence_label %in% c("high", "medium", "low")) confidence_label <- NA_character_
+    }
+
+    found_n <- sum(!is.na(c(title, summary, confidence_label, rationale)))
+    if (found_n == 0) return(NULL)
+
+    list(
+      title = title,
+      summary = summary,
+      confidence_label = confidence_label,
+      rationale = rationale
+    )
+  }
+
   messages <- list(
     list(role = "system", content = system_prompt),
     list(role = "user",   content = user_prompt)
@@ -150,6 +213,11 @@ annotate_one_module <- function(module_obj,
 
   parsed <- NULL
   raw_text <- NA_character_
+  current_max_tokens <- if (identical(provider, "gemini")) {
+    max(4000, max_tokens)
+  } else {
+    max_tokens
+  }
 
   for (attempt in 1:2) {
     res_call <- safe_chat_call(
@@ -157,7 +225,7 @@ annotate_one_module <- function(module_obj,
       provider = provider,
       api_key = llm_api_key,
       model = model,
-      max_tokens = max_tokens,
+      max_tokens = current_max_tokens,
       temperature = temperature,
       response_schema = gemini_schema
     )
@@ -173,6 +241,13 @@ annotate_one_module <- function(module_obj,
       parsed <- parse_json_response(raw_text)
       if (!is.null(parsed)) break
       message("No JSON found for module ", module_obj$module_id, " (attempt ", attempt, ")")
+
+      if (identical(provider, "gemini") &&
+          !is.null(res_call$finish_reason) &&
+          identical(toupper(as.character(res_call$finish_reason)), "MAX_TOKENS")) {
+        current_max_tokens <- min(max(3000, current_max_tokens * 2), 8192)
+        message("Gemini output was truncated (MAX_TOKENS). Retrying with max_tokens = ", current_max_tokens)
+      }
     }
 
     if (attempt == 1) {
@@ -187,6 +262,10 @@ annotate_one_module <- function(module_obj,
   }
   
   # Handle JSON parsing failure
+  if (is.null(parsed)) {
+    parsed <- parse_partial_json_fallback(raw_text)
+  }
+
   if (is.null(parsed)) {
     parsed <- parse_labeled_fallback(raw_text)
   }

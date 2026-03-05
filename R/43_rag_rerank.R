@@ -370,6 +370,8 @@ refine_module_pubmed_with_llm <- function(
       refined
     })
   })
+
+  names(out) <- names(module_pubmed_embed)
   
   return(out)
 }
@@ -515,7 +517,7 @@ add_metabolite_summaries_to_modules <- function(
     llm_model, 
     max_chars_abstract = 1500
 ) {
-  lapply(seq_along(module_pubmed_embed_refined), function(mi) {
+  out <- lapply(seq_along(module_pubmed_embed_refined), function(mi) {
     
     message("--Summarizing for ", names(module_pubmed_embed_refined)[mi], " ...")
     
@@ -531,6 +533,9 @@ add_metabolite_summaries_to_modules <- function(
       )
     })
   })
+
+  names(out) <- names(module_pubmed_embed_refined)
+  out
 }
 
 

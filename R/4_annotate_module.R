@@ -458,6 +458,7 @@ annotate_module = function(res = res,
       provider = provider,
       llm_api_key = llm_api_key,
       llm_model   = llm_model)
+    names(module_pubmed_embed_refined) <- names(module_pubmed_embed)
 
     message("\nStep 2 has finished!\n")
 

@@ -49,6 +49,8 @@
 #' \itemize{
 #'   \item \code{module_function}: module-level functional annotation output
 #'         returned by LLM helpers (or empty tibble when no modules pass filter)
+#'   \item \code{module_top_metabolite_pmids}: tidy mapping table of top
+#'         metabolites to PubMed IDs (PMIDs) retained after reranking
 #'   \item \code{stage}: updated to \code{"module_annotated"}
 #' }
 #'
@@ -138,6 +140,7 @@ annotate_module = function(res = res,
 
     message("No significant modules passed the cutoff (", p, " < ", pcutoff, "). Returning empty module_function.\n")
     res$module_function <- tibble::tibble()
+    res$module_top_metabolite_pmids <- tibble::tibble()
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
 
@@ -463,8 +466,64 @@ annotate_module = function(res = res,
   }else{
 
     module_pubmed_embed_refined = NULL
+    res$module_top_metabolite_pmids <- tibble::tibble()
 
     message("Step 2: Generating prompt for LLM-based functional annotation...\n")
+  }
+
+  if (pubmed) {
+    id_col <- if (identical(res$refdata, "hmdb")) "HMDB_ID" else "KEGG_ID"
+
+    top_metabolite_map <- purrr::imap_dfr(module_list_top, function(module_df, module_label) {
+      compound_name_col <- if ("name" %in% colnames(module_df)) "name" else "Compound_name"
+
+      module_df %>%
+        dplyr::transmute(
+          Module_label = module_label,
+          Module = as.character(Module),
+          Compound_ID = as.character(.data[[id_col]]),
+          Compound_name = as.character(.data[[compound_name_col]])
+        )
+    })
+
+    pmid_map <- purrr::imap_dfr(module_pubmed_embed_refined, function(module_res, module_label) {
+      if (is.null(module_res) || length(module_res) == 0) {
+        return(tibble::tibble())
+      }
+
+      purrr::imap_dfr(module_res, function(res_single, compound_id) {
+        pmids <- as.character(res_single$pmids)
+        if (length(pmids) == 0) {
+          return(
+            tibble::tibble(
+              Module_label = module_label,
+              Compound_ID = as.character(compound_id),
+              PMID_rank = NA_integer_,
+              PMID = NA_character_
+            )
+          )
+        }
+
+        tibble::tibble(
+          Module_label = module_label,
+          Compound_ID = as.character(compound_id),
+          PMID_rank = seq_along(pmids),
+          PMID = pmids
+        )
+      })
+    })
+
+    res$module_top_metabolite_pmids <- top_metabolite_map %>%
+      dplyr::left_join(pmid_map, by = c("Module_label", "Compound_ID")) %>%
+      dplyr::arrange(Module_label, Compound_name, PMID_rank) %>%
+      dplyr::select(
+        Module,
+        Module_label,
+        Compound_ID,
+        Compound_name,
+        PMID_rank,
+        PMID
+      )
   }
 
   # Generate input prompt to LLM module ----------------------------------------
@@ -508,6 +567,9 @@ annotate_module = function(res = res,
   if (length(all_modules_ready) == 0) {
     message("No modules to annotate. Returning empty module_function.\n")
     res$module_function <- tibble::tibble()
+    if (is.null(res$module_top_metabolite_pmids)) {
+      res$module_top_metabolite_pmids <- tibble::tibble()
+    }
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
   }

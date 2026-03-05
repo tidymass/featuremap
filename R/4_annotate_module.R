@@ -570,7 +570,9 @@ annotate_module = function(res = res,
         Compound_ID,
         Compound_name,
         PMID_rank = rank,
-        PMID = pmid
+        PMID = pmid,
+        title,
+        score_embed
       )
   }
 

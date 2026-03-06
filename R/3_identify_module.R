@@ -58,7 +58,7 @@
 #'
 #' @export
 
-identify_module = function(res = res,
+identify_module = function(res = NULL,
                            method = c("louvain","leading_eigen","fast_greedy","walktrap"),
                            min_size = 3,
                            max_size = 100000,

@@ -5,7 +5,7 @@
 \title{Identify functional modules via community detection}
 \usage{
 identify_module(
-  res = res,
+  res = NULL,
   method = c("louvain", "leading_eigen", "fast_greedy", "walktrap"),
   min_size = 3,
   max_size = 1e+05,

@@ -5,7 +5,7 @@
 \title{Annotate functional modules using database, literature, and LLM models}
 \usage{
 annotate_module(
-  res = res,
+  res = NULL,
   p = "fdr",
   pcutoff = 0.05,
   ref_data = NULL,
@@ -81,6 +81,10 @@ The input \code{res} object updated with:
 \itemize{
 \item \code{module_function}: module-level functional annotation output
 returned by LLM helpers (or empty tibble when no modules pass filter)
+\item \code{module_top_metabolite_pmids}: tidy mapping table of top
+metabolites to PubMed IDs (PMIDs) retained after reranking
+\item \code{module_top_metabolite_pubmed_evidence}: auditable evidence
+table for top metabolites with PMID, title, embedding score, and rank
 \item \code{stage}: updated to \code{"module_annotated"}
 }
 }

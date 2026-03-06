@@ -86,7 +86,7 @@
 #' }
 #'
 #' @export
-annotate_module = function(res = res,
+annotate_module = function(res = NULL,
                            p = "fdr",
                            pcutoff = 0.05,
                            ref_data = NULL,

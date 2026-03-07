@@ -37,9 +37,7 @@ Imports:
     igraph,
     jsonlite,
     magrittr,
-    massdataset,
     mclust,
-    metid,
     methods,
     R6,
     rlang,
@@ -49,6 +47,9 @@ Imports:
     tidygraph,
     xml2
 Suggests:
+    massdataset,
+    masstools,
+    metid,
     PCSF2
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

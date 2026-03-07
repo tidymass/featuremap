@@ -83,8 +83,6 @@ The input \code{res} object updated with:
 returned by LLM helpers (or empty tibble when no modules pass filter)
 \item \code{module_top_metabolite_pmids}: tidy mapping table of top
 metabolites to PubMed IDs (PMIDs) retained after reranking
-\item \code{module_top_metabolite_pubmed_evidence}: auditable evidence
-table for top metabolites with PMID, title, embedding score, and rank
 \item \code{stage}: updated to \code{"module_annotated"}
 }
 }

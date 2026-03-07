@@ -51,8 +51,6 @@
 #'         returned by LLM helpers (or empty tibble when no modules pass filter)
 #'   \item \code{module_top_metabolite_pmids}: tidy mapping table of top
 #'         metabolites to PubMed IDs (PMIDs) retained after reranking
-#'   \item \code{module_top_metabolite_pubmed_evidence}: auditable evidence
-#'         table for top metabolites with PMID, title, embedding score, and rank
 #'   \item \code{stage}: updated to \code{"module_annotated"}
 #' }
 #'
@@ -143,7 +141,6 @@ annotate_module = function(res = NULL,
     message("No significant modules passed the cutoff (", p, " < ", pcutoff, "). Returning empty module_function.\n")
     res$module_function <- tibble::tibble()
     res$module_top_metabolite_pmids <- tibble::tibble()
-    res$module_top_metabolite_pubmed_evidence <- tibble::tibble()
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
 
@@ -471,24 +468,23 @@ annotate_module = function(res = NULL,
 
     module_pubmed_embed_refined = NULL
     res$module_top_metabolite_pmids <- tibble::tibble()
-    res$module_top_metabolite_pubmed_evidence <- tibble::tibble()
 
     message("Step 2: Generating prompt for LLM-based functional annotation...\n")
   }
 
   if (pubmed) {
-    empty_module_evidence_tbl <- tibble::tibble(
+    empty_module_pmids_tbl <- tibble::tibble(
       Module = character(),
       Module_label = character(),
       Compound_ID = character(),
       Compound_name = character(),
-      rank = integer(),
-      pmid = character(),
+      PMID_rank = integer(),
+      PMID = character(),
       title = character(),
       score_embed = numeric()
     )
 
-    res$module_top_metabolite_pubmed_evidence <- tryCatch({
+    res$module_top_metabolite_pmids <- tryCatch({
       id_col <- if (identical(res$refdata, "hmdb")) "HMDB_ID" else "KEGG_ID"
       empty_evidence_tbl <- tibble::tibble(
         Module_label = character(),
@@ -553,27 +549,15 @@ annotate_module = function(res = NULL,
           Module_label,
           Compound_ID,
           Compound_name,
-          rank,
-          pmid,
+          PMID_rank = rank,
+          PMID = pmid,
           title,
           score_embed
         )
     }, error = function(e) {
-      warning("Failed to build module_top_metabolite_pubmed_evidence: ", e$message)
-      empty_module_evidence_tbl
+      warning("Failed to build module_top_metabolite_pmids: ", e$message)
+      empty_module_pmids_tbl
     })
-
-    res$module_top_metabolite_pmids <- res$module_top_metabolite_pubmed_evidence %>%
-      dplyr::transmute(
-        Module,
-        Module_label,
-        Compound_ID,
-        Compound_name,
-        PMID_rank = rank,
-        PMID = pmid,
-        title,
-        score_embed
-      )
   }
 
   # Generate input prompt to LLM module ----------------------------------------
@@ -619,9 +603,6 @@ annotate_module = function(res = NULL,
     res$module_function <- tibble::tibble()
     if (is.null(res$module_top_metabolite_pmids)) {
       res$module_top_metabolite_pmids <- tibble::tibble()
-    }
-    if (is.null(res$module_top_metabolite_pubmed_evidence)) {
-      res$module_top_metabolite_pubmed_evidence <- tibble::tibble()
     }
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)

@@ -10,9 +10,11 @@
 #'   \code{\link{check_feature_table}} requirements, including columns:
 #'   \code{variable_id}, \code{mz}, \code{rt}, \code{polarity},
 #'   \code{mean_intensity}, \code{condition}, and \code{pvalue}.
-#' @param ms2_table Optional MS2 annotation table. Can be \code{NULL}.
-#'   If provided, it should be compatible with
-#'   \code{\link{check_annotation_table_ms2}}.
+#' @param ms2_table Optional MS2 confirmation table. Can be \code{NULL}.
+#'   If provided, it should contain \code{variable_id} and the identifier
+#'   column matching \code{refdata} (that is, \code{HMDB.ID} for
+#'   \code{refdata = "hmdb"} or \code{KEGG.ID} for
+#'   \code{refdata = "kegg"}).
 #' @param metabolite_database A \code{metid} database object (typically
 #'   \code{databaseClass}) used for MS1 annotation. If \code{NULL},
 #'   the function auto-loads a cached/reference database from the

@@ -118,21 +118,22 @@ check_feature_table <-
 
 #' Check the Format of an MS2 Annotation Table
 #'
-#' Validates that the MS2 annotation table meets required structural and type specifications.
-#' The function checks for required columns and ensures proper data types for each.
+#' Validates that the MS2 annotation table meets the minimal key-based
+#' structure required for downstream feature confirmation.
 #'
 #' @param check_annotation_table_ms2 A `data.frame` containing MS2 annotation results.
-#'   It must include the following columns: `variable_id`, `mz`, `rt`, `HMDB.ID`, and `KEGG.ID`.
+#'   It must include `variable_id` and at least one identifier column among
+#'   `HMDB.ID` and `KEGG.ID`.
 #'
 #' @return Returns `TRUE` (invisibly) if all checks pass. Otherwise, stops with an informative error message.
 #'
 #' @details The function performs the following checks:
 #' \itemize{
 #'   \item `check_annotation_table_ms2` must be a data frame
-#'   \item Required columns: `variable_id`, `mz`, `rt`, `HMDB.ID`, `KEGG.ID`
-#'   \item `variable_id`: character, unique
-#'   \item `mz` and `rt`: numeric
-#'   \item `HMDB.ID` and `KEGG.ID`: character (can include `NA`)
+#'   \item Required columns: `variable_id` and at least one of `HMDB.ID` / `KEGG.ID`
+#'   \item `variable_id`: character
+#'   \item Identifier columns must be character when present
+#'   \item Non-empty (`variable_id`, identifier) pairs must not be duplicated
 #' }
 #'
 #' @author Xiaotao Shen \email{xiaotao.shen@outlook.com}
@@ -142,10 +143,8 @@ check_feature_table <-
 #' # Example annotation table
 #' annotation_table <- data.frame(
 #'   variable_id = c("M1", "M2"),
-#'   mz = c(100.1, 200.2),
-#'   rt = c(300, 400),
 #'   HMDB.ID = c("HMDB00001", NA),
-#'   KEGG.ID = c("C00031", NA),
+#'   KEGG.ID = c(NA, "C00031"),
 #'   stringsAsFactors = FALSE
 #' )
 #'
@@ -162,45 +161,52 @@ check_annotation_table_ms2 <-
     }
 
     # Required columns
-    required_cols <- c("variable_id", "mz", "rt", "HMDB.ID", "KEGG.ID")
-    missing_cols <- setdiff(required_cols, colnames(check_annotation_table_ms2))
-    if (length(missing_cols) > 0) {
-      stop(paste(
-        "check_annotation_table_ms2 is missing required columns:",
-        paste(missing_cols, collapse = ", ")
-      ))
+    if (!"variable_id" %in% colnames(check_annotation_table_ms2)) {
+      stop("check_annotation_table_ms2 is missing required column: variable_id")
+    }
+
+    id_cols <- intersect(c("HMDB.ID", "KEGG.ID"), colnames(check_annotation_table_ms2))
+    if (length(id_cols) == 0) {
+      stop("check_annotation_table_ms2 must contain at least one of: HMDB.ID, KEGG.ID")
     }
 
     # Check variable_id
     if (!is.character(check_annotation_table_ms2$variable_id)) {
       stop("variable_id column must be character.")
     }
-    if (anyDuplicated(check_annotation_table_ms2$variable_id)) {
-      stop("variable_id column contains duplicated values.")
+
+    if ("HMDB.ID" %in% id_cols &&
+        !is.character(check_annotation_table_ms2$HMDB.ID)) {
+      stop("HMDB.ID column must be character when provided.")
     }
 
-    # Check mz
-    if (!is.numeric(check_annotation_table_ms2$mz)) {
-      stop("mz column must be numeric.")
+    if ("KEGG.ID" %in% id_cols &&
+        !is.character(check_annotation_table_ms2$KEGG.ID)) {
+      stop("KEGG.ID column must be character when provided.")
     }
 
-    # Check rt
-    if (!is.numeric(check_annotation_table_ms2$rt)) {
-      stop("rt column must be numeric.")
+    if ("HMDB.ID" %in% id_cols) {
+      hmdb_pairs <- check_annotation_table_ms2[
+        !is.na(check_annotation_table_ms2$HMDB.ID) &
+          check_annotation_table_ms2$HMDB.ID != "",
+        c("variable_id", "HMDB.ID"),
+        drop = FALSE
+      ]
+      if (anyDuplicated(hmdb_pairs)) {
+        stop("Duplicated variable_id/HMDB.ID pairs found in check_annotation_table_ms2.")
+      }
     }
 
-    # Check HMDB.ID
-    if (!is.character(check_annotation_table_ms2$HMDB.ID)) {
-      stop(
-        "HMDB.ID column must be character. It can contain NA but the column itself must be character type."
-      )
-    }
-
-    # Check KEGG.ID
-    if (!is.character(check_annotation_table_ms2$KEGG.ID)) {
-      stop(
-        "KEGG.ID column must be character. It can contain NA but the column itself must be character type."
-      )
+    if ("KEGG.ID" %in% id_cols) {
+      kegg_pairs <- check_annotation_table_ms2[
+        !is.na(check_annotation_table_ms2$KEGG.ID) &
+          check_annotation_table_ms2$KEGG.ID != "",
+        c("variable_id", "KEGG.ID"),
+        drop = FALSE
+      ]
+      if (anyDuplicated(kegg_pairs)) {
+        stop("Duplicated variable_id/KEGG.ID pairs found in check_annotation_table_ms2.")
+      }
     }
 
     message("[OK] check_annotation_table_ms2 passed all checks.")

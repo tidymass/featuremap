@@ -83,17 +83,17 @@ group_peaks_rt <- function(rt, rt.tol = 10) {
 #' Score a Metabolite Feature Cluster (MFC)
 #'
 #' Computes a heuristic score for a metabolite feature cluster (`mfc`) based on MS annotation features such as
-#' adduct type, polarity, isotopic composition, and spectral similarity.
+#' adduct type, polarity, isotopic composition, and MS2-supported annotation level.
 #'
 #' @param mfc A data frame representing a single metabolite feature cluster. Must contain at least the columns:
-#'   `Adduct`, `polarity`, `isotope`, and optionally `SS` (spectral similarity score).
+#'   `Adduct`, `polarity`, `isotope`, and optionally `Level`.
 #'
 #' @return A numeric score representing the confidence or quality of the MFC annotation.
 #'
 #' @details
 #' The scoring logic is based on heuristic rules:
 #' \itemize{
-#'   \item +150 points if any feature has a non-missing `SS` (spectrum similarity)
+#'   \item +150 points if any feature has `Level == 2`, indicating MS2-backed confirmation
 #'   \item +50 for canonical adducts: `(M+H)+` in positive mode or `(M-H)-` in negative mode
 #'   \item +20 if isotopic peaks are observed for canonical adducts
 #'   \item +20–10 for secondary adducts or isotopic forms
@@ -108,7 +108,7 @@ group_peaks_rt <- function(rt, rt.tol = 10) {
 #'   Adduct = c("(M+H)+", "(M+H)+"),
 #'   polarity = c("positive", "positive"),
 #'   isotope = c("[M]", "[M+1]"),
-#'   SS = c(0.9, NA),
+#'   Level = c(2L, 2L),
 #'   stringsAsFactors = FALSE
 #' )
 #'
@@ -120,8 +120,8 @@ group_peaks_rt <- function(rt, rt.tol = 10) {
 score_mfc <- function(mfc) {
   score <- 0
 
-  ###
-  if (any(!is.na(mfc$SS))) {
+  if ("Level" %in% colnames(mfc) &&
+      any(!is.na(mfc$Level) & mfc$Level == 2L)) {
     score <-
       score + 150
   }

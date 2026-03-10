@@ -5,8 +5,9 @@
 #'
 #' @param feature_table A data frame with metabolite features. Must include columns:
 #'   `variable_id`, `mz`, `rt`, `condition`, `polarity`, and `mean_intensity`.
-#' @param ms2_table Optional MS2 annotation table. Must be compatible with
-#'   `check_annotation_table_ms2()`.
+#' @param ms2_table Optional MS2 confirmation table. When provided, it must
+#'   contain `variable_id` and at least one identifier column among `HMDB.ID`
+#'   and `KEGG.ID`, and is used only as a key-based confirmation signal.
 #' @param column Character. Chromatographic column type: either `"rp"` (reverse-phase) or `"hilic"`. Default is `"rp"`.
 #' @param metabolite_database A metabolite database object (from `metid`) used for annotation.
 #' @param refdata Character. Reference identifier system used downstream.
@@ -73,6 +74,15 @@ annotate_feature_table <-
       check_feature_table(feature_table)
     }
 
+    if (!is.null(ms2_table)) {
+      check_annotation_table_ms2(ms2_table)
+      if (identical(refdata, "hmdb") && !"HMDB.ID" %in% colnames(ms2_table)) {
+        stop("ms2_table must contain HMDB.ID when refdata = 'hmdb'.")
+      }
+      if (identical(refdata, "kegg") && !"KEGG.ID" %in% colnames(ms2_table)) {
+        stop("ms2_table must contain KEGG.ID when refdata = 'kegg'.")
+      }
+    }
 
 
     ##metabolite_database is required
@@ -403,19 +413,37 @@ annotate_feature_table <-
 
     if(!is.null(ms2_table)){
       if(refdata == "hmdb"){
+        ms2_hmdb_keys <-
+          ms2_table %>%
+          dplyr::filter(!is.na(HMDB.ID), HMDB.ID != "") %>%
+          dplyr::distinct(variable_id, HMDB.ID) %>%
+          with(paste(variable_id, HMDB.ID, sep = "\r"))
+
         annotation_table_final <-
           annotation_table_final %>%
-          dplyr::left_join(ms2_table,by = c("variable_id", "HMDB.ID"),suffix = c("", ".ms2")) %>%
-          dplyr::mutate(SS = coalesce(SS.ms2, SS),
-                        Level = if_else(!is.na(SS), 2L, Level)) %>%
-          dplyr::select(-SS.ms2)
+          dplyr::mutate(
+            Level = if_else(
+              paste(variable_id, HMDB.ID, sep = "\r") %in% ms2_hmdb_keys,
+              2L,
+              Level
+            )
+          )
       }else if(refdata == "kegg"){
+        ms2_kegg_keys <-
+          ms2_table %>%
+          dplyr::filter(!is.na(KEGG.ID), KEGG.ID != "") %>%
+          dplyr::distinct(variable_id, KEGG.ID) %>%
+          with(paste(variable_id, KEGG.ID, sep = "\r"))
+
         annotation_table_final <-
           annotation_table_final %>%
-          dplyr::left_join(ms2_table,by = c("variable_id", "KEGG.ID"),suffix = c("", ".ms2")) %>%
-          dplyr::mutate(SS = coalesce(SS.ms2, SS),
-                        Level = if_else(!is.na(SS), 2L, Level)) %>%
-          dplyr::select(-SS.ms2)
+          dplyr::mutate(
+            Level = if_else(
+              paste(variable_id, KEGG.ID, sep = "\r") %in% ms2_kegg_keys,
+              2L,
+              Level
+            )
+          )
       }
     }
 

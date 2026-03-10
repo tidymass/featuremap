@@ -1,2 +1,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.git$
+^\.gitignore$
+^\.DS_Store$
+^\.github$
+^\.{2}Rcheck$

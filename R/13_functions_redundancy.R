@@ -1,8 +1,3 @@
-#' @title calculate_redundancy
-#' @description calculate_redundancy
-#' @author Xiaotao Shen
-#' \email{xiaotao.shen@@outlook.com}
-#' @param annotation_table annotation table
 #' Calculate Annotation Redundancy Metrics
 #'
 #' Computes two types of annotation redundancy from an annotation table:
@@ -36,6 +31,7 @@
 #' calculate_redundancy(annotation_table)
 #' }
 #'
+#' @keywords internal
 
 
 calculate_redundancy <-
@@ -102,6 +98,7 @@ calculate_redundancy <-
 #' @importFrom dplyr group_by filter ungroup bind_rows
 #' @importFrom purrr map
 #' @importFrom plyr dlply
+#' @keywords internal
 #'
 
 

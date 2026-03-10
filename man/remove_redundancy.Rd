@@ -40,3 +40,4 @@ filtered_table <- remove_redundancy(annotation_table = example_annotation_table)
 \author{
 Xiaotao Shen \email{xiaotao.shen@outlook.com}
 }
+\keyword{internal}

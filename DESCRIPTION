@@ -23,33 +23,38 @@ Description:
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
-    cli,
     MASS,
+    PCSF2,
+    R6,
+    cli,
     data.table,
     dplyr,
     furrr,
     future,
     glue,
     httr,
-    plyr,
-    purrr,
-    stringr,
     igraph,
     jsonlite,
     magrittr,
-    mclust,
+    massdataset,
+    masstools,
     methods,
-    R6,
+    metid,
+    mclust,
+    plyr,
+    purrr,
+    Rdisop,
     rlang,
     rentrez,
+    stringr,
     tibble,
     tidyr,
     tidygraph,
     xml2
-Suggests:
-    massdataset,
-    masstools,
-    metid,
-    PCSF2
+Remotes:
+    tidymass/massdataset,
+    tidymass/metid,
+    ytwangZero/PCSF2,
+    tidymass/masstools
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

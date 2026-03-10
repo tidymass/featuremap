@@ -1,0 +1,7 @@
+name,version,file,url,md5
+metabolite_database_hmdb,1.0.0,metabolite_database_hmdb_v1.0.0.rds,,
+metabolite_database_kegg,1.0.0,metabolite_database_kegg_v1.0.0.rds,,
+mrn_hmdb,1.0.0,mrn_hmdb_v1.0.0.rds,,
+mrn_kegg,1.0.0,mrn_kegg_v1.0.0.rds,,
+functional_reference_hmdb,1.0.0,functional_reference_hmdb_v1.0.0.rds,,
+functional_reference_kegg,1.0.0,functional_reference_kegg_v1.0.0.rds,,

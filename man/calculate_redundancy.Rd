@@ -2,7 +2,7 @@
 % Please edit documentation in R/13_functions_redundancy.R
 \name{calculate_redundancy}
 \alias{calculate_redundancy}
-\title{calculate_redundancy}
+\title{Calculate Annotation Redundancy Metrics}
 \usage{
 calculate_redundancy(annotation_table)
 }
@@ -18,7 +18,12 @@ A named numeric vector with two elements:
 }
 }
 \description{
-calculate_redundancy
+Computes two types of annotation redundancy from an annotation table:
+\itemize{
+\item \strong{Redundancy 1:} The average number of unique compound clusters (e.g., metabolite feature clusters)
+mapped to each compound (\code{Lab.ID}).
+\item \strong{Redundancy 2:} The average number of compound matches per metabolite peak (\code{variable_id}).
+}
 }
 \examples{
 \dontrun{
@@ -35,8 +40,6 @@ calculate_redundancy(annotation_table)
 
 }
 \author{
-Xiaotao Shen
-\email{xiaotao.shen@outlook.com}
-
 Xiaotao Shen \email{xiaotao.shen@outlook.com}
 }
+\keyword{internal}

@@ -107,10 +107,10 @@ annotate_one_module <- function(module_obj,
       if (!nzchar(val)) NA_character_ else val
     }
 
-    title <- get_value("^\\s*(title|module\\s*title)\\s*[:：]\\s*")
-    summary <- get_value("^\\s*summary\\s*[:：]\\s*")
-    rationale <- get_value("^\\s*rationale\\s*[:：]\\s*")
-    conf_line <- get_value("^\\s*confidence(_label)?\\s*[:：]\\s*")
+    title <- get_value("^\\s*(title|module\\s*title)\\s*[:\\uFF1A]\\s*")
+    summary <- get_value("^\\s*summary\\s*[:\\uFF1A]\\s*")
+    rationale <- get_value("^\\s*rationale\\s*[:\\uFF1A]\\s*")
+    conf_line <- get_value("^\\s*confidence(_label)?\\s*[:\\uFF1A]\\s*")
 
     confidence_label <- NA_character_
     if (!is.na(conf_line)) {

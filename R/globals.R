@@ -1,7 +1,6 @@
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(c(
     ".", ".data", ".N",
-    "annotate_isotope",
     "Annotated_fraction", "Annotated_nodes",
     "base_prize", "bin",
     "coalesce",
@@ -19,13 +18,15 @@ if (getRversion() >= "2.15.1") {
     "KEGG_ID", "KEGG.ID",
     "Lab.ID", "Level",
     "mean_weighted_score", "metabolite", "metabolite_feature_cluster", "module",
-    "Module", "Module_score", "Module_size",
+    "Module", "Module_label", "Module_score", "Module_size",
+    "mzError.ppm",
     "n", "N", "n_real", "name", "Node_freq", "nodes",
-    "p", "peakIndex", "penalty", "polarity", "prize", "pvalue",
+    "p", "peakIndex", "penalty", "pmid", "polarity", "prize", "pvalue",
     "R6Class", "Robustness",
-    "score", "score_fc", "score_norm", "score_p", "sequential", "SS", "SS.ms2",
+    "rtError.s",
+    "score", "score_embed", "score_fc", "score_norm", "score_p", "sequential", "SS", "SS.ms2",
     "str_detect",
-    "tibble", "to", "type", "Type",
+    "tibble", "title", "to", "type", "Type",
     "unique_variable_id",
     "V", "V<-", "variable_id", "vcount",
     "weighted_anno_score", "weighted_score"

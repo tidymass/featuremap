@@ -14,10 +14,8 @@ build_pubmed_query(met_name, synonyms = NULL, phenotype = NULL, years = NULL)
 synonyms for the metabolite. Passed through \code{filter_safe_synonyms}
 before use; \code{NULL} or empty vectors are silently ignored.}
 
-\item{phenotype}{Character string or \code{NULL}. Optional disease or
-phenotype term to restrict results (e.g. \code{"type 2 diabetes"}).
-When provided and longer than one character, added as an
-\code{AND "[Title/Abstract]"} constraint. Ignored when \code{NULL}.}
+\item{phenotype}{Character string or \code{NULL}. Reserved for backward
+compatibility and ignored in Function-channel retrieval.}
 
 \item{years}{Numeric scalar. Number of years to look back from the
 current calendar year when setting the \code{pdat} (publication date)
@@ -31,19 +29,16 @@ ready to pass to \code{rentrez::entrez_search}.
 \description{
 Constructs a structured PubMed Boolean query for a given metabolite
 by combining its primary name, optional synonyms, metabolism-related
-topic terms, an optional phenotype constraint, and a publication date
-range.
+topic terms (including MeSH), and a publication date range.
 }
 \details{
-The query is assembled from up to four AND-joined blocks:
+The query is assembled from up to three AND-joined blocks:
 \enumerate{
 \item \strong{Name block}: metabolite name and synonyms joined with OR,
-each wrapped in \code{"..."[Title/Abstract]}.
+using exact-phrase matching in \code{[Title/Abstract]} and MeSH for
+primary metabolite name.
 \item \strong{Topic block}: fixed metabolism-related terms
-(\code{metabolism}, \code{biochemical}, \code{pathway},
-\code{reaction}) joined with OR.
-\item \strong{Phenotype block} (optional): single
-\code{"phenotype"[Title/Abstract]} term.
+in \code{[Title/Abstract]} plus metabolism-related MeSH terms.
 \item \strong{Date block}: \code{(start_year:current_year[pdat])}.
 }
 }

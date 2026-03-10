@@ -133,7 +133,6 @@ check_feature_table <-
 #'   \item Required columns: `variable_id` and at least one of `HMDB.ID` / `KEGG.ID`
 #'   \item `variable_id`: character
 #'   \item Identifier columns must be character when present
-#'   \item Non-empty (`variable_id`, identifier) pairs must not be duplicated
 #' }
 #'
 #' @author Xiaotao Shen \email{xiaotao.shen@outlook.com}
@@ -183,30 +182,6 @@ check_annotation_table_ms2 <-
     if ("KEGG.ID" %in% id_cols &&
         !is.character(check_annotation_table_ms2$KEGG.ID)) {
       stop("KEGG.ID column must be character when provided.")
-    }
-
-    if ("HMDB.ID" %in% id_cols) {
-      hmdb_pairs <- check_annotation_table_ms2[
-        !is.na(check_annotation_table_ms2$HMDB.ID) &
-          check_annotation_table_ms2$HMDB.ID != "",
-        c("variable_id", "HMDB.ID"),
-        drop = FALSE
-      ]
-      if (anyDuplicated(hmdb_pairs)) {
-        stop("Duplicated variable_id/HMDB.ID pairs found in check_annotation_table_ms2.")
-      }
-    }
-
-    if ("KEGG.ID" %in% id_cols) {
-      kegg_pairs <- check_annotation_table_ms2[
-        !is.na(check_annotation_table_ms2$KEGG.ID) &
-          check_annotation_table_ms2$KEGG.ID != "",
-        c("variable_id", "KEGG.ID"),
-        drop = FALSE
-      ]
-      if (anyDuplicated(kegg_pairs)) {
-        stop("Duplicated variable_id/KEGG.ID pairs found in check_annotation_table_ms2.")
-      }
     }
 
     message("[OK] check_annotation_table_ms2 passed all checks.")

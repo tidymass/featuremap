@@ -85,8 +85,18 @@ featuremap_read_manifest <- function(refresh = FALSE) {
 
 featuremap_default_resource_name <- function(kind, refdata = NULL) {
   defaults <- list(
-    metabolite_database = c(hmdb = "metabolite_database_hmdb", kegg = "metabolite_database_kegg"),
-    mrn = c(default = "mrn_default", hmdb = "mrn_hmdb", kegg = "mrn_kegg"),
+    metabolite_database = c(
+      default = "featuremap_compound",
+      all = "featuremap_compound",
+      hmdb = "featuremap_compound",
+      kegg = "featuremap_compound"
+    ),
+    mrn = c(
+      default = "mrn",
+      all = "mrn",
+      hmdb = "mrn",
+      kegg = "mrn"
+    ),
     functional_reference = c(hmdb = "functional_reference_hmdb", kegg = "functional_reference_kegg")
   )
 

@@ -644,7 +644,6 @@ embed_pubmed_for_metabolite <- function(
   
   keep_idx <- which(sim_scores >= similarity)
   if (length(keep_idx) == 0) {
-    message("No PubMed articles pass similarity threshold for metabolite: ", met_name)
     return(NULL)
   }
   
@@ -723,7 +722,7 @@ embed_pubmed_for_metabolite <- function(
 embed_module_pubmed <- function(
     module_pub,
     llm_api_key,
-    refdata        = c("hmdb", "kegg"),
+    refdata        = c("hmdb", "kegg", "auto"),
     module_df      = NULL,
     embed_model    = "BAAI/bge-large-en-v1.5",
     provider       = "siliconflow",
@@ -741,7 +740,10 @@ embed_module_pubmed <- function(
     
     ## Resolve human-readable name
     met_real_name <- m
-    if (refdata == "hmdb") {
+    if (!is.null(module_df) && "Compound_ID" %in% colnames(module_df)) {
+      hit <- module_df[module_df$Compound_ID == m, "name"]
+      if (length(hit) > 0) met_real_name <- hit[1]
+    } else if (refdata == "hmdb") {
       if (!is.null(module_df) && "HMDB_ID" %in% colnames(module_df)) {
         hit <- module_df[module_df$HMDB_ID == m, "name"]
         if (length(hit) > 0) met_real_name <- hit[1]

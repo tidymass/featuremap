@@ -105,14 +105,20 @@ extract_subnetwork = function(res = NULL,
   if (!"feature_table" %in% names(res)){
     stop("[Error] res$feature_table is missing.")
   }
+  cli::cli_h2("Step 2: Subnetwork Extraction")
+  has_user_mrn <- !is.null(mrn)
+  start_time <- Sys.time()
+  cli::cli_alert_info("[1/3] Loading the metabolic reaction network.")
   if (is.null(mrn)){
     ref_tag <- if (!is.null(res$refdata)) as.character(res$refdata) else NULL
     resource_name <- featuremap_default_resource_name("mrn", refdata = ref_tag)
-    message("mrn is NULL. Loading resource from cache/GitHub: ", resource_name)
     mrn <- featuremap_load_resource(resource_name)
   }
-
-  start_time <- Sys.time()
+  if (has_user_mrn) {
+    cli::cli_alert_success("Using a user-supplied metabolic reaction network.")
+  } else {
+    cli::cli_alert_success("No user-supplied metabolic reaction network detected; loaded cached or remote resources.")
+  }
 
   res$mrn = mrn
   res$feature_table %>%
@@ -137,54 +143,72 @@ extract_subnetwork = function(res = NULL,
     if (nrow(feature_sig) == 0)
       stop("[Error] No significant features found under pcutoff = ", pcutoff)
   }
+  cli::cli_alert_info("[2/3] Preparing subnetwork extraction.")
 
   ## build FMpair + mrnref ----
-  if(res$refdata == "kegg"){
-    res$anno_feature_table1 %>%
-      dplyr::filter(variable_id %in% feature_sig$variable_id) %>%
-      dplyr::select(variable_id, Compound.name, KEGG.ID, score_norm) -> anno_FM
+  anno_feature_table1_sub <- res$anno_feature_table1 %>%
+    dplyr::filter(variable_id %in% feature_sig$variable_id) %>%
+    dplyr::mutate(annotation_row_id = dplyr::row_number()) %>%
+    as.data.frame()
 
-    mrn %>%
-      tidygraph::activate(nodes) %>%
-      as.data.frame() %>%
-      dplyr::filter(KEGG_ID != "<NA>") %>%
-      dplyr::select(KEGG_ID, INCHI_ID, Compound_name) -> mrnref
+  anno_feature_table1_sub %>%
+    dplyr::select(
+      annotation_row_id,
+      variable_id,
+      Compound.name,
+      HMDB.ID,
+      KEGG.ID,
+      score_norm
+    ) -> anno_FM
 
-    c_min = 0.02
-    suppressWarnings({
-      anno_FM %>%
-        dplyr::left_join(mrnref, by = c("KEGG.ID" = "KEGG_ID")) %>%
-        dplyr::filter(!is.na(INCHI_ID)) %>%
-        dplyr::arrange(INCHI_ID) %>%
-        dplyr::distinct(variable_id, KEGG.ID, .keep_all = TRUE) %>%
-        dplyr::mutate(cost = 1-score_norm+c_min) %>%
-        dplyr::select(variable_id, INCHI_ID, cost) %>%
-        purrr::set_names(c("from", "to", "weight")) -> FMpair
-    })
+  mrn_nodes <- mrn %>%
+    tidygraph::activate(nodes) %>%
+    as.data.frame()
 
-  }else if(res$refdata == "hmdb"){
-    res$anno_feature_table1 %>%
-      dplyr::filter(variable_id %in% feature_sig$variable_id) %>%
-      dplyr::select(variable_id, Compound.name, HMDB.ID, score_norm) -> anno_FM
+  mrnref_hmdb <- mrn_nodes %>%
+    dplyr::filter(!is.na(HMDB_ID), HMDB_ID != "", HMDB_ID != "<NA>") %>%
+    dplyr::select(HMDB_ID, INCHI_ID, Compound_name) %>%
+    dplyr::distinct(HMDB_ID, .keep_all = TRUE)
 
-    mrn %>%
-      tidygraph::activate(nodes) %>%
-      as.data.frame() %>%
-      dplyr::filter(HMDB_ID != "<NA>") %>%
-      dplyr::select(HMDB_ID, INCHI_ID, Compound_name) -> mrnref
+  mrnref_kegg <- mrn_nodes %>%
+    dplyr::filter(!is.na(KEGG_ID), KEGG_ID != "", KEGG_ID != "<NA>") %>%
+    dplyr::select(KEGG_ID, INCHI_ID, Compound_name) %>%
+    dplyr::distinct(KEGG_ID, .keep_all = TRUE)
 
-    c_min = 0.02
-    suppressWarnings({
-      anno_FM %>%
-        dplyr::left_join(mrnref, by = c("HMDB.ID" = "HMDB_ID")) %>%
-        dplyr::filter(!is.na(INCHI_ID)) %>%
-        dplyr::arrange(INCHI_ID) %>%
-        dplyr::distinct(variable_id, HMDB.ID, .keep_all = TRUE) %>%
-        dplyr::mutate(cost = 1-score_norm+c_min) %>%
-        dplyr::select(variable_id, INCHI_ID, cost) %>%
-        purrr::set_names(c("from", "to", "weight")) -> FMpair
-    })
-  }
+  suppressWarnings({
+    anno_hmdb <- anno_FM %>%
+      dplyr::filter(!is.na(HMDB.ID), HMDB.ID != "") %>%
+      dplyr::left_join(mrnref_hmdb, by = c("HMDB.ID" = "HMDB_ID")) %>%
+      dplyr::filter(!is.na(INCHI_ID)) %>%
+      dplyr::arrange(annotation_row_id, INCHI_ID) %>%
+      dplyr::distinct(annotation_row_id, .keep_all = TRUE) %>%
+      dplyr::mutate(mapping_source = "HMDB")
+
+    hmdb_mapped_rows <- anno_hmdb$annotation_row_id
+
+    anno_kegg <- anno_FM %>%
+      dplyr::filter(!annotation_row_id %in% hmdb_mapped_rows) %>%
+      dplyr::filter(!is.na(KEGG.ID), KEGG.ID != "") %>%
+      dplyr::left_join(mrnref_kegg, by = c("KEGG.ID" = "KEGG_ID")) %>%
+      dplyr::filter(!is.na(INCHI_ID)) %>%
+      dplyr::arrange(annotation_row_id, INCHI_ID) %>%
+      dplyr::distinct(annotation_row_id, .keep_all = TRUE) %>%
+      dplyr::mutate(mapping_source = "KEGG")
+  })
+
+  anno_mapped <- dplyr::bind_rows(anno_hmdb, anno_kegg) %>%
+    dplyr::arrange(variable_id, dplyr::desc(score_norm), mapping_source, INCHI_ID)
+
+  cli::cli_alert_success(
+    "Using {.val {nrow(feature_sig)}} features with {.val {nrow(anno_mapped)}} mapped annotation rows for subnetwork extraction."
+  )
+
+  c_min = 0.02
+  FMpair <- anno_mapped %>%
+    dplyr::mutate(cost = 1 - score_norm + c_min) %>%
+    dplyr::select(variable_id, INCHI_ID, cost) %>%
+    dplyr::distinct(variable_id, INCHI_ID, .keep_all = TRUE) %>%
+    purrr::set_names(c("from", "to", "weight"))
 
   if (nrow(FMpair) == 0){
     stop("[Error] No matched feature-metabolite pairs (FMpair); check annotation table or ID format.")
@@ -200,8 +224,6 @@ extract_subnetwork = function(res = NULL,
   imrn = igraph::graph_from_data_frame(dplyr::bind_rows(FMpair, MMpair), directed = FALSE)
 
   ## prepare node weights (parts independent of b) ---
-  message("Setting node and edge weights for pcsf ...")
-
   terminals <- feature_sig %>%
     dplyr::filter(variable_id %in% FMpair$from) %>%
     dplyr::select(variable_id, importance) %>%
@@ -237,7 +259,6 @@ extract_subnetwork = function(res = NULL,
 
   # prepare parallel computation ----
   if (workers > 1) {
-    message("Initializing parallel backend with ", workers, " workers...")
     future::plan(future::multisession, workers = workers)
     on.exit(future::plan(future::sequential), add = TRUE)
   }
@@ -252,10 +273,6 @@ extract_subnetwork = function(res = NULL,
     ) %>%
       dplyr::mutate(final_prize = dplyr::if_else(base_prize == 0, penalty, base_prize)) %>%
       dplyr::pull(final_prize)
-
-    message("Running PCSF (", times_val, " iterations; b=", b_val, ", w=", w_val,
-            if (workers > 1) paste0(", parallel with ", workers, " workers") else ", sequential",
-            ") ...")
 
     if(workers > 1){
       results_list <- furrr::future_map(
@@ -387,59 +404,106 @@ extract_subnetwork = function(res = NULL,
       feature = rep(names(feature2metabolite), lengths(feature2metabolite)),
       metabolite = unlist(feature2metabolite)
     ) %>%
-      dplyr::left_join(mrnref, by = c("metabolite" = "INCHI_ID"))
+      dplyr::mutate(network_supported = TRUE) %>%
+      dplyr::left_join(
+        mrn_nodes %>%
+          dplyr::select(INCHI_ID, Compound_name, HMDB_ID, KEGG_ID) %>%
+          dplyr::distinct(INCHI_ID, .keep_all = TRUE),
+        by = c("metabolite" = "INCHI_ID")
+      )
     rownames(feature_metabolite_df) = NULL
 
-    if(res$refdata == "hmdb"){
-      anno_feature_table2 <- res$anno_feature_table1 %>%
-        dplyr::select(variable_id, HMDB.ID, score_norm) %>%
-        dplyr::left_join(feature_metabolite_df, by = c("variable_id" = "feature", "HMDB.ID" = "HMDB_ID")) %>%
-        dplyr::filter(!is.na(metabolite)) %>%
-        dplyr::rename(INCHI_ID = metabolite) %>%
-        dplyr::rename(HMDB_ID = HMDB.ID) %>%
-        dplyr::arrange(variable_id)
-    }else if(res$refdata == "kegg"){
-      anno_feature_table2 <- res$anno_feature_table1 %>%
-        dplyr::select(variable_id, KEGG.ID, score_norm) %>%
-        dplyr::left_join(feature_metabolite_df, by = c("variable_id" = "feature", "KEGG.ID" = "KEGG_ID")) %>%
-        dplyr::filter(!is.na(metabolite)) %>%
-        dplyr::rename(INCHI_ID = metabolite) %>%
-        dplyr::rename(KEGG_ID = KEGG.ID) %>%
-        dplyr::arrange(variable_id)
-    }
+    anno_feature_table2_extra <- anno_mapped %>%
+      dplyr::rename(HMDB_ID = HMDB.ID, KEGG_ID = KEGG.ID) %>%
+      dplyr::select(
+        annotation_row_id,
+        variable_id,
+        INCHI_ID,
+        score_norm,
+        mapping_source
+      ) %>%
+      dplyr::left_join(
+        feature_metabolite_df,
+        by = c("variable_id" = "feature", "INCHI_ID" = "metabolite")
+      ) %>%
+      dplyr::filter(!is.na(network_supported) & network_supported) %>%
+      dplyr::mutate(
+        mapped_compound_name = Compound_name,
+        mapped_hmdb_id = HMDB_ID,
+        mapped_kegg_id = KEGG_ID
+      ) %>%
+      dplyr::select(
+        annotation_row_id,
+        variable_id,
+        INCHI_ID,
+        score_norm,
+        mapping_source,
+        network_supported,
+        mapped_compound_name,
+        mapped_hmdb_id,
+        mapped_kegg_id
+      ) %>%
+      dplyr::arrange(variable_id, dplyr::desc(score_norm))
 
     from_is_inchi <- all(grepl("^InChI", edge_frequency$from))
     to_is_inchi   <- all(grepl("^InChI", edge_frequency$to))
 
     if(from_is_inchi){
-      anno_feature_table2 <- anno_feature_table2 %>%
+      anno_feature_table2_extra <- anno_feature_table2_extra %>%
         dplyr::left_join(edge_frequency %>%
-                           dplyr::filter(to %in% anno_feature_table2$variable_id),
+                           dplyr::filter(to %in% anno_feature_table2_extra$variable_id),
                          by = c("variable_id" = "to", "INCHI_ID" = "from"))
     }else if(to_is_inchi){
-      anno_feature_table2 <- anno_feature_table2 %>%
+      anno_feature_table2_extra <- anno_feature_table2_extra %>%
         dplyr::left_join(edge_frequency %>%
-                           dplyr::filter(to %in% anno_feature_table2$variable_id),
+                           dplyr::filter(from %in% anno_feature_table2_extra$variable_id),
                          by = c("variable_id" = "from", "INCHI_ID" = "to"))
     }
 
-    if (res$refdata == "hmdb") {
-      anno_feature_table2 <- anno_feature_table2 %>%
-        dplyr::select(variable_id, Compound_name, HMDB_ID, INCHI_ID, score_norm, freq) %>%
-        dplyr::rename(edge_freq = freq) %>%
-        dplyr::arrange(variable_id, dplyr::desc(score_norm), dplyr::desc(edge_freq))
-    } else {
-      anno_feature_table2 <- anno_feature_table2 %>%
-        dplyr::select(variable_id, Compound_name, KEGG_ID, INCHI_ID, score_norm, freq) %>%
-        dplyr::rename(edge_freq = freq) %>%
-        dplyr::arrange(variable_id, dplyr::desc(score_norm), dplyr::desc(edge_freq))
-    }
+    anno_feature_table2_extra <- anno_feature_table2_extra %>%
+      dplyr::select(
+        annotation_row_id,
+        variable_id,
+        INCHI_ID,
+        score_norm,
+        mapping_source,
+        network_supported,
+        mapped_compound_name,
+        mapped_hmdb_id,
+        mapped_kegg_id,
+        freq
+      ) %>%
+      dplyr::rename(edge_freq = freq) %>%
+      dplyr::arrange(variable_id, dplyr::desc(score_norm), dplyr::desc(edge_freq))
 
-    anno_feature_table2 <- anno_feature_table2 %>%
+    anno_feature_table2_extra <- anno_feature_table2_extra %>%
       dplyr::mutate(weighted_anno_score = 0.7*score_norm + 0.3*edge_freq) %>%
       dplyr::group_by(variable_id) %>%
       dplyr::mutate(confidence_rank = dplyr::dense_rank(dplyr::desc(weighted_anno_score))) %>%
       dplyr::ungroup()
+
+    anno_feature_table2 <- anno_feature_table1_sub %>%
+      dplyr::filter(annotation_row_id %in% anno_feature_table2_extra$annotation_row_id) %>%
+      dplyr::left_join(anno_feature_table2_extra, by = c("annotation_row_id", "variable_id", "score_norm")) %>%
+      dplyr::left_join(
+        res$feature_table[, c("variable_id", "importance")] %>%
+          dplyr::distinct(variable_id, .keep_all = TRUE),
+        by = "variable_id"
+      ) %>%
+      dplyr::mutate(
+        Compound.name = dplyr::coalesce(Compound.name, mapped_compound_name),
+        HMDB.ID = dplyr::coalesce(HMDB.ID, mapped_hmdb_id),
+        KEGG.ID = dplyr::coalesce(KEGG.ID, mapped_kegg_id)
+      ) %>%
+      dplyr::select(
+        -annotation_row_id,
+        -network_supported,
+        -mapped_compound_name,
+        -mapped_hmdb_id,
+        -mapped_kegg_id,
+        -mapping_source
+      ) %>%
+      dplyr::arrange(variable_id, dplyr::desc(weighted_anno_score), dplyr::desc(edge_freq))
 
     list(
       pcsf_subnet = pcsf_subnet,
@@ -454,9 +518,6 @@ extract_subnetwork = function(res = NULL,
   best_w <- w
 
   if (isTRUE(grid_tune)) {
-    message("\n[Grid tuning] Start tuning b (", min(b_grid), "-", max(b_grid),
-            ") and w (", min(w_grid), "-", max(w_grid), ") ...")
-
     grid <- tidyr::expand_grid(b = b_grid, w = w_grid)
     grid$unique_variable_id <- NA_integer_
     grid$mean_weighted_score <- NA_real_
@@ -491,12 +552,14 @@ extract_subnetwork = function(res = NULL,
                             mean_weighted_score = grid2$mean_weighted_score[1],
                             times_tune = times_tune)
 
-    message("[Grid tuning] Best parameters: b = ", best_b, ", w = ", best_w,
-            " (unique variable_id = ", grid2$unique_variable_id[1], ").\n")
+    cli::cli_alert_success(
+      "Selected tuned PCSF parameters b = {.val {best_b}} and w = {.val {best_w}}."
+    )
   }
 
 
   # ---- final run with (best_b, best_w) and full times/workers ----
+  cli::cli_alert_info("[3/3] Finalizing network-supported annotations.")
   final_out <- run_pcsf_once(b_val = best_b, w_val = best_w, times_val = times)
 
   res$pcsf_subnet <- final_out$pcsf_subnet
@@ -504,12 +567,17 @@ extract_subnetwork = function(res = NULL,
   res$edge_frequency <- final_out$edge_frequency
   res$anno_feature_table2 <- final_out$anno_feature_table2
 
-  message("\nStep 2: Union PCSF-based subnetwork has been constructed: ",
-          igraph::gorder(res$pcsf_subnet), " nodes and ", igraph::gsize(res$pcsf_subnet), " edges.")
   res <- set_featuremap_stage(res, "subnetwork_extracted")
 
   end_time <- Sys.time()
-  cat("Execution time:", round(as.numeric(end_time - start_time, units = "mins"), 2), "minutes\n")
+  elapsed_min <- round(as.numeric(end_time - start_time, units = "mins"), 2)
+  cli::cli_alert_success(
+    "Constructed a subnetwork with {.val {igraph::gorder(res$pcsf_subnet)}} nodes and {.val {igraph::gsize(res$pcsf_subnet)}} edges."
+  )
+  cli::cli_alert_success(
+    "Retained {.val {nrow(res$anno_feature_table2)}} network-supported annotation rows for {.val {dplyr::n_distinct(res$anno_feature_table2$variable_id)}} features."
+  )
+  cli::cli_alert_info("Elapsed time: {.val {elapsed_min}} minutes.")
 
   return(res)
 }

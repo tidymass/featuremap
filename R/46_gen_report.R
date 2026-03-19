@@ -366,10 +366,6 @@ annotate_all_modules <- function(all_modules_ready,
   results_list <- lapply(seq_len(n_mod), function(i) {
     
     mod <- all_modules_ready[[i]]
-    message(sprintf(
-      "-Annotating module %s (%d/%d) via %s...",
-      mod$module_id, i, n_mod, model
-    ))
     
     out <- annotate_one_module(
       module_obj    = mod,

@@ -147,12 +147,30 @@ filter_safe_synonyms <- function(synonyms) {
 #' convert_module_to_met_list(module_df, refdata = "hmdb")
 #' convert_module_to_met_list(module_df, refdata = "kegg")
 #' }
-convert_module_to_met_list <- function(module_df, refdata = c("hmdb", "kegg")) {
+convert_module_to_met_list <- function(module_df, refdata = c("hmdb", "kegg", "auto")) {
 
   refdata <- match.arg(refdata)
 
+  if (refdata == "auto" && "Compound_ID" %in% colnames(module_df)) {
+    compound_ids <- unique(module_df$Compound_ID)
+    compound_ids <- compound_ids[!is.na(compound_ids) & nzchar(compound_ids)]
+    met_list <- lapply(compound_ids, function(id) {
+      df <- module_df %>% dplyr::filter(Compound_ID == id) %>% dplyr::slice(1)
+      list(
+        Compound_ID = df$Compound_ID,
+        HMDB_ID     = if ("HMDB_ID" %in% colnames(df)) df$HMDB_ID else NA_character_,
+        KEGG_ID     = if ("KEGG_ID" %in% colnames(df)) df$KEGG_ID else NA_character_,
+        name        = df$name,
+        synonyms    = clean_field(df$synonyms)
+      )
+    })
+    names(met_list) <- compound_ids
+    return(met_list)
+  }
+
   if (refdata == "hmdb") {
     hmdb_ids <- unique(module_df$HMDB_ID)
+    hmdb_ids <- hmdb_ids[!is.na(hmdb_ids) & nzchar(hmdb_ids)]
     met_list <- lapply(hmdb_ids, function(id) {
       df <- module_df %>% dplyr::filter(HMDB_ID == id) %>% dplyr::slice(1)
       list(
@@ -165,6 +183,7 @@ convert_module_to_met_list <- function(module_df, refdata = c("hmdb", "kegg")) {
 
   } else if (refdata == "kegg") {
     kegg_ids <- unique(module_df$KEGG_ID)
+    kegg_ids <- kegg_ids[!is.na(kegg_ids) & nzchar(kegg_ids)]
     met_list <- lapply(kegg_ids, function(id) {
       df <- module_df %>% dplyr::filter(KEGG_ID == id) %>% dplyr::slice(1)
       list(

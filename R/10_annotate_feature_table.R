@@ -9,9 +9,10 @@
 #'   contain `variable_id` and at least one identifier column among `HMDB.ID`
 #'   and `KEGG.ID`, and is used only as a key-based confirmation signal.
 #' @param column Character. Chromatographic column type: either `"rp"` (reverse-phase) or `"hilic"`. Default is `"rp"`.
-#' @param metabolite_database A metabolite database object (from `metid`) used for annotation.
-#' @param refdata Character. Reference identifier system used downstream.
-#'   Typically `"hmdb"` or `"kegg"`.
+#' @param metabolite_database A merged metabolite database object (from `metid`)
+#'   used for annotation. Its `spectra.info` slot is expected to carry at least
+#'   `Lab.ID`, `Compound.name`, `Formula`, `HMDB.ID`, `KEGG.ID`, `CAS.ID`,
+#'   `mz`, `RT`, and `Submitter`.
 #' @param ms1_match_ppm Numeric. m/z tolerance (in ppm) for MS1 matching. Default is 15.
 #' @param mfc_rt_tol Numeric. Retention time tolerance (in seconds) for metabolite feature cluster scoring. Default is 5.
 #' @param isotope_number Integer. Maximum number of isotopes to annotate. Default is 3.
@@ -59,7 +60,6 @@ annotate_feature_table <-
            ms2_table,
            column = c("rp", "hilic"),
            metabolite_database,
-           refdata = NULL,
            ms1_match_ppm = 15,
            mfc_rt_tol = 5,
            isotope_number = 3,
@@ -76,18 +76,24 @@ annotate_feature_table <-
 
     if (!is.null(ms2_table)) {
       check_annotation_table_ms2(ms2_table)
-      if (identical(refdata, "hmdb") && !"HMDB.ID" %in% colnames(ms2_table)) {
-        stop("ms2_table must contain HMDB.ID when refdata = 'hmdb'.")
-      }
-      if (identical(refdata, "kegg") && !"KEGG.ID" %in% colnames(ms2_table)) {
-        stop("ms2_table must contain KEGG.ID when refdata = 'kegg'.")
-      }
     }
 
 
     ##metabolite_database is required
     if (missing(metabolite_database)) {
       stop("metabolite_database is required.")
+    }
+
+    required_db_cols <- c(
+      "Lab.ID", "Compound.name", "Formula", "HMDB.ID",
+      "KEGG.ID", "CAS.ID", "mz", "RT", "Submitter"
+    )
+    missing_db_cols <- setdiff(required_db_cols, colnames(metabolite_database@spectra.info))
+    if (length(missing_db_cols) > 0) {
+      stop(
+        "metabolite_database@spectra.info is missing required columns: ",
+        paste(missing_db_cols, collapse = ", ")
+      )
     }
 
     feature_table_pos <-
@@ -100,8 +106,6 @@ annotate_feature_table <-
 
 
     ############metabolite database matching for feature_table
-    message("\nAnnotating features positive mode...\n")
-
     if (nrow(feature_table_pos) == 0) {
       annotation_table_ms1_pos <- NULL
     } else{
@@ -137,8 +141,6 @@ annotate_feature_table <-
         object_pos@annotation_table
       annotation_table_ms1_pos$polarity <- "positive"
     }
-
-    message("\nAnnotating features negative mode...\n")
 
     if (nrow(feature_table_neg) == 0) {
       annotation_table_ms1_neg <- NULL
@@ -176,20 +178,14 @@ annotate_feature_table <-
       annotation_table_ms1_neg$polarity <- "negative"
     }
 
-    if(refdata == "kegg"){
-      annotation_table_ms1 <-
-        rbind(annotation_table_ms1_pos, annotation_table_ms1_neg) %>%
-        as.data.frame() %>%
-        dplyr::filter(!is.na(KEGG.ID)) %>%
-        dplyr::mutate(isotope = "[M]")
-    }else if(refdata == "hmdb"){
-      annotation_table_ms1 <-
-        rbind(annotation_table_ms1_pos, annotation_table_ms1_neg) %>%
-        as.data.frame() %>%
-        dplyr::filter(!is.na(HMDB.ID)) %>%
-        dplyr::mutate(isotope = "[M]")
-    }
-
+    annotation_table_ms1 <-
+      rbind(annotation_table_ms1_pos, annotation_table_ms1_neg) %>%
+      as.data.frame() %>%
+      dplyr::filter(
+        (!is.na(HMDB.ID) & HMDB.ID != "") |
+          (!is.na(KEGG.ID) & KEGG.ID != "")
+      ) %>%
+      dplyr::mutate(isotope = "[M]")
 
     annotation_table_final <-
       annotation_table_ms1 %>%
@@ -214,23 +210,18 @@ annotate_feature_table <-
         "isotope"
       )
 
-    if(refdata == "kegg"){
+    spectra_info <- metabolite_database@spectra.info
 
-      annotation_table_final <-
-        annotation_table_final %>%
-        dplyr::left_join(metabolite_database@spectra.info[, c("KEGG.ID", "Formula")], by = "KEGG.ID") %>%
-        dplyr::filter(!is.na(KEGG.ID)) %>%
-        dplyr::filter(KEGG.ID != "")
-
-    }else if(refdata == "hmdb"){
-
-      annotation_table_final <-
-        annotation_table_final %>%
-        dplyr::left_join(metabolite_database@spectra.info[, c("HMDB.ID", "Formula")], by = "HMDB.ID") %>%
-        dplyr::filter(!is.na(HMDB.ID)) %>%
-        dplyr::filter(HMDB.ID != "")
-
-    }
+    annotation_table_final <-
+      annotation_table_final %>%
+      dplyr::left_join(
+        spectra_info[, c("Lab.ID", "Formula", "Submitter")],
+        by = "Lab.ID"
+      ) %>%
+      dplyr::filter(
+        (!is.na(HMDB.ID) & HMDB.ID != "") |
+          (!is.na(KEGG.ID) & KEGG.ID != "")
+      )
 
 
     annotation_table_final <-
@@ -263,6 +254,7 @@ annotate_feature_table <-
       temp_iso$Lab.ID <- annotation_row$Lab.ID
       temp_iso$Adduct <- annotation_row$Adduct
       temp_iso$Formula <- annotation_row$Formula
+      temp_iso$Submitter <- annotation_row$Submitter
       temp_iso$rt <- annotation_row$rt
       temp_iso$CAS.ID <- annotation_row$CAS.ID
       temp_iso$HMDB.ID <- annotation_row$HMDB.ID
@@ -281,9 +273,9 @@ annotate_feature_table <-
         dplyr::select(dplyr::all_of(template_cols))
     }
 
+    old_plan <- future::plan()
     future::plan(multisession, workers = workers)
-
-    message("\nIsotope annotation for feature table positive mode ...\n")
+    on.exit(future::plan(old_plan), add = TRUE)
 
     if (nrow(annotation_table_final_pos) == 0) {
       isotope_pos <- NULL
@@ -345,8 +337,6 @@ annotate_feature_table <-
       rbind(annotation_table_final_pos, isotope_pos) %>%
       as.data.frame() %>%
       dplyr::arrange(Compound.name, isotope, rt)
-
-    message("\nIsotope annotation for feature table negative mode...\n")
 
     if (nrow(annotation_table_final_neg) == 0) {
       isotope_neg <- NULL
@@ -412,51 +402,46 @@ annotate_feature_table <-
       dplyr::arrange(Lab.ID, rt)
 
     if(!is.null(ms2_table)){
-      if(refdata == "hmdb"){
-        ms2_hmdb_keys <-
+      ms2_hmdb_keys <-
+        if ("HMDB.ID" %in% colnames(ms2_table)) {
           ms2_table %>%
-          dplyr::filter(!is.na(HMDB.ID), HMDB.ID != "") %>%
-          dplyr::distinct(variable_id, HMDB.ID) %>%
-          with(paste(variable_id, HMDB.ID, sep = "\r"))
+            dplyr::filter(!is.na(HMDB.ID), HMDB.ID != "") %>%
+            dplyr::distinct(variable_id, HMDB.ID) %>%
+            with(paste(variable_id, HMDB.ID, sep = "\r"))
+        } else {
+          character(0)
+        }
 
-        annotation_table_final <-
-          annotation_table_final %>%
-          dplyr::mutate(
-            Level = if_else(
-              paste(variable_id, HMDB.ID, sep = "\r") %in% ms2_hmdb_keys,
-              2L,
-              Level
-            )
-          )
-      }else if(refdata == "kegg"){
-        ms2_kegg_keys <-
+      ms2_kegg_keys <-
+        if ("KEGG.ID" %in% colnames(ms2_table)) {
           ms2_table %>%
-          dplyr::filter(!is.na(KEGG.ID), KEGG.ID != "") %>%
-          dplyr::distinct(variable_id, KEGG.ID) %>%
-          with(paste(variable_id, KEGG.ID, sep = "\r"))
+            dplyr::filter(!is.na(KEGG.ID), KEGG.ID != "") %>%
+            dplyr::distinct(variable_id, KEGG.ID) %>%
+            with(paste(variable_id, KEGG.ID, sep = "\r"))
+        } else {
+          character(0)
+        }
 
-        annotation_table_final <-
-          annotation_table_final %>%
-          dplyr::mutate(
-            Level = if_else(
+      annotation_table_final <-
+        annotation_table_final %>%
+        dplyr::mutate(
+          Level = if_else(
+            paste(variable_id, HMDB.ID, sep = "\r") %in% ms2_hmdb_keys |
               paste(variable_id, KEGG.ID, sep = "\r") %in% ms2_kegg_keys,
-              2L,
-              Level
-            )
+            2L,
+            Level
           )
-      }
+        )
+
     }
 
     ####combine peaks to metabolite feature cluster (MFC)
-    message("\n\nScoring metabolite feature clusters...\n")
-
     annotation_table_final <-
       score_annotation_table(annotation_table = annotation_table_final, mfc_rt_tol = mfc_rt_tol)
 
 
     ###remove redundant annotation according to metabolite
     calculate_redundancy(annotation_table = annotation_table_final)
-    message("\nAll done!\n")
     return(annotation_table_final)
   }
 

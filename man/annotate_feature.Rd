@@ -8,7 +8,6 @@ annotate_feature(
   feature_table,
   ms2_table = NULL,
   metabolite_database = NULL,
-  refdata = c("kegg", "hmdb"),
   column = c("rp", "hilic"),
   ms1_match_ppm = 15,
   mfc_rt_tol = 5,
@@ -28,11 +27,8 @@ If provided, it should be compatible with
 
 \item{metabolite_database}{A \code{metid} database object (typically
 \code{databaseClass}) used for MS1 annotation. If \code{NULL},
-the function auto-loads a cached/reference database from the
-featuremap resource repository according to \code{refdata}.}
-
-\item{refdata}{Character. Reference namespace for downstream ID mapping.
-Must be one of \code{"kegg"} or \code{"hmdb"}.}
+the function auto-loads the merged \code{featuremap_compound}
+resource from the featuremap resource repository.}
 
 \item{column}{Character. LC column mode used by \code{metid} adduct/matching
 rules. Must be one of \code{"rp"} or \code{"hilic"}.}
@@ -54,7 +50,7 @@ annotation) and threads passed to \code{metid::annotate_metabolites()}.}
 A \code{featuremap_result} R6 object containing at least:
 \itemize{
 \item \code{feature_table}: input feature table (with derived fields added later in pipeline)
-\item \code{refdata}: selected reference tag (\code{"kegg"} or \code{"hmdb"})
+\item \code{refdata}: fixed to \code{"all"} to indicate merged HMDB/KEGG annotation
 \item \code{anno_feature_table1}: feature-metabolite annotation table after redundancy removal
 \item \code{anno_redundancy}: redundancy summary before/after filtering
 \item \code{object_type}: \code{"featuremap_result"}
@@ -75,7 +71,6 @@ res <- annotate_feature(
   feature_table = demo_feature_table,
   ms2_table = NULL,
   metabolite_database = NULL,
-  refdata = "kegg",
   column = "rp",
   ms1_match_ppm = 15,
   mfc_rt_tol = 5,

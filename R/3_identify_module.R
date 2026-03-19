@@ -7,8 +7,8 @@
 #' @param res A \code{featuremap_result} object returned by
 #'   \code{\link{extract_subnetwork}} (or later). It should contain at least:
 #'   \code{pcsf_subnet}, \code{mrn}, \code{edge_frequency},
-#'   \code{node_frequency}, \code{anno_feature_table2}, \code{feature_table},
-#'   and \code{refdata}. Expected stage is \code{"subnetwork_extracted"} or later.
+#'   \code{node_frequency}, \code{anno_feature_table2}, and
+#'   \code{feature_table}. Expected stage is \code{"subnetwork_extracted"} or later.
 #' @param method Character. Community detection algorithm. One of
 #'   \code{"louvain"}, \code{"leading_eigen"}, \code{"fast_greedy"},
 #'   or \code{"walktrap"}.
@@ -77,8 +77,10 @@ identify_module = function(res = NULL,
     res,
     expected_stages = c("subnetwork_extracted", "module_identified", "module_annotated")
   )
+  cli::cli_h2("Step 3: Module Identification")
 
   start_time <- Sys.time()
+  cli::cli_alert_info("[1/3] Detecting modules.")
 
   set.seed(seed)
 
@@ -153,90 +155,57 @@ identify_module = function(res = NULL,
   member <- igraph::membership(comm)
 
   # construct the module table ---
-  if(res$refdata == "hmdb"){
-
-    res$module_table <- data.frame(
-      name = names(member),
-      module = as.integer(member)) %>%
-      dplyr::arrange(module) %>%
-      dplyr::group_by(module) %>%
-      dplyr::filter(dplyr::n() >= min_size & dplyr::n() <= min(max_size, vcount(steiner_subnet))) %>%
-      dplyr::ungroup() %>%
-      dplyr::left_join(mrn_node[,c("HMDB_ID", "INCHI_ID", "Compound_name")], by = c("name" = "INCHI_ID")) %>%
-      dplyr::left_join((res$node_frequency %>% dplyr::select(-type)), by = c("name")) %>%
-      dplyr::rename(INCHI_ID = name) %>%
-      dplyr::left_join(data.frame(
+  res$module_table <- data.frame(
+    name = names(member),
+    module = as.integer(member)
+  ) %>%
+    dplyr::arrange(module) %>%
+    dplyr::group_by(module) %>%
+    dplyr::filter(dplyr::n() >= min_size & dplyr::n() <= min(max_size, vcount(steiner_subnet))) %>%
+    dplyr::ungroup() %>%
+    dplyr::left_join(
+      mrn_node[, c("HMDB_ID", "KEGG_ID", "INCHI_ID", "Compound_name")] %>%
+        dplyr::distinct(INCHI_ID, .keep_all = TRUE),
+      by = c("name" = "INCHI_ID")
+    ) %>%
+    dplyr::left_join((res$node_frequency %>% dplyr::select(-type)), by = c("name")) %>%
+    dplyr::rename(INCHI_ID = name, Module = module, Node_freq = freq) %>%
+    dplyr::left_join(
+      data.frame(
         INCHI_ID = V(steiner_subnet)$name,
-        Type = V(steiner_subnet)$type), by = "INCHI_ID")
+        Type = V(steiner_subnet)$type
+      ),
+      by = "INCHI_ID"
+    )
 
-    res$anno_feature_table2 %>%
-      filter(INCHI_ID %in% res$module_table$INCHI_ID) %>%
-      dplyr::distinct(variable_id, INCHI_ID, .keep_all = TRUE) %>%
-      dplyr::left_join(res$feature_table[,c("variable_id","importance")], by = "variable_id") %>%
-      dplyr::group_by(INCHI_ID) %>%
-      dplyr::summarise(
-        Importance = {
-          w <- weighted_anno_score
-          x <- importance
-          if (all(is.na(w)) || sum(w, na.rm = TRUE) == 0) {
-            mean(x, na.rm = TRUE)
-          } else {
-            weighted.mean(x, w, na.rm = TRUE)
-          }
+  res$anno_feature_table2 %>%
+    dplyr::filter(INCHI_ID %in% res$module_table$INCHI_ID) %>%
+    dplyr::distinct(variable_id, INCHI_ID, .keep_all = TRUE) %>%
+    dplyr::group_by(INCHI_ID) %>%
+    dplyr::summarise(
+      Importance = {
+        w <- weighted_anno_score
+        x <- importance
+        if (all(is.na(w)) || sum(w, na.rm = TRUE) == 0) {
+          mean(x, na.rm = TRUE)
+        } else {
+          weighted.mean(x, w, na.rm = TRUE)
         }
-      ) %>%
-      dplyr::ungroup() -> meta_importance
+      }
+    ) %>%
+    dplyr::ungroup() -> meta_importance
 
-    res$module_table %>%
-      left_join(meta_importance, by = "INCHI_ID") %>%
-      purrr::set_names(c("INCHI_ID", "Module", "HMDB_ID", "Compound_name", "Node_freq", "Type", "Importance")) -> res$module_table
+  res$module_table <- res$module_table %>%
+    dplyr::left_join(meta_importance, by = "INCHI_ID") %>%
+    dplyr::select(INCHI_ID, Module, HMDB_ID, KEGG_ID, Compound_name, Node_freq, Type, Importance)
 
-  }else if(res$refdata == "kegg"){
-
-    res$module_table <- data.frame(
-      name = names(member),
-      module = as.integer(member)) %>%
-      dplyr::arrange(module) %>%
-      dplyr::group_by(module) %>%
-      dplyr::filter(dplyr::n() >= min_size & dplyr::n() <= min(max_size, vcount(steiner_subnet))) %>%
-      dplyr::ungroup() %>%
-      dplyr::left_join(mrn_node[,c("KEGG_ID", "INCHI_ID", "Compound_name")], by = c("name" = "INCHI_ID")) %>%
-      dplyr::left_join((res$node_frequency %>% dplyr::select(-type)), by = c("name")) %>%
-      dplyr::rename(INCHI_ID = name) %>%
-      dplyr::left_join(data.frame(
-        INCHI_ID = V(steiner_subnet)$name,
-        Type = V(steiner_subnet)$type), by = "INCHI_ID")
-
-    res$anno_feature_table2 %>%
-      filter(INCHI_ID %in% res$module_table$INCHI_ID) %>%
-      dplyr::distinct(variable_id, INCHI_ID, .keep_all = TRUE) %>%
-      dplyr::left_join(res$feature_table[,c("variable_id","importance")], by = "variable_id") %>%
-      dplyr::group_by(INCHI_ID) %>%
-      dplyr::summarise(
-        Importance = {
-          w <- weighted_anno_score
-          x <- importance
-          if (all(is.na(w)) || sum(w, na.rm = TRUE) == 0) {
-            mean(x, na.rm = TRUE)
-          } else {
-            weighted.mean(x, w, na.rm = TRUE)
-          }
-        }
-      ) %>%
-      dplyr::ungroup() -> meta_importance
-
-    res$module_table %>%
-      left_join(meta_importance, by = "INCHI_ID") %>%
-      purrr::set_names(c("INCHI_ID", "Module", "KEGG_ID", "Compound_name", "Node_freq", "Type", "Importance")) -> res$module_table
-
-  }
-
-
-  message(sprintf("Detected %d modules using %s method.", length(unique(res$module_table$Module)), method))
+  cli::cli_alert_success(
+    "Detected {.val {length(unique(res$module_table$Module))}} modules using the {.val {method}} method."
+  )
 
 
   ## Calculate module activity scores ----
-  message("\nCalculating module scores for each module ...")
+  cli::cli_alert_info("[2/3] Calculating module activity scores.")
 
   read_importance_tbl<- res$module_table %>%
     dplyr::filter(Type == "annotated", is.finite(Importance)) %>%
@@ -248,10 +217,12 @@ identify_module = function(res = NULL,
     annotated_ID = annotated_ID,
     mrn = res$mrn,
     importance_tbl = read_importance_tbl)
+  cli::cli_alert_success(
+    "Calculated activity scores for {.val {nrow(res$module_score)}} modules."
+  )
 
   ## Calculate p values for each module via permutation test ---
-
-  message("\nPerforming permutation test for module significance ...\n")
+  cli::cli_alert_info("[3/3] Estimating module significance.")
 
   perm_p <- permutation_test_gamma(
     subnet = steiner_subnet,
@@ -268,19 +239,21 @@ identify_module = function(res = NULL,
   res$module_score <- res$module_score %>%
     dplyr::left_join(perm_p[,c("Module","p","fdr")], by = "Module")
 
-  message("\nStep 3: Module identification has finished!\n")
-
   if(nrow(res$module_score) == 0){
-    message("\nNo module was detected successfully!\n")
+    cli::cli_alert_warning("No modules passed the identification step.")
   }
   res <- set_featuremap_stage(res, "module_identified")
 
   end_time <- Sys.time()
-  cat("Execution time:", round(as.numeric(end_time - start_time, units = "mins"), 2), "minutes\n")
+  elapsed_min <- round(as.numeric(end_time - start_time, units = "mins"), 2)
+  n_modules <- dplyr::n_distinct(res$module_table$Module)
+  n_sig_modules <- sum(res$module_score$p < 0.05, na.rm = TRUE)
+  cli::cli_alert_success(
+    "Identified {.val {n_sig_modules}} modules with p < 0.05 among {.val {n_modules}} detected modules."
+  )
+  cli::cli_alert_info("Elapsed time: {.val {elapsed_min}} minutes.")
 
 
   return(res)
 
 }
-
-

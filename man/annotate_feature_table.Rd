@@ -9,7 +9,6 @@ annotate_feature_table(
   ms2_table,
   column = c("rp", "hilic"),
   metabolite_database,
-  refdata = NULL,
   ms1_match_ppm = 15,
   mfc_rt_tol = 5,
   isotope_number = 3,
@@ -25,10 +24,10 @@ annotate_feature_table(
 
 \item{column}{Character. Chromatographic column type: either \code{"rp"} (reverse-phase) or \code{"hilic"}. Default is \code{"rp"}.}
 
-\item{metabolite_database}{A metabolite database object (from \code{metid}) used for annotation.}
-
-\item{refdata}{Character. Reference identifier system used downstream.
-Typically \code{"hmdb"} or \code{"kegg"}.}
+\item{metabolite_database}{A merged metabolite database object (from \code{metid})
+used for annotation. Its \code{spectra.info} slot is expected to carry at least
+\code{Lab.ID}, \code{Compound.name}, \code{Formula}, \code{HMDB.ID}, \code{KEGG.ID}, \code{CAS.ID},
+\code{mz}, \code{RT}, and \code{Submitter}.}
 
 \item{ms1_match_ppm}{Numeric. m/z tolerance (in ppm) for MS1 matching. Default is 15.}
 

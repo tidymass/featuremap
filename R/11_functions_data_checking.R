@@ -110,7 +110,6 @@ check_feature_table <-
       stop("polarity column can only contain 'positive' or 'negative'.")
     }
 
-    message("[OK] feature_table passed all checks.")
     invisible(TRUE)
   }
 
@@ -184,6 +183,5 @@ check_annotation_table_ms2 <-
       stop("KEGG.ID column must be character when provided.")
     }
 
-    message("[OK] check_annotation_table_ms2 passed all checks.")
     invisible(TRUE)
   }

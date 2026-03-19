@@ -26,7 +26,7 @@ annotate_module(
 \arguments{
 \item{res}{A \code{featuremap_result} object returned by
 \code{\link{identify_module}} (or already module-annotated). Must contain
-\code{module_table}, \code{module_score}, and \code{refdata}. Expected
+\code{module_table} and \code{module_score}. Expected
 stage is \code{"module_identified"} or \code{"module_annotated"}.}
 
 \item{p}{Character. Column name in \code{res$module_score} used for module
@@ -35,10 +35,17 @@ significance filtering (typically \code{"p"} or \code{"fdr"}).}
 \item{pcutoff}{Numeric. Threshold applied to \code{res$module_score[[p]]}
 for selecting modules to annotate.}
 
-\item{ref_data}{Data frame of metabolite functional metadata. Must contain
-an \code{id} column matching HMDB/KEGG IDs in \code{res$module_table}.
-If \code{NULL}, a cached reference resource is loaded based on
-\code{res$refdata}.}
+\item{ref_data}{Functional reference metadata. Can be either:
+\itemize{
+\item \code{NULL}, in which case cached HMDB and KEGG reference resources
+are loaded automatically
+\item a single data frame with an \code{id} column (used for both HMDB
+and KEGG lookups)
+\item a list with components \code{hmdb} and \code{kegg}, each containing
+a data frame with an \code{id} column
+}
+Module annotation uses HMDB reference metadata first and fills remaining
+missing annotations with KEGG reference metadata.}
 
 \item{species}{Character. Species context passed to the final LLM prompt.}
 

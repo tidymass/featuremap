@@ -125,7 +125,16 @@ prepare_module <- function(
 ) {
   
 
-  module_topN <- module_list_top[[k]]; colnames(module_topN)[3] = "Compound_ID"
+  module_topN <- module_list_top[[k]]
+  if (!"Compound_ID" %in% colnames(module_topN)) {
+    if ("HMDB_ID" %in% colnames(module_topN)) {
+      module_topN <- module_topN %>% dplyr::rename(Compound_ID = HMDB_ID)
+    } else if ("KEGG_ID" %in% colnames(module_topN)) {
+      module_topN <- module_topN %>% dplyr::rename(Compound_ID = KEGG_ID)
+    } else {
+      colnames(module_topN)[3] = "Compound_ID"
+    }
+  }
   module_id <- unique(module_topN$Module)
 
   if (pubmed) {
@@ -141,7 +150,6 @@ prepare_module <- function(
       
     } else {
 
-      warning(sprintf("PubMed data missing for module %s. Skip merging.", module_id))
       module_topN_merged <- module_topN %>%
         dplyr::select(
           Compound_ID,

@@ -377,8 +377,6 @@ refine_module_pubmed_with_llm <- function(
 ) {
   
   out <- lapply(seq_along(module_pubmed_embed), function(mi) {
-    
-    message("--Reranking for ", names(module_pubmed_embed)[mi], " ...")
     mod_res <- module_pubmed_embed[[mi]]
     
     lapply(mod_res, function(res_single) {
@@ -541,9 +539,6 @@ add_metabolite_summaries_to_modules <- function(
     max_chars_abstract = 1500
 ) {
   out <- lapply(seq_along(module_pubmed_embed_refined), function(mi) {
-    
-    message("--Summarizing for ", names(module_pubmed_embed_refined)[mi], " ...")
-    
     mod_res <- module_pubmed_embed_refined[[mi]]
     
     lapply(mod_res, function(res_single) {

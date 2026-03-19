@@ -74,7 +74,9 @@ The input \code{res} object updated in-place with:
 \item \code{pcsf_subnet}: final PCSF-derived subnetwork (\code{igraph})
 \item \code{node_frequency}: node appearance frequency across repeats
 \item \code{edge_frequency}: edge appearance frequency across repeats
-\item \code{anno_feature_table2}: network-refined feature-metabolite table
+\item \code{anno_feature_table2}: network-supported feature-metabolite
+annotation table including \code{INCHI_ID}, \code{edge_freq},
+\code{weighted_anno_score}, and feature-level \code{importance}
 \item \code{tuning_grid} and \code{tuning_best}: (if \code{grid_tune = TRUE})
 tuning summary
 \item \code{stage}: updated to \code{"subnetwork_extracted"}
@@ -86,6 +88,11 @@ sub-network from annotated metabolomics features and a reference
 metabolic reaction network (MRN).
 }
 \details{
+Annotation rows are projected to the MRN at the metabolite-node level using
+\code{HMDB.ID} first and \code{KEGG.ID} as fallback when no HMDB-based match
+is available. Only annotation rows supported by the final PCSF subnetwork are
+retained in \code{anno_feature_table2}.
+
 This function integrates feature-level statistical scores with a
 metabolic reaction network and identifies a robust sub-network
 through repeated PCSF optimization. Optional grid tuning of

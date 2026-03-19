@@ -29,13 +29,16 @@
 #' @return The input \code{res} object updated with:
 #' \itemize{
 #'   \item \code{module_table}: node-to-module assignments with node type,
-#'         node frequency, and aggregated importance
+#'         node frequency, aggregated importance, and both HMDB/KEGG identifiers
 #'   \item \code{module_score}: module activity scores with permutation-based
 #'         \code{p} and \code{fdr}
 #'   \item \code{stage}: updated to \code{"module_identified"}
 #' }
 #'
 #' @details
+#' Module detection is performed on \code{INCHI_ID}-level metabolite nodes and
+#' is therefore independent of the original annotation reference namespace.
+#'
 #' Edge weights are adjusted using a hub-penalty strategy based on
 #' full MRN degree to reduce hub bias. Module activity scores are
 #' calculated from node-level importance and evaluated using a

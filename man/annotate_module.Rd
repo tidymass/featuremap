@@ -52,8 +52,8 @@ missing annotations with KEGG reference metadata.}
 \item{biospecimen}{Character. Biospecimen context (e.g., plasma, serum, tissue)
 passed to the final LLM prompt.}
 
-\item{phenotype}{Character. Phenotype/context string used in PubMed query
-and final module interpretation.}
+\item{phenotype}{Character. Phenotype/context string passed to the final
+module interpretation prompt and used only for confidence assessment.}
 
 \item{pubmed}{Logical. Whether to perform PubMed retrieval + embedding + reranking
 before LLM summarization.}
@@ -109,6 +109,11 @@ Module annotation proceeds in three stages:
 \item Literature retrieval and embedding-based filtering (optional)
 \item LLM-based functional summarization and confidence scoring
 }
+
+Database annotation uses HMDB functional references first and fills remaining
+missing annotations with KEGG functional references. When \code{pubmed = TRUE},
+literature retrieval is performed for top metabolites derived from each
+significant module; phenotype is not injected into the PubMed query itself.
 
 Only statistically significant modules (based on \code{p} and \code{pcutoff})
 are annotated. If no modules pass the threshold, an empty result is returned.

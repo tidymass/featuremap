@@ -8,23 +8,26 @@ check_annotation_table_ms2(check_annotation_table_ms2)
 }
 \arguments{
 \item{check_annotation_table_ms2}{A \code{data.frame} containing MS2 annotation results.
-It must include the following columns: \code{variable_id}, \code{mz}, \code{rt}, \code{HMDB.ID}, and \code{KEGG.ID}.}
+It must include \code{variable_id} and at least one identifier column among
+\code{HMDB.ID} and \code{KEGG.ID}.}
 }
 \value{
 Returns \code{TRUE} (invisibly) if all checks pass. Otherwise, stops with an informative error message.
 }
 \description{
-Validates that the MS2 annotation table meets required structural and type specifications.
-The function checks for required columns and ensures proper data types for each.
+Validates that the MS2 annotation table meets the minimal key-based
+structure required for downstream feature confirmation.
 }
 \details{
 The function performs the following checks:
 \itemize{
 \item \code{check_annotation_table_ms2} must be a data frame
-\item Required columns: \code{variable_id}, \code{mz}, \code{rt}, \code{HMDB.ID}, \code{KEGG.ID}
-\item \code{variable_id}: character, unique
-\item \code{mz} and \code{rt}: numeric
-\item \code{HMDB.ID} and \code{KEGG.ID}: character (can include \code{NA})
+\item Required columns: \code{variable_id} and at least one of \code{HMDB.ID} / \code{KEGG.ID}
+\item \code{variable_id}: character
+\item Identifier columns must be character when present
+\item Downstream scoring treats the MS2 table as auxiliary evidence for a
+feature-metabolite pair; a pair is MS2-supported when
+\code{variable_id + HMDB.ID} or \code{variable_id + KEGG.ID} matches
 }
 }
 \examples{
@@ -32,10 +35,8 @@ The function performs the following checks:
 # Example annotation table
 annotation_table <- data.frame(
   variable_id = c("M1", "M2"),
-  mz = c(100.1, 200.2),
-  rt = c(300, 400),
   HMDB.ID = c("HMDB00001", NA),
-  KEGG.ID = c("C00031", NA),
+  KEGG.ID = c(NA, "C00031"),
   stringsAsFactors = FALSE
 )
 

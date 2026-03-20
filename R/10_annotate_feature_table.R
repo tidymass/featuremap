@@ -8,6 +8,9 @@
 #' @param ms2_table Optional MS2 confirmation table. When provided, it must
 #'   contain `variable_id` and at least one identifier column among `HMDB.ID`
 #'   and `KEGG.ID`, and is used only as a key-based confirmation signal.
+#'   It provides auxiliary support for each MS1-derived feature-metabolite pair:
+#'   if the pair matches on `variable_id + HMDB.ID` or `variable_id + KEGG.ID`,
+#'   the pair is marked as MS2-confirmed and receives the MS2 score bonus.
 #' @param column Character. Chromatographic column type: either `"rp"` (reverse-phase) or `"hilic"`. Default is `"rp"`.
 #' @param metabolite_database A merged metabolite database object (from `metid`)
 #'   used for annotation. Its `spectra.info` slot is expected to carry at least
@@ -208,7 +211,8 @@ annotate_feature_table <-
         "Level",
         "polarity",
         "isotope"
-      )
+      ) %>%
+      dplyr::mutate(ms2_confirmed = FALSE)
 
     spectra_info <- metabolite_database@spectra.info
 
@@ -263,6 +267,7 @@ annotate_feature_table <-
       temp_iso$SS <- annotation_row$SS
       temp_iso$Total.score <- annotation_row$Total.score
       temp_iso$Level <- annotation_row$Level
+      temp_iso$ms2_confirmed <- annotation_row$ms2_confirmed
       temp_iso$CE <- annotation_row$CE
       temp_iso$mz.match.score <-
         (ms1_match_ppm - temp_iso$mz.error) / ms1_match_ppm
@@ -425,13 +430,18 @@ annotate_feature_table <-
       annotation_table_final <-
         annotation_table_final %>%
         dplyr::mutate(
+          hmdb_ms2_match = (!is.na(HMDB.ID) & HMDB.ID != "") &
+            paste(variable_id, HMDB.ID, sep = "\r") %in% ms2_hmdb_keys,
+          kegg_ms2_match = (!is.na(KEGG.ID) & KEGG.ID != "") &
+            paste(variable_id, KEGG.ID, sep = "\r") %in% ms2_kegg_keys,
           Level = if_else(
-            paste(variable_id, HMDB.ID, sep = "\r") %in% ms2_hmdb_keys |
-              paste(variable_id, KEGG.ID, sep = "\r") %in% ms2_kegg_keys,
+            hmdb_ms2_match | kegg_ms2_match,
             2L,
             Level
-          )
-        )
+          ),
+          ms2_confirmed = hmdb_ms2_match | kegg_ms2_match
+        ) %>%
+        dplyr::select(-hmdb_ms2_match, -kegg_ms2_match)
 
     }
 

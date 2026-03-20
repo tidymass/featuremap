@@ -132,6 +132,9 @@ check_feature_table <-
 #'   \item Required columns: `variable_id` and at least one of `HMDB.ID` / `KEGG.ID`
 #'   \item `variable_id`: character
 #'   \item Identifier columns must be character when present
+#'   \item Downstream scoring treats the MS2 table as auxiliary evidence for a
+#'         feature-metabolite pair; a pair is MS2-supported when
+#'         `variable_id + HMDB.ID` or `variable_id + KEGG.ID` matches
 #' }
 #'
 #' @author Xiaotao Shen \email{xiaotao.shen@outlook.com}

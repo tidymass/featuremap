@@ -19,8 +19,13 @@ annotate_feature_table(
 \item{feature_table}{A data frame with metabolite features. Must include columns:
 \code{variable_id}, \code{mz}, \code{rt}, \code{condition}, \code{polarity}, and \code{mean_intensity}.}
 
-\item{ms2_table}{Optional MS2 annotation table. Must be compatible with
-\code{check_annotation_table_ms2()}.}
+\item{ms2_table}{Optional MS2 confirmation table. When provided, it must
+contain \code{variable_id} and at least one identifier column among \code{HMDB.ID}
+and \code{KEGG.ID}, and is used only as a key-based confirmation signal.
+It provides auxiliary support for each MS1-derived feature-metabolite pair:
+if the pair matches on \code{variable_id + HMDB.ID} or
+\code{variable_id + KEGG.ID}, the pair is marked as MS2-confirmed and
+receives the MS2 score bonus.}
 
 \item{column}{Character. Chromatographic column type: either \code{"rp"} (reverse-phase) or \code{"hilic"}. Default is \code{"rp"}.}
 

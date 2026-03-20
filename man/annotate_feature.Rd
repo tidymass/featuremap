@@ -21,9 +21,12 @@ annotate_feature(
 \code{variable_id}, \code{mz}, \code{rt}, \code{polarity},
 \code{mean_intensity}, \code{condition}, and \code{pvalue}.}
 
-\item{ms2_table}{Optional MS2 annotation table. Can be \code{NULL}.
-If provided, it should be compatible with
-\code{\link{check_annotation_table_ms2}}.}
+\item{ms2_table}{Optional MS2 confirmation table. Can be \code{NULL}.
+If provided, it should contain \code{variable_id} and at least one
+identifier column among \code{HMDB.ID} and \code{KEGG.ID}. It is used only
+as auxiliary evidence for MS1-derived feature-metabolite pairs: a pair is
+considered MS2-supported when \code{variable_id + HMDB.ID} or
+\code{variable_id + KEGG.ID} matches the MS2 table.}
 
 \item{metabolite_database}{A \code{metid} database object (typically
 \code{databaseClass}) used for MS1 annotation. If \code{NULL},
@@ -66,10 +69,11 @@ MS2 confirmation.
 \examples{
 \dontrun{
 data("demo_feature_table", package = "featuremap")
+data("demo_ms2", package = "featuremap")
 
 res <- annotate_feature(
   feature_table = demo_feature_table,
-  ms2_table = NULL,
+  ms2_table = demo_ms2,
   metabolite_database = NULL,
   column = "rp",
   ms1_match_ppm = 15,

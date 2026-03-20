@@ -29,5 +29,7 @@ A small example feature table used to demonstrate the featuremap workflow.
 data("demo_feature_table", package = "featuremap")
 head(demo_feature_table)
 colnames(demo_feature_table)
+data("demo_ms2", package = "featuremap")
+head(demo_ms2)
 }
 \keyword{datasets}

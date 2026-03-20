@@ -53,9 +53,12 @@ module detection.}
 The input \code{res} object updated with:
 \itemize{
 \item \code{module_table}: node-to-module assignments with node type,
-node frequency, aggregated importance, and both HMDB/KEGG identifiers
+node frequency, aggregated importance, and both HMDB/KEGG identifiers.
+The \code{Module} column stores character module IDs such as
+\code{"M1"}, \code{"M2"}, ...
 \item \code{module_score}: module activity scores with permutation-based
-\code{p} and \code{fdr}
+\code{p} and \code{fdr}. The \code{Module} column uses the same
+character IDs as \code{module_table}
 \item \code{stage}: updated to \code{"module_identified"}
 }
 }
@@ -71,7 +74,8 @@ is therefore independent of the original annotation reference namespace.
 Edge weights are adjusted using a hub-penalty strategy based on
 full MRN degree to reduce hub bias. Module activity scores are
 calculated from node-level importance and evaluated using a
-permutation-based gamma model.
+permutation-based gamma model. Detected communities are relabeled into
+compact character IDs (\code{"M1"}, \code{"M2"}, ...) before being stored.
 }
 \examples{
 \dontrun{

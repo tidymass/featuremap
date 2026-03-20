@@ -17,7 +17,7 @@ annotate_one_module(
 \arguments{
 \item{module_obj}{List containing module data with fields:
 \itemize{
-\item \code{module_id}: module identifier.
+\item \code{module_id}: module identifier (for example \code{"M1"}).
 \item \code{module_stats}: module-level statistics (Importance, Robustness, Annotated_fraction).
 \item \code{top_N_metabolites}: data frame of top metabolites with
 \code{HMDB_ID}, \code{Compound_name}, \code{Importance}, \code{Robustness}, \code{class},

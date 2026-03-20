@@ -29,9 +29,12 @@
 #' @return The input \code{res} object updated with:
 #' \itemize{
 #'   \item \code{module_table}: node-to-module assignments with node type,
-#'         node frequency, aggregated importance, and both HMDB/KEGG identifiers
+#'         node frequency, aggregated importance, and both HMDB/KEGG identifiers.
+#'         The \code{Module} column stores character module IDs such as
+#'         \code{"M1"}, \code{"M2"}, ...
 #'   \item \code{module_score}: module activity scores with permutation-based
-#'         \code{p} and \code{fdr}
+#'         \code{p} and \code{fdr}. The \code{Module} column uses the same
+#'         character IDs as \code{module_table}
 #'   \item \code{stage}: updated to \code{"module_identified"}
 #' }
 #'
@@ -42,7 +45,8 @@
 #' Edge weights are adjusted using a hub-penalty strategy based on
 #' full MRN degree to reduce hub bias. Module activity scores are
 #' calculated from node-level importance and evaluated using a
-#' permutation-based gamma model.
+#' permutation-based gamma model. Detected communities are relabeled into
+#' compact character IDs (\code{"M1"}, \code{"M2"}, ...) before being stored.
 #'
 #' @examples
 #' \dontrun{
@@ -199,8 +203,26 @@ identify_module = function(res = NULL,
     dplyr::ungroup() -> meta_importance
 
   res$module_table <- res$module_table %>%
-    dplyr::left_join(meta_importance, by = "INCHI_ID") %>%
-    dplyr::select(INCHI_ID, Module, HMDB_ID, KEGG_ID, Compound_name, Node_freq, Type, Importance)
+    dplyr::left_join(meta_importance, by = "INCHI_ID")
+
+  module_levels <- sort(unique(res$module_table$Module))
+  module_lookup <- tibble::tibble(
+    Module_old = module_levels,
+    Module = paste0("M", seq_along(module_levels))
+  )
+
+  res$module_table <- res$module_table %>%
+    dplyr::left_join(module_lookup, by = c("Module" = "Module_old")) %>%
+    dplyr::transmute(
+      Module = Module.y,
+      INCHI_ID = INCHI_ID,
+      HMDB_ID = HMDB_ID,
+      KEGG_ID = KEGG_ID,
+      Compound_name = Compound_name,
+      Node_freq = Node_freq,
+      Type = Type,
+      Importance = Importance
+    )
 
   cli::cli_alert_success(
     "Detected {.val {length(unique(res$module_table$Module))}} modules using the {.val {method}} method."
@@ -240,7 +262,8 @@ identify_module = function(res = NULL,
   )
 
   res$module_score <- res$module_score %>%
-    dplyr::left_join(perm_p[,c("Module","p","fdr")], by = "Module")
+    dplyr::left_join(perm_p[,c("Module","p","fdr")], by = "Module") %>%
+    dplyr::select(Module, Module_size, Annotated_nodes, Module_score, p, fdr)
 
   if(nrow(res$module_score) == 0){
     cli::cli_alert_warning("No modules passed the identification step.")

@@ -69,17 +69,18 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
 #'   for a module. Each data frame must have columns: Module, HMDB_ID, Compound_name,
 #'   Importance, Robustness, class
 #' @param module_list Named list of data frames containing all metabolites for each module.
-#'   Names should be in format "moduleX" where X is the module ID
+#'   Names should match the module IDs returned by \code{\link{identify_module}}
+#'   (for example \code{"M1"}, \code{"M2"}, ...)
 #' @param module_pubmed_embed_refined List of PubMed data for each module. Each element
 #'   is a named list where names are HMDB IDs
 #' @param module_statistics List of statistics for each module. Names should match
-#'   format "moduleX"
+#'   the character module IDs returned by \code{\link{identify_module}}
 #' @param module_class Optional list of class-level summaries for each module.
 #' @param pubmed Logical. If TRUE (default), attempts to merge PubMed functional summaries.
 #'   If FALSE, functional_summary column will be NA
 #'
 #' @return A named list with four elements:
-#'   \item{module_id}{Character. The module identifier}
+#'   \item{module_id}{Character. The module identifier (for example \code{"M1"})}
 #'   \item{module_stats}{Statistics data for the module}
 #'   \item{topN_metabolites}{Tibble of top 10 metabolites with functional summaries (if available)}
 #'   \item{other_metabolites}{Tibble of remaining metabolites not in top 10}
@@ -99,7 +100,7 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
 #'
 #' @examples
 #' \dontrun{
-#' # Prepare module 1 with PubMed data
+#' # Prepare the first module entry with PubMed data
 #' module_data <- prepare_module(
 #'   k = 1,
 #'   module_list_top = topN_list,
@@ -123,7 +124,34 @@ prepare_module <- function(
     module_class,
     pubmed = TRUE      
 ) {
-  
+  make_lookup_keys <- function(module_id, fallback_key) {
+    unique(as.character(stats::na.omit(c(
+      module_id,
+      fallback_key
+    ))))
+  }
+
+  pick_named_entry <- function(x, keys, fallback = NULL) {
+    if (is.null(x)) {
+      return(NULL)
+    }
+    if (is.null(names(x))) {
+      if (!is.null(fallback) && is.numeric(fallback) && fallback <= length(x)) {
+        return(x[[fallback]])
+      }
+      return(NULL)
+    }
+
+    hit <- keys[keys %in% names(x)][1]
+    if (is.na(hit) || !nzchar(hit)) {
+      if (!is.null(fallback) && is.numeric(fallback) && fallback <= length(x)) {
+        return(x[[fallback]])
+      }
+      return(NULL)
+    }
+
+    x[[hit]]
+  }
 
   module_topN <- module_list_top[[k]]
   if (!"Compound_ID" %in% colnames(module_topN)) {
@@ -136,6 +164,8 @@ prepare_module <- function(
     }
   }
   module_id <- unique(module_topN$Module)
+  module_id <- as.character(module_id[1])
+  lookup_keys <- make_lookup_keys(module_id, as.character(k))
 
   if (pubmed) {
 
@@ -170,19 +200,12 @@ prepare_module <- function(
   }
 
   # for other metabolites ----
+  module_other <- NULL
   if (!is.null(module_class)) {
-
-    if (!is.null(names(module_class)) &&
-        paste0("module", module_id) %in% names(module_class)) {
-      module_other <- module_class[[ paste0("module", module_id) ]]
-    } else {
-      module_other <- module_class[[k]]
-    }
-    
+    module_other <- pick_named_entry(module_class, lookup_keys, fallback = k)
   }
   
-
-  stats <- module_statistics[[ paste0("module", module_id) ]]
+  stats <- pick_named_entry(module_statistics, lookup_keys, fallback = k)
 
   list(
     module_id          = module_id,

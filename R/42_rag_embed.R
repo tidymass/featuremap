@@ -139,9 +139,7 @@ get_embedding_dim <- function(embed_model,
 detect_embedding_dim <- function(llm_api_key,
                                  embed_model = "BAAI/bge-large-en-v1.5",
                                  provider    = "siliconflow") {
-  
-  message("Detecting embedding dimension for model: ", embed_model)
-  
+
   test_emb <- get_embedding(
     text          = "test",
     llm_api_key   = llm_api_key,
@@ -156,7 +154,6 @@ detect_embedding_dim <- function(llm_api_key,
   }
   
   dim_detected <- ncol(test_emb)
-  message("Detected embedding dimension: ", dim_detected)
   return(dim_detected)
 }
 

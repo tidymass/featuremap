@@ -19,7 +19,7 @@ annotate_all_modules(
 \item{all_modules_ready}{List of prepared module objects (typically the output
 from \code{prepare_module()} for each module). Each element is a list with:
 \itemize{
-\item module_id
+\item module_id (for example \code{"M1"})
 \item module_stats (Importance, Robustness, Annotated_fraction)
 \item top10_metabolites (per-metabolite data with functional summaries)
 \item other_metabolites (additional metabolites aggregated at class level)
@@ -79,4 +79,3 @@ Use the sleep_sec parameter to add delays between API calls. For example:
 If an individual module fails to annotate (e.g., API error, JSON parse error),
 that module's row will contain NA values but processing continues for remaining modules.
 }
-

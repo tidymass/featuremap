@@ -4,7 +4,7 @@
 #' interpretation including a title, summary, confidence label, and rationale.
 #'
 #' @param module_obj List containing module data with fields:
-#'   - `module_id`: module identifier.
+#'   - `module_id`: module identifier (for example `"M1"`).
 #'   - `module_stats`: module-level statistics (Importance, Robustness, Annotated_fraction).
 #'   - `top_N_metabolites`: data frame of top metabolites with
 #'     `HMDB_ID`, `Compound_name`, `Importance`, `Robustness`, `class`,
@@ -312,7 +312,7 @@ annotate_one_module <- function(module_obj,
 #' @param all_modules_ready List of prepared module objects (typically the output
 #'   from \code{prepare_module()} for each module). Each element is a list with:
 #'   \itemize{
-#'     \item module_id
+#'     \item module_id (for example \code{"M1"})
 #'     \item module_stats (Importance, Robustness, Annotated_fraction)
 #'     \item top10_metabolites (per-metabolite data with functional summaries)
 #'     \item other_metabolites (additional metabolites aggregated at class level)

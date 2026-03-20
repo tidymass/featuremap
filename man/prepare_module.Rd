@@ -22,13 +22,14 @@ for a module. Each data frame must have columns: Module, HMDB_ID, Compound_name,
 Importance, Robustness, class}
 
 \item{module_list}{Named list of data frames containing all metabolites for each module.
-Names should be in format "moduleX" where X is the module ID}
+Names should match the module IDs returned by \code{\link{identify_module}}
+(for example \code{"M1"}, \code{"M2"}, ...)}
 
 \item{module_pubmed_embed_refined}{List of PubMed data for each module. Each element
 is a named list where names are HMDB IDs}
 
 \item{module_statistics}{List of statistics for each module. Names should match
-format "moduleX"}
+the character module IDs returned by \code{\link{identify_module}}}
 
 \item{module_class}{Optional list of class-level summaries for each module.}
 
@@ -37,7 +38,7 @@ If FALSE, functional_summary column will be NA}
 }
 \value{
 A named list with four elements:
-\item{module_id}{Character. The module identifier}
+\item{module_id}{Character. The module identifier (for example \code{"M1"})}
 \item{module_stats}{Statistics data for the module}
 \item{topN_metabolites}{Tibble of top 10 metabolites with functional summaries (if available)}
 \item{other_metabolites}{Tibble of remaining metabolites not in top 10}
@@ -64,7 +65,7 @@ a warning is issued and functional_summary will be set to NA for all metabolites
 
 \examples{
 \dontrun{
-# Prepare module 1 with PubMed data
+# Prepare the first module entry with PubMed data
 module_data <- prepare_module(
   k = 1,
   module_list_top = topN_list,

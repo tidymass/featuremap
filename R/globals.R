@@ -18,7 +18,7 @@ if (getRversion() >= "2.15.1") {
     "KEGG_ID", "KEGG.ID",
     "Lab.ID", "Level",
     "mean_weighted_score", "metabolite", "metabolite_feature_cluster", "module",
-    "Module", "Module_label", "Module_score", "Module_size",
+    "Module", "Module_score", "Module_size",
     "mzError.ppm",
     "n", "N", "n_real", "name", "Node_freq", "nodes",
     "p", "peakIndex", "penalty", "pmid", "polarity", "prize", "pvalue",

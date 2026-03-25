@@ -107,32 +107,46 @@ annotate_feature_table <-
       feature_table %>%
       dplyr::filter(polarity == "negative")
 
+    cli::cli_alert_info(
+      "Detected {nrow(feature_table_pos)} positive-mode features and {nrow(feature_table_neg)} negative-mode features."
+    )
 
-    ############metabolite database matching for feature_table
-    if (nrow(feature_table_pos) == 0) {
-      annotation_table_ms1_pos <- NULL
-    } else{
+    run_ms1_annotation <- function(feature_table_mode, polarity_mode) {
+      n_features <- nrow(feature_table_mode)
+
+      if (n_features == 0) {
+        cli::cli_bullets(c(
+          ">" = "Skipping {polarity_mode}-mode feature annotation because no features were detected in this mode."
+        ))
+        return(NULL)
+      }
+
+      cli::cli_bullets(c(
+        ">" = "Annotating {polarity_mode}-mode features."
+      ))
+
       expression_data <-
-        data.frame(sample_1 = rep(1, nrow(feature_table_pos)))
+        data.frame(sample_1 = rep(1, n_features))
       sample_info <-
         data.frame(sample_id = "sample_1", class = "Subject")
-      rownames(expression_data) <- feature_table_pos$variable_id
-      object_pos <-
+      rownames(expression_data) <- feature_table_mode$variable_id
+
+      object_mode <-
         massdataset::create_mass_dataset(
           expression_data = expression_data,
           sample_info = sample_info,
-          variable_info = feature_table_pos
+          variable_info = feature_table_mode
         )
 
-      object_pos <-
+      object_mode <-
         metid::annotate_metabolites(
-          object = object_pos,
+          object = object_mode,
           based_on = "ms1",
           ms1.match.ppm = ms1_match_ppm,
           column = column,
-          polarity = "positive",
+          polarity = polarity_mode,
           adduct.table = featuremap_load_metid_adduct_table(
-            polarity = "positive",
+            polarity = polarity_mode,
             column = column
           ),
           database = metabolite_database,
@@ -140,46 +154,23 @@ annotate_feature_table <-
           threads = max(1L, as.integer(workers))
         )
 
-      annotation_table_ms1_pos <-
-        object_pos@annotation_table
-      annotation_table_ms1_pos$polarity <- "positive"
+      annotation_table_mode <- object_mode@annotation_table
+      annotation_table_mode$polarity <- polarity_mode
+
+      annotation_table_mode
     }
 
-    if (nrow(feature_table_neg) == 0) {
-      annotation_table_ms1_neg <- NULL
-    } else{
-      expression_data <-
-        data.frame(sample_1 = rep(1, nrow(feature_table_neg)))
-      sample_info = data.frame(sample_id = "sample_1", class = "Subject")
-      rownames(expression_data) <- feature_table_neg$variable_id
 
-      object_neg <-
-        massdataset::create_mass_dataset(
-          expression_data = expression_data,
-          sample_info = sample_info,
-          variable_info = feature_table_neg
-        )
+    ############metabolite database matching for feature_table
+    annotation_table_ms1_pos <- run_ms1_annotation(
+      feature_table_mode = feature_table_pos,
+      polarity_mode = "positive"
+    )
 
-      object_neg <-
-        metid::annotate_metabolites(
-          object = object_neg,
-          based_on = "ms1",
-          ms1.match.ppm = ms1_match_ppm,
-          column = column,
-          polarity = "negative",
-          adduct.table = featuremap_load_metid_adduct_table(
-            polarity = "negative",
-            column = column
-          ),
-          database = metabolite_database,
-          candidate.num = 1000,
-          threads = max(1L, as.integer(workers))
-        )
-
-      annotation_table_ms1_neg <-
-        object_neg@annotation_table
-      annotation_table_ms1_neg$polarity <- "negative"
-    }
+    annotation_table_ms1_neg <- run_ms1_annotation(
+      feature_table_mode = feature_table_neg,
+      polarity_mode = "negative"
+    )
 
     annotation_table_ms1 <-
       rbind(annotation_table_ms1_pos, annotation_table_ms1_neg) %>%
@@ -283,8 +274,14 @@ annotate_feature_table <-
     on.exit(future::plan(old_plan), add = TRUE)
 
     if (nrow(annotation_table_final_pos) == 0) {
+      cli::cli_bullets(c(
+        ">" = "Skipping positive-mode isotope annotation because no positive-mode feature candidates were retained."
+      ))
       isotope_pos <- NULL
     } else{
+      cli::cli_bullets(c(
+        ">" = "Matching isotopes for positive-mode annotations."
+      ))
       system.time(
         isotope_pos <-
           furrr::future_map(
@@ -344,8 +341,14 @@ annotate_feature_table <-
       dplyr::arrange(Compound.name, isotope, rt)
 
     if (nrow(annotation_table_final_neg) == 0) {
+      cli::cli_bullets(c(
+        ">" = "Skipping negative-mode isotope annotation because no negative-mode feature candidates were retained."
+      ))
       isotope_neg <- NULL
     } else {
+      cli::cli_bullets(c(
+        ">" = "Matching isotopes for negative-mode annotations."
+      ))
       system.time(
         isotope_neg <-
           furrr::future_map(
@@ -446,6 +449,9 @@ annotate_feature_table <-
     }
 
     ####combine peaks to metabolite feature cluster (MFC)
+    cli::cli_bullets(c(
+      ">" = "Scoring metabolite feature clusters."
+    ))
     annotation_table_final <-
       score_annotation_table(annotation_table = annotation_table_final, mfc_rt_tol = mfc_rt_tol)
 

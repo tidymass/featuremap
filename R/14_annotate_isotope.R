@@ -54,8 +54,7 @@
 #' @importFrom masstools sum_formula
 #' @importFrom purrr map
 #' @importFrom dplyr mutate
-#'
-#' @keywords internal
+#' @noRd
 
 annotate_isotope <-
   function(formula = "C9H14N2O12P2",

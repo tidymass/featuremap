@@ -36,9 +36,9 @@ and should be at stage \code{"feature_annotated"} or later.}
 \item{pcutoff}{Numeric. Significance threshold used only when
 \code{feature = "sig"} to filter \code{res$feature_table$pvalue}.}
 
-\item{mrn}{An \code{igraph} object for the metabolic reaction network.
-If \code{NULL}, a cached/default MRN resource will be loaded based on
-\code{res$refdata}.}
+\item{mrn}{A \code{tidygraph::tbl_graph} object for the metabolic reaction
+network. If \code{NULL}, a cached/default MRN resource will be loaded
+based on \code{res$refdata}.}
 
 \item{workers}{Integer. Number of parallel workers used in repeated PCSF runs.}
 

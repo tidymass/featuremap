@@ -20,9 +20,9 @@
 #'   }
 #' @param pcutoff Numeric. Significance threshold used only when
 #'   \code{feature = "sig"} to filter \code{res$feature_table$pvalue}.
-#' @param mrn An \code{igraph} object for the metabolic reaction network.
-#'   If \code{NULL}, a cached/default MRN resource will be loaded based on
-#'   \code{res$refdata}.
+#' @param mrn A \code{tidygraph::tbl_graph} object for the metabolic reaction
+#'   network. If \code{NULL}, a cached/default MRN resource will be loaded
+#'   based on \code{res$refdata}.
 #' @param workers Integer. Number of parallel workers used in repeated PCSF runs.
 #' @param times Integer. Number of PCSF repeats for final subnetwork construction.
 #'   Larger values usually improve robustness but increase runtime.
@@ -115,7 +115,10 @@ extract_subnetwork = function(res = NULL,
   cli::cli_h2("Step 2: Subnetwork Extraction")
   has_user_mrn <- !is.null(mrn)
   start_time <- Sys.time()
-  cli::cli_alert_info("[1/3] Loading the metabolic reaction network.")
+  total_steps <- if (isTRUE(grid_tune)) 4 else 3
+  step_label <- function(step_id) sprintf("[%d/%d]", step_id, total_steps)
+
+  cli::cli_alert_info("{step_label(1)} Loading the metabolic reaction network.")
   if (is.null(mrn)){
     ref_tag <- if (!is.null(res$refdata)) as.character(res$refdata) else NULL
     resource_name <- featuremap_default_resource_name("mrn", refdata = ref_tag)
@@ -150,7 +153,7 @@ extract_subnetwork = function(res = NULL,
     if (nrow(feature_sig) == 0)
       stop("[Error] No significant features found under pcutoff = ", pcutoff)
   }
-  cli::cli_alert_info("[2/3] Preparing subnetwork extraction.")
+  cli::cli_alert_info("{step_label(2)} Preparing subnetwork extraction.")
 
   ## build FMpair + mrnref ----
   anno_feature_table1_sub <- res$anno_feature_table1 %>%
@@ -525,9 +528,13 @@ extract_subnetwork = function(res = NULL,
   best_w <- w
 
   if (isTRUE(grid_tune)) {
+    cli::cli_alert_info("{step_label(3)} Tuning PCSF parameters on the grid.")
+
     grid <- tidyr::expand_grid(b = b_grid, w = w_grid)
     grid$unique_variable_id <- NA_integer_
     grid$mean_weighted_score <- NA_real_
+    grid$tuning_success <- FALSE
+    grid$tuning_error <- NA_character_
 
     for (i in seq_len(nrow(grid))) {
       bb <- grid$b[i]
@@ -535,20 +542,36 @@ extract_subnetwork = function(res = NULL,
 
       out <- tryCatch(
         run_pcsf_once(b_val = bb, w_val = ww, times_val = times_tune),
-        error = function(e) NULL
+        error = function(e) e
       )
 
-      if (!is.null(out)) {
+      if (!inherits(out, "error")) {
         grid$unique_variable_id[i] <- dplyr::n_distinct(out$anno_feature_table2$variable_id)
-        grid$mean_weighted_score[i] <- mean(out$anno_feature_table2$weighted_anno_score, na.rm = TRUE)
+        grid$mean_weighted_score[i] <- if (nrow(out$anno_feature_table2) > 0) {
+          mean(out$anno_feature_table2$weighted_anno_score, na.rm = TRUE)
+        } else {
+          NA_real_
+        }
+        grid$tuning_success[i] <- TRUE
       } else {
         grid$unique_variable_id[i] <- 0L
         grid$mean_weighted_score[i] <- NA_real_
+        grid$tuning_error[i] <- conditionMessage(out)
       }
     }
 
     grid2 <- grid %>%
-      dplyr::arrange(dplyr::desc(unique_variable_id), dplyr::desc(mean_weighted_score))
+      dplyr::arrange(
+        dplyr::desc(tuning_success),
+        dplyr::desc(unique_variable_id),
+        dplyr::desc(mean_weighted_score),
+        b,
+        w
+      )
+
+    if (!any(grid2$tuning_success)) {
+      stop("[Error] Grid tuning failed for all candidate (b, w) pairs.")
+    }
 
     best_b <- grid2$b[1]
     best_w <- grid2$w[1]
@@ -559,14 +582,19 @@ extract_subnetwork = function(res = NULL,
                             mean_weighted_score = grid2$mean_weighted_score[1],
                             times_tune = times_tune)
 
-    cli::cli_alert_success(
-      "Selected tuned PCSF parameters b = {.val {best_b}} and w = {.val {best_w}}."
+    cli::cli_alert_info(
+      paste(
+        "Grid tuning evaluated", nrow(grid2), "candidate (b, w) pairs;",
+        sum(grid2$tuning_success), "succeeded.",
+        "Selected b =", best_b, "and w =", best_w,
+        "for the final run based on retained feature count and mean weighted annotation score."
+      )
     )
   }
 
 
   # ---- final run with (best_b, best_w) and full times/workers ----
-  cli::cli_alert_info("[3/3] Finalizing network-supported annotations.")
+  cli::cli_alert_info("{step_label(total_steps)} Finalizing network-supported annotations.")
   final_out <- run_pcsf_once(b_val = best_b, w_val = best_w, times_val = times)
 
   res$pcsf_subnet <- final_out$pcsf_subnet

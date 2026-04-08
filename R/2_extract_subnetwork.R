@@ -274,7 +274,7 @@ extract_subnetwork = function(res = NULL,
   }
 
   # define run pcsf once function ---
-  run_pcsf_once <- function(b_val, w_val, times_val){
+  run_pcsf_once <- function(b_val, w_val, times_val, show_progress = TRUE){
 
     node_prizes <- tibble::tibble(
       name = node_names,
@@ -317,7 +317,7 @@ extract_subnetwork = function(res = NULL,
             node_names = node_names, node_prz = node_prz, hub_penalty = hub_penalty
           )
         ),
-        .progress = TRUE
+        .progress = show_progress
       )
     }else{
       results_list <- purrr::map(
@@ -535,13 +535,28 @@ extract_subnetwork = function(res = NULL,
     grid$mean_weighted_score <- NA_real_
     grid$tuning_success <- FALSE
     grid$tuning_error <- NA_character_
+    tuning_progress_id <- cli::cli_progress_bar(
+      name = "Grid tuning",
+      total = nrow(grid),
+      format = "{cli::pb_name} [{cli::pb_current}/{cli::pb_total}] {cli::pb_bar} {cli::pb_percent} | {cli::pb_status}"
+    )
+    on.exit(cli::cli_progress_done(id = tuning_progress_id), add = TRUE)
 
     for (i in seq_len(nrow(grid))) {
       bb <- grid$b[i]
       ww <- grid$w[i]
+      cli::cli_progress_update(
+        id = tuning_progress_id,
+        status = paste("Evaluating b =", bb, ", w =", ww)
+      )
 
       out <- tryCatch(
-        run_pcsf_once(b_val = bb, w_val = ww, times_val = times_tune),
+        run_pcsf_once(
+          b_val = bb,
+          w_val = ww,
+          times_val = times_tune,
+          show_progress = FALSE
+        ),
         error = function(e) e
       )
 
@@ -558,6 +573,8 @@ extract_subnetwork = function(res = NULL,
         grid$mean_weighted_score[i] <- NA_real_
         grid$tuning_error[i] <- conditionMessage(out)
       }
+
+      cli::cli_progress_update(id = tuning_progress_id, set = i)
     }
 
     grid2 <- grid %>%

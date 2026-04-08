@@ -535,17 +535,30 @@ extract_subnetwork = function(res = NULL,
     grid$mean_weighted_score <- NA_real_
     grid$tuning_success <- FALSE
     grid$tuning_error <- NA_character_
+
+    safe_cli_progress_update <- function(...) {
+      try(cli::cli_progress_update(...), silent = TRUE)
+      invisible(NULL)
+    }
+    safe_cli_progress_done <- function(id) {
+      try(cli::cli_progress_done(id = id), silent = TRUE)
+      invisible(NULL)
+    }
+
     tuning_progress_id <- cli::cli_progress_bar(
       name = "Grid tuning",
       total = nrow(grid),
-      format = "{cli::pb_name} [{cli::pb_current}/{cli::pb_total}] {cli::pb_bar} {cli::pb_percent} | {cli::pb_status}"
+      format = "{cli::pb_name} [{cli::pb_current}/{cli::pb_total}] {cli::pb_bar} {cli::pb_percent} | {cli::pb_status}",
+      current = FALSE,
+      auto_terminate = FALSE,
+      .auto_close = FALSE
     )
-    on.exit(cli::cli_progress_done(id = tuning_progress_id), add = TRUE)
+    on.exit(safe_cli_progress_done(tuning_progress_id), add = TRUE)
 
     for (i in seq_len(nrow(grid))) {
       bb <- grid$b[i]
       ww <- grid$w[i]
-      cli::cli_progress_update(
+      safe_cli_progress_update(
         id = tuning_progress_id,
         status = paste("Evaluating b =", bb, ", w =", ww)
       )
@@ -574,8 +587,10 @@ extract_subnetwork = function(res = NULL,
         grid$tuning_error[i] <- conditionMessage(out)
       }
 
-      cli::cli_progress_update(id = tuning_progress_id, set = i)
+      safe_cli_progress_update(id = tuning_progress_id, set = i)
     }
+
+    safe_cli_progress_done(tuning_progress_id)
 
     grid2 <- grid %>%
       dplyr::arrange(

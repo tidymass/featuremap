@@ -58,6 +58,41 @@
 #' @importFrom furrr future_map
 #' @importFrom data.table as.data.table rbindlist
 #'
+build_isotope_rows <- function(temp_iso_input,
+                               feature_table_mode,
+                               annotation_row,
+                               template_cols,
+                               ms1_match_ppm,
+                               mfc_rt_tol) {
+  temp_iso <-
+    feature_table_mode[temp_iso_input$peakIndex, , drop = FALSE]
+
+  temp_iso$mz.error <- as.numeric(temp_iso_input$mzError.ppm)
+  temp_iso$isotope <- temp_iso_input$isotopes
+  temp_iso$RT.error <- as.numeric(temp_iso_input$rtError.s)
+  temp_iso$Compound.name <- annotation_row$Compound.name
+  temp_iso$Lab.ID <- annotation_row$Lab.ID
+  temp_iso$Adduct <- annotation_row$Adduct
+  temp_iso$Formula <- annotation_row$Formula
+  temp_iso$Submitter <- annotation_row$Submitter
+  temp_iso$rt <- annotation_row$rt
+  temp_iso$CAS.ID <- annotation_row$CAS.ID
+  temp_iso$HMDB.ID <- annotation_row$HMDB.ID
+  temp_iso$KEGG.ID <- annotation_row$KEGG.ID
+  temp_iso$Database <- annotation_row$Database
+  temp_iso$SS <- annotation_row$SS
+  temp_iso$Total.score <- annotation_row$Total.score
+  temp_iso$Level <- annotation_row$Level
+  temp_iso$ms2_confirmed <- annotation_row$ms2_confirmed
+  temp_iso$CE <- annotation_row$CE
+  temp_iso$mz.match.score <-
+    (ms1_match_ppm - temp_iso$mz.error) / ms1_match_ppm
+  temp_iso$RT.match.score <-
+    (mfc_rt_tol - temp_iso$RT.error) / mfc_rt_tol
+
+  dplyr::select(temp_iso, dplyr::all_of(template_cols))
+}
+
 annotate_feature_table <-
   function(feature_table,
            ms2_table,
@@ -235,40 +270,6 @@ annotate_feature_table <-
 
     ###positive
 
-    build_isotope_rows <- function(temp_iso_input,
-                                   feature_table_mode,
-                                   annotation_row,
-                                   template_cols) {
-      temp_iso <-
-        feature_table_mode[temp_iso_input$peakIndex, , drop = FALSE]
-
-      temp_iso$mz.error <- as.numeric(temp_iso_input$mzError.ppm)
-      temp_iso$isotope <- temp_iso_input$isotopes
-      temp_iso$RT.error <- as.numeric(temp_iso_input$rtError.s)
-      temp_iso$Compound.name <- annotation_row$Compound.name
-      temp_iso$Lab.ID <- annotation_row$Lab.ID
-      temp_iso$Adduct <- annotation_row$Adduct
-      temp_iso$Formula <- annotation_row$Formula
-      temp_iso$Submitter <- annotation_row$Submitter
-      temp_iso$rt <- annotation_row$rt
-      temp_iso$CAS.ID <- annotation_row$CAS.ID
-      temp_iso$HMDB.ID <- annotation_row$HMDB.ID
-      temp_iso$KEGG.ID <- annotation_row$KEGG.ID
-      temp_iso$Database <- annotation_row$Database
-      temp_iso$SS <- annotation_row$SS
-      temp_iso$Total.score <- annotation_row$Total.score
-      temp_iso$Level <- annotation_row$Level
-      temp_iso$ms2_confirmed <- annotation_row$ms2_confirmed
-      temp_iso$CE <- annotation_row$CE
-      temp_iso$mz.match.score <-
-        (ms1_match_ppm - temp_iso$mz.error) / ms1_match_ppm
-      temp_iso$RT.match.score <-
-        (mfc_rt_tol - temp_iso$RT.error) / mfc_rt_tol
-
-      temp_iso %>%
-        dplyr::select(dplyr::all_of(template_cols))
-    }
-
     old_plan <- future::plan()
     future::plan(multisession, workers = workers)
     on.exit(future::plan(old_plan), add = TRUE)
@@ -323,11 +324,24 @@ annotate_feature_table <-
                 temp_iso_input = temp_iso,
                 feature_table_mode = feature_table_pos,
                 annotation_row = annotation_row,
-                template_cols = colnames(annotation_table_final_pos)
+                template_cols = colnames(annotation_table_final_pos),
+                ms1_match_ppm = ms1_match_ppm,
+                mfc_rt_tol = mfc_rt_tol
               )
               temp_iso
             },
-            .progress = TRUE
+            .progress = TRUE,
+            .options = furrr::furrr_options(
+              globals = list(
+                annotation_table_final_pos = annotation_table_final_pos,
+                feature_table_pos = feature_table_pos,
+                build_isotope_rows = build_isotope_rows,
+                annotate_isotope = annotate_isotope,
+                isotope_number = isotope_number,
+                mfc_rt_tol = mfc_rt_tol,
+                ms1_match_ppm = ms1_match_ppm
+              )
+            )
           ) %>%
           do.call(rbind, .) %>%
           as.data.frame()
@@ -389,11 +403,24 @@ annotate_feature_table <-
                 temp_iso_input = temp_iso,
                 feature_table_mode = feature_table_neg,
                 annotation_row = annotation_row,
-                template_cols = colnames(annotation_table_final_neg)
+                template_cols = colnames(annotation_table_final_neg),
+                ms1_match_ppm = ms1_match_ppm,
+                mfc_rt_tol = mfc_rt_tol
               )
               temp_iso
             },
-            .progress = TRUE
+            .progress = TRUE,
+            .options = furrr::furrr_options(
+              globals = list(
+                annotation_table_final_neg = annotation_table_final_neg,
+                feature_table_neg = feature_table_neg,
+                build_isotope_rows = build_isotope_rows,
+                annotate_isotope = annotate_isotope,
+                isotope_number = isotope_number,
+                mfc_rt_tol = mfc_rt_tol,
+                ms1_match_ppm = ms1_match_ppm
+              )
+            )
           ) %>%
           do.call(rbind, .) %>%
           as.data.frame()

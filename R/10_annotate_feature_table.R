@@ -93,6 +93,30 @@ build_isotope_rows <- function(temp_iso_input,
   dplyr::select(temp_iso, dplyr::all_of(template_cols))
 }
 
+score_annotation_group <- function(x, mfc_rt_tol) {
+  x <- x %>%
+    dplyr::arrange(rt)
+
+  rt_class <-
+    group_peaks_rt(rt = x$rt, rt.tol = mfc_rt_tol) %>%
+    dplyr::arrange(rt)
+
+  rt_class <- paste(x$Lab.ID[1], rt_class$class, sep = "@")
+
+  x$metabolite_feature_cluster <-
+    rt_class
+
+  unique(x$metabolite_feature_cluster) %>%
+    purrr::map(function(y) {
+      z <- x[x$metabolite_feature_cluster == y, , drop = FALSE]
+      score <- score_mfc(z)
+      z$score <- score
+      z
+    }) %>%
+    do.call(rbind, .) %>%
+    as.data.frame()
+}
+
 annotate_feature_table <-
   function(feature_table,
            ms2_table,
@@ -528,38 +552,23 @@ annotate_feature_table <-
 score_annotation_table <-
   function(annotation_table, mfc_rt_tol) {
     ##calculate the score for each metabolite feature cluster
+    annotation_groups <- split(annotation_table, annotation_table$Lab.ID)
+
     annotation_table <-
-      unique(annotation_table$Lab.ID) %>%
       furrr::future_map(
+        .x = annotation_groups,
         .f = function(temp_id) {
-          x <- annotation_table %>%
-            dplyr::filter(Lab.ID == temp_id)
-
-          x <- x %>%
-            dplyr::arrange(rt)
-
-          rt_class <-
-            group_peaks_rt(rt = x$rt, rt.tol = mfc_rt_tol) %>%
-            dplyr::arrange(rt)
-
-          rt_class <- paste(x$Lab.ID[1], rt_class$class, sep = "@")
-
-          x$metabolite_feature_cluster <-
-            rt_class
-
-          x <-
-            unique(x$metabolite_feature_cluster) %>%
-            purrr::map(function(y) {
-              z = x[x$metabolite_feature_cluster == y, , drop = FALSE]
-              score <- score_mfc(z)
-              z$score <- score
-              z
-            }) %>%
-            do.call(rbind, .) %>%
-            as.data.frame()
-          x
+          score_annotation_group(x = temp_id, mfc_rt_tol = mfc_rt_tol)
         },
-        .progress = TRUE
+        .progress = TRUE,
+        .options = furrr::furrr_options(
+          globals = list(
+            score_annotation_group = score_annotation_group,
+            group_peaks_rt = group_peaks_rt,
+            score_mfc = score_mfc,
+            mfc_rt_tol = mfc_rt_tol
+          )
+        )
       ) %>%
       do.call(rbind, .) %>%
       as.data.frame()

@@ -39,12 +39,17 @@ Important notes:
 
 Using ONLY the metabolite information (top metabolite names, classes, literature-derived texts when available, and class-level structure with proportion and levels) together with the module-level statistics, you must:
 
-1) Propose a concise, human-readable TITLE describing the PRIMARY biochemical function represented by this module.
-   - The TITLE should describe a specific biochemical process or mechanistic role, not a broad category label.
-   - Avoid generic naming that only states a metabolite family without further functional qualification.
-   - Prefer a single dominant function; do NOT list multiple functions or themes in parallel.
-   - Interpret Signal_concentration appropriately (hub-like vs diffuse structure), but do NOT assume that high or low is inherently better.
-
+1) Propose a concise TITLE (2–5 words) describing the PRIMARY biochemical function of this module.
+   - Prefer established pathway or process names.
+   - The title must reflect ONE dominant biochemical process. Do NOT combine multiple functions with 'and', 'or', or commas.
+   - Avoid broad category labels (e.g., 'Amino acid metabolism', 'Lipid processing') unless the module is genuinely heterogeneous with low annotation completeness.
+   - BAD examples: 
+       'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies',
+       'Nucleotide Metabolism Involving Purine and Pyrimidine Pathways and Ribose Processing'
+   - GOOD examples: 
+       'Bile acid conjugation', 
+       'Sphingolipid biosynthesis', 
+       'Purine salvage pathway'
 2) Provide a short SUMMARY (5-8 sentences) of the likely biological function of this module.
    - Anchor interpretation to recurring patterns among top metabolites and high-proportion classes with high Importance_level.
    - Use Structural_stability to assess reliability of the module structure.
@@ -53,9 +58,7 @@ Using ONLY the metabolite information (top metabolite names, classes, literature
    - If secondary biochemical signals exist, mention them briefly as ancillary.
 
 VERY IMPORTANT:
-- When inferring the biological function and TITLE of the module, you must NOT use the phenotype or biospecimen information.
-- Species information may be used only to assess biological plausibility.
-- Phenotype and biospecimen may ONLY influence the CONFIDENCE rating.
+- When inferring the biological function and TITLE of the module, you must NOT use the phenotype, biospecimen and species information.
 
 Then:
 
@@ -192,12 +195,6 @@ Study context (for confidence assessment only):
 - Species: {sp}
 - Biospecimen: {bio}
 - Phenotype: {phe}
-
-Instructions:
-1) Infer the dominant biochemical function of this module using ONLY the module-level statistics and metabolite information above.
-2) Do NOT use phenotype or biospecimen information when inferring function.
-3) Use study context only when assigning confidence.
-4) Respond ONLY with the JSON object as specified in the system instructions.
 ")
   
   as.character(prompt)

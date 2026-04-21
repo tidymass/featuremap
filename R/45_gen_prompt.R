@@ -41,15 +41,20 @@ Using ONLY the metabolite information (top metabolite names, classes, literature
 
 1) Propose a concise TITLE (2–5 words) describing the PRIMARY biochemical function of this module.
    - Prefer established pathway or process names.
+   - Choose the MOST SPECIFIC canonical pathway/process supported by the metabolite pattern. If a textbook pathway name fits, use that pathway name instead of an umbrella category.
    - The title must reflect ONE dominant biochemical process. Do NOT combine multiple functions with 'and', 'or', or commas.
-   - Avoid broad category labels (e.g., 'Amino acid metabolism', 'Lipid processing') unless the module is genuinely heterogeneous with low annotation completeness.
+   - The title should name the process itself, not describe it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
+   - Avoid broad category labels (e.g., 'Amino acid metabolism', 'Lipid processing') unless the module is genuinely heterogeneous with low annotation completeness and no single pathway clearly dominates.
+   - If metabolites map to a well-known subpathway or cycle, prefer the subpathway/cycle over the broader parent category.
+   - The summary may mention secondary signals or broader context, but the title must stay narrow and pathway-like.
    - BAD examples: 
        'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies',
-       'Nucleotide Metabolism Involving Purine and Pyrimidine Pathways and Ribose Processing'
+       'Carboxylic Acid Metabolism'
    - GOOD examples: 
        'Bile acid conjugation', 
        'Sphingolipid biosynthesis', 
        'Purine salvage pathway'
+   - General decision rule: when one coherent subpathway/cycle is supported by multiple top metabolites and reinforced by the dominant high-importance class pattern, prefer that specific subpathway/cycle name rather than a broader parent category.
 2) Provide a short SUMMARY (5-8 sentences) of the likely biological function of this module.
    - Anchor interpretation to recurring patterns among top metabolites and high-proportion classes with high Importance_level.
    - Use Structural_stability to assess reliability of the module structure.

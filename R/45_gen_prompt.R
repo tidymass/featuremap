@@ -3,10 +3,9 @@
 build_system_prompt <- function() {
   glue::glue(
     "You are an expert in metabolomics and biochemical pathway interpretation. 
-Your task is to interpret dysregulated metabolic network modules from an omics study.
+Your task is to interpret a dysregulated metabolic module from an omics study.
 
 For each module, you will receive:
-- Study context (biospecimen, phenotype of interest, and species)
 - Module-level statistics:
   - Signal_concentration (low | medium | high)
   - Structural_stability (low | medium | high)
@@ -22,8 +21,7 @@ For each module, you will receive:
   - class name
   - the names of metabolites belonging to this class
   - the proportion of metabolites in the module that belong to this class
-  - Importance_level (low | medium | high)
-  - Robustness_level (low | medium | high)
+  - Priority_level (low | medium | high)
 
 Definitions:
 - Signal_concentration reflects how concentrated the phenotype-associated Importance signal is within the module:
@@ -31,12 +29,10 @@ Definitions:
     - Low: signal is distributed more evenly across many metabolites (diffuse or pathway-like structure).
 - Structural_stability reflects the average stability of module member metabolites across network inference procedures.
 - Annotation_completeness reflects the fraction of metabolites that are chemically annotated.
-- Importance reflects the strength of statistical association with the study phenotype.
-- Robustness reflects structural stability across network inference or resampling.
-- Class-level Importance_level and Robustness_level summarize the average node-level behavior within that class.
+- Priority_level indicates relative priority within the module. When interpreting the module, prioritize metabolites and classes labeled high Priority_level.
 
 Important notes:
-- Top metabolites are listed in descending priority order, with rank 1 being the strongest signal in the module.
+- Top metabolites are listed in descending priority order.
 - High Priority_level metabolites should drive the PRIMARY module function.
 - Literature-derived texts are extracted from PubMed and should be treated as supporting context only; they may be incomplete or indirect.
 
@@ -58,39 +54,29 @@ Using ONLY the metabolite information (top metabolite names, classes, literature
        'Sphingolipid biosynthesis', 
        'Purine salvage pathway'
 2) Provide a short SUMMARY (5-8 sentences) of the likely biological function of this module.
-   - Anchor interpretation to recurring patterns among top metabolites and high-proportion classes with high Importance_level.
+   - Anchor interpretation to recurring patterns among top metabolites and high-proportion classes with high Priority_level.
    - Start from the early-ranked high-priority metabolites, then use class-level structure to confirm or qualify the pathway interpretation.
    - Use Structural_stability to assess reliability of the module structure.
    - If Signal_concentration is high, consider whether a small number of metabolites are likely driving the function.
    - If Signal_concentration is low, consider whether the module represents a coordinated pathway-level shift.
    - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
 
-VERY IMPORTANT:
-- When inferring the biological function and TITLE of the module, you must NOT use the phenotype, biospecimen and species information.
+3) Assign a CONFIDENCE rating (high/medium/low).
+   - If study context is provided, use it only to judge plausibility of the inferred interpretation, not to infer the function itself.
+   - Prioritize biological plausibility in the species, plausibility in the biospecimen, and support from the module-level statistics.
 
-Then:
-
-3) Assign a CONFIDENCE rating (high/medium/low) with this priority:
-
-PRIMARY (most important): Biological plausibility in the study context
-- Is the inferred module function biologically plausible in the given species?
-- Is it plausible that this function/pathway would be observable or reflected in the given biospecimen?
-  (e.g., plasma/serum reflects systemic metabolism and circulating lipids/amino acids; tissue-specific processes may be weakly reflected.)
-- Is it plausible that this function could relate to the phenotype (ONLY as plausibility, not for inferring function)?
-
-Rationale rules:
-- 1-2 sentences only.
-- Do NOT mention \"lack of literature\" or \"annotation completeness is low\" as the main reason.
+4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
+   - Do NOT mention missing literature as the main reason.
+   - Do NOT make the rationale depend mainly on annotation completeness.
 
 Return STRICT JSON only:
 {{
   \"title\": \"...\",
   \"summary\": \"...\",
   \"confidence_label\": \"high\" | \"medium\" | \"low\",
-  \"rationale\": \"1-3 short sentences explaining the confidence decision.\"
+  \"rationale\": \"1-2 short sentences explaining the confidence decision.\"
 }}
 
-If evidence is weak or incoherent, clearly state this and assign LOW confidence.
 Do NOT invent unsupported pathways or mechanisms."
   )
 }
@@ -98,7 +84,7 @@ Do NOT invent unsupported pathways or mechanisms."
 
 
 
-build_module_prompt <- function(module_obj, study_context) {
+build_module_prompt <- function(module_obj, study_context = NULL) {
   
   scalar_text <- function(x, na = "NA") {
     if (is.null(x) || length(x) == 0) return(na)
@@ -171,8 +157,7 @@ build_module_prompt <- function(module_obj, study_context) {
 - Class_name: {scalar_text(row$class)}
 - Proportion_of_module: {scalar_text(row$n_metabolites)}
 - Metabolite_names: {met_str}
-- Importance_level: {scalar_text(row$importance_level)}
-- Robustness_level: {scalar_text(row$robustness_level)}",
+- Priority_level: {scalar_text(row$priority_level)}",
         .na = "NA"
       )
     })
@@ -180,12 +165,28 @@ build_module_prompt <- function(module_obj, study_context) {
     class_text <- paste(class_blocks, collapse = "\n\n")
   }
   
-  # ---- Study context ----
-  sp  <- scalar_text(study_context$species)
-  bio <- scalar_text(study_context$biospecimen)
-  phe <- scalar_text(study_context$phenotype)
-  
   # ---- Final prompt ----
+  has_context <- !is.null(study_context) && any(vapply(
+    study_context[c("species", "biospecimen", "phenotype")],
+    function(x) {
+      if (is.null(x) || length(x) == 0) return(FALSE)
+      val <- trimws(as.character(x[1]))
+      nzchar(val) && !identical(val, "NA")
+    },
+    logical(1)
+  ))
+
+  context_text <- ""
+  if (has_context) {
+    context_text <- glue::glue(
+      "
+Study context (for confidence assessment only):
+- Species: {scalar_text(study_context$species)}
+- Biospecimen: {scalar_text(study_context$biospecimen)}
+- Phenotype: {scalar_text(study_context$phenotype)}"
+    )
+  }
+
   prompt <- glue::glue("
 Module information:
 - Module ID: {mid}
@@ -200,12 +201,7 @@ Listed in descending priority order, where smaller Top_rank means stronger evide
 
 Class-level structure of the module (all metabolites grouped by class):
 
-{class_text}
-
-Study context (for confidence assessment only):
-- Species: {sp}
-- Biospecimen: {bio}
-- Phenotype: {phe}
+{class_text}{context_text}
 ")
   
   as.character(prompt)

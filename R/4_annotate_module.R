@@ -340,21 +340,14 @@ annotate_module = function(res = NULL,
           n_metabolites = round(n()/nrow(mod_non_top), 2),
           metabolites = paste(unique(Compound_name), collapse = "{}"),
           Compound_IDs = paste(unique(Compound_ID), collapse = "{}"),
-          mean_importance = mean(Importance, na.rm = TRUE),
-          mean_robustness = mean(Robustness, na.rm = TRUE),
+          mean_priority = mean(0.7 * Importance + 0.3 * Robustness, na.rm = TRUE),
           .groups = "drop"
         ) %>%
         dplyr::mutate(
-          importance_rank = dplyr::percent_rank(mean_importance),
-          robustness_rank = dplyr::percent_rank(mean_robustness),
-          importance_level = dplyr::case_when(
-            importance_rank >= 0.7 ~ "high",
-            importance_rank >= 0.3 ~ "medium",
-            TRUE ~ "low"
-          ),
-          robustness_level = dplyr::case_when(
-            robustness_rank >= 0.7 ~ "high",
-            robustness_rank >= 0.3 ~ "medium",
+          priority_rank = dplyr::percent_rank(mean_priority),
+          priority_level = dplyr::case_when(
+            priority_rank >= 0.7 ~ "high",
+            priority_rank >= 0.3 ~ "medium",
             TRUE ~ "low"
           )
         ) %>%
@@ -363,8 +356,7 @@ annotate_module = function(res = NULL,
           n_metabolites,
           metabolites,
           Compound_IDs,
-          importance_level,
-          robustness_level
+          priority_level
         )
 
       out

@@ -26,10 +26,8 @@
 #'
 #' @details This function:
 #'   \enumerate{
-#'     \item Constructs system and user prompts using \code{build_system_prompt()}
-#'           and \code{build_module_prompt()}
-#'     \item Sends the prompts to the LLM API via \code{gpt_api_call()}
-#'     \item Parses the JSON response into structured fields
+#'     \item Constructs a single prompt using module evidence and optional study context
+#'     \item Sends the prompt to the LLM API and parses the JSON response
 #'     \item Handles errors gracefully by returning NA values when parsing fails
 #'   }
 #'
@@ -42,13 +40,6 @@ annotate_one_module <- function(module_obj,
                                 model,
                                 max_tokens  = 5000,
                                 temperature = 0) {
-  
-  # 1) Build system prompt with global instructions
-  system_prompt <- build_system_prompt()
-  
-  # 2) Build user prompt with module-specific data
-  user_prompt <- build_module_prompt(module_obj, study_context)
-  
   normalize_parsed <- function(x) {
     if (is.null(x)) return(NULL)
     if (is.data.frame(x) && nrow(x) >= 1) return(as.list(x[1, , drop = FALSE]))
@@ -193,13 +184,78 @@ annotate_one_module <- function(module_obj,
     )
   }
 
-  messages <- list(
-    list(role = "system", content = system_prompt),
-    list(role = "user",   content = user_prompt)
-  )
-  gemini_schema <- NULL
+  validate_required_keys <- function(x, required_keys) {
+    if (is.null(x)) return(NULL)
+    vals <- x[required_keys]
+    ok <- vapply(vals, function(v) {
+      !is.null(v) && length(v) >= 1 && !is.na(v[[1]]) && nzchar(trimws(as.character(v[[1]])))
+    }, logical(1))
+    if (all(ok)) x else NULL
+  }
+
+  request_json <- function(messages, schema, required_keys, retry_instruction, stage_label) {
+    parsed <- NULL
+    raw_text <- NA_character_
+    current_max_tokens <- if (identical(provider, "gemini")) {
+      max(4000, max_tokens)
+    } else {
+      max_tokens
+    }
+
+    for (attempt in 1:2) {
+      res_call <- safe_chat_call(
+        messages = messages,
+        provider = provider,
+        api_key = llm_api_key,
+        model = model,
+        max_tokens = current_max_tokens,
+        temperature = temperature,
+        response_schema = schema
+      )
+
+      if (is.null(res_call) ||
+          is.null(res_call$content) ||
+          !is.character(res_call$content) ||
+          length(res_call$content) != 1 ||
+          !nzchar(res_call$content)) {
+        message("Empty or NULL response for module ", module_obj$module_id, " during ", stage_label, " (attempt ", attempt, ")")
+      } else {
+        raw_text <- res_call$content
+        parsed <- validate_required_keys(parse_json_response(raw_text), required_keys)
+        if (!is.null(parsed)) break
+        message("No valid JSON found for module ", module_obj$module_id, " during ", stage_label, " (attempt ", attempt, ")")
+
+        if (identical(provider, "gemini") &&
+            !is.null(res_call$finish_reason) &&
+            identical(toupper(as.character(res_call$finish_reason)), "MAX_TOKENS")) {
+          current_max_tokens <- min(max(3000, current_max_tokens * 2), 8192)
+          message("Gemini output was truncated (MAX_TOKENS). Retrying with max_tokens = ", current_max_tokens)
+        }
+      }
+
+      if (attempt == 1) {
+        messages <- c(
+          messages,
+          list(list(role = "user", content = retry_instruction))
+        )
+      }
+    }
+
+    if (is.null(parsed)) {
+      parsed <- validate_required_keys(parse_partial_json_fallback(raw_text), required_keys)
+    }
+    if (is.null(parsed)) {
+      parsed <- validate_required_keys(parse_labeled_fallback(raw_text), required_keys)
+    }
+
+    list(parsed = parsed, raw_text = raw_text)
+  }
+
+  system_prompt <- build_system_prompt()
+  user_prompt <- build_module_prompt(module_obj, study_context)
+  response_schema <- NULL
   if (identical(provider, "gemini")) {
-    gemini_schema <- list(
+    response_schema <- list(
       type = "OBJECT",
       properties = list(
         title = list(type = "STRING"),
@@ -211,66 +267,18 @@ annotate_one_module <- function(module_obj,
     )
   }
 
-  parsed <- NULL
-  raw_text <- NA_character_
-  current_max_tokens <- if (identical(provider, "gemini")) {
-    max(4000, max_tokens)
-  } else {
-    max_tokens
-  }
+  res <- request_json(
+    messages = list(
+      list(role = "system", content = system_prompt),
+      list(role = "user", content = user_prompt)
+    ),
+    schema = response_schema,
+    required_keys = c("title", "summary", "confidence_label", "rationale"),
+    retry_instruction = "Return ONLY a valid JSON object with keys: title, summary, confidence_label, rationale.",
+    stage_label = "module interpretation"
+  )
 
-  for (attempt in 1:2) {
-    res_call <- safe_chat_call(
-      messages = messages,
-      provider = provider,
-      api_key = llm_api_key,
-      model = model,
-      max_tokens = current_max_tokens,
-      temperature = temperature,
-      response_schema = gemini_schema
-    )
-
-    if (is.null(res_call) ||
-        is.null(res_call$content) ||
-        !is.character(res_call$content) ||
-        length(res_call$content) != 1 ||
-        !nzchar(res_call$content)) {
-      message("Empty or NULL response for module ", module_obj$module_id, " (attempt ", attempt, ")")
-    } else {
-      raw_text <- res_call$content
-      parsed <- parse_json_response(raw_text)
-      if (!is.null(parsed)) break
-      message("No JSON found for module ", module_obj$module_id, " (attempt ", attempt, ")")
-
-      if (identical(provider, "gemini") &&
-          !is.null(res_call$finish_reason) &&
-          identical(toupper(as.character(res_call$finish_reason)), "MAX_TOKENS")) {
-        current_max_tokens <- min(max(3000, current_max_tokens * 2), 8192)
-        message("Gemini output was truncated (MAX_TOKENS). Retrying with max_tokens = ", current_max_tokens)
-      }
-    }
-
-    if (attempt == 1) {
-      messages <- c(
-        messages,
-        list(list(
-          role = "user",
-          content = "Return ONLY a valid JSON object with keys: title, summary, confidence_label, rationale."
-        ))
-      )
-    }
-  }
-  
-  # Handle JSON parsing failure
-  if (is.null(parsed)) {
-    parsed <- parse_partial_json_fallback(raw_text)
-  }
-
-  if (is.null(parsed)) {
-    parsed <- parse_labeled_fallback(raw_text)
-  }
-
-  if (is.null(parsed)) {
+  if (is.null(res$parsed)) {
     return(
       data.frame(
         module_id        = module_obj$module_id,
@@ -278,17 +286,17 @@ annotate_one_module <- function(module_obj,
         summary          = NA_character_,
         confidence_label = NA_character_,
         rationale        = NA_character_,
-        raw_response     = raw_text,
+        raw_response     = res$raw_text,
         stringsAsFactors = FALSE
       )
     )
   }
-  
-  # Extract fields from parsed JSON, with fallback to NA
-  title  <- parsed[["title"]]            %||% NA_character_
-  summ   <- parsed[["summary"]]          %||% NA_character_
-  clabel <- parsed[["confidence_label"]] %||% NA_character_
-  rat    <- parsed[["rationale"]]        %||% NA_character_
+
+  title <- res$parsed[["title"]] %||% NA_character_
+  summ  <- res$parsed[["summary"]] %||% NA_character_
+  clabel <- res$parsed[["confidence_label"]] %||% NA_character_
+  rat <- res$parsed[["rationale"]] %||% NA_character_
+  raw_text <- res$raw_text
   
   # Return structured data frame
   data.frame(

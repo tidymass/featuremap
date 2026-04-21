@@ -7,7 +7,7 @@
 #'   - `module_id`: module identifier (for example `"M1"`).
 #'   - `module_stats`: module-level statistics (Importance, Robustness, Annotated_fraction).
 #'   - `top_N_metabolites`: data frame of top metabolites with
-#'     `HMDB_ID`, `Compound_name`, `Importance`, `Robustness`, `class`,
+#'     `top_rank`, `Compound_ID`, `Compound_name`, `class`, `priority_level`,
 #'     and optional `functional_summary`.
 #'   - `other_metabolites`: data frame of additional metabolites aggregated at class level.
 #' @param study_context List containing study metadata:

@@ -37,12 +37,12 @@ flatten_pubmed_for_one_module <- function(pubmed_list_for_module) {
 #' PubMed functional summaries, then selects and orders relevant columns.
 #'
 #' @param module_top_df A data frame containing the top metabolites with columns:
-#'   HMDB_ID, Compound_name, Importance, Robustness, class
+#'   top_rank, Compound_ID, Compound_name, class, priority_level
 #' @param pubmed_top_df A data frame containing PubMed data with columns:
 #'   HMDB_ID, functional_summary
 #'
-#' @return A tibble with columns ordered as: HMDB_ID, Compound_name, Importance,
-#'   Robustness, class, functional_summary
+#' @return A tibble with columns ordered as: top_rank, Compound_ID, Compound_name,
+#'   class, priority_level, functional_summary
 #'
 #' @details The left join ensures all metabolites from module_top_df are retained,
 #'   even if they don't have corresponding PubMed data.
@@ -50,9 +50,11 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
   module_top_df %>%
     left_join(pubmed_top_df, by = "Compound_ID") %>%
     dplyr::select(
+      top_rank,
       Compound_ID,
       Compound_name,
       class,
+      priority_level,
       functional_summary
     )
 }
@@ -66,8 +68,8 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
 #'
 #' @param k Integer or character. Index or identifier for the module to prepare
 #' @param module_list_top List of data frames, each containing top 10 metabolites
-#'   for a module. Each data frame must have columns: Module, HMDB_ID, Compound_name,
-#'   Importance, Robustness, class
+#'   for a module. Each data frame must have columns including Module, Compound_ID
+#'   (or HMDB_ID / KEGG_ID), Compound_name, class, top_rank, and priority_level
 #' @param module_list Named list of data frames containing all metabolites for each module.
 #'   Names should match the module IDs returned by \code{\link{identify_module}}
 #'   (for example \code{"M1"}, \code{"M2"}, ...)
@@ -182,9 +184,11 @@ prepare_module <- function(
 
       module_topN_merged <- module_topN %>%
         dplyr::select(
+          top_rank,
           Compound_ID,
           Compound_name,
-          class
+          class,
+          priority_level
         ) %>%
         mutate(functional_summary = NA_character_)
     }
@@ -192,9 +196,11 @@ prepare_module <- function(
   } else {
     module_topN_merged <- module_topN %>%
       dplyr::select(
+        top_rank,
         Compound_ID,
         Compound_name,
-        class
+        class,
+        priority_level
       ) %>%
       mutate(functional_summary = NA_character_)
   }

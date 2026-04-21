@@ -263,7 +263,16 @@ annotate_module = function(res = NULL,
     module2 <- module %>%
       dplyr::mutate(weighted_score = 0.7 * Importance + 0.3 * Robustness) %>%
       dplyr::filter(is.finite(weighted_score)) %>%
-      dplyr::arrange(dplyr::desc(weighted_score))
+      dplyr::arrange(dplyr::desc(weighted_score)) %>%
+      dplyr::mutate(
+        top_rank = dplyr::row_number(),
+        weighted_rank = dplyr::percent_rank(weighted_score),
+        priority_level = dplyr::case_when(
+          weighted_rank >= 0.7 ~ "high",
+          weighted_rank >= 0.3 ~ "medium",
+          TRUE ~ "low"
+        )
+      )
 
     s <- module2$weighted_score
     n <- length(s)

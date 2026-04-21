@@ -13,7 +13,9 @@ For each module, you will receive:
   - Annotation_completeness (low | medium | high)
 
 - A list of the top metabolites in that module with:
+  - rank in the module-specific top-metabolite list
   - metabolite names and chemical classes
+  - Priority_level (low | medium | high)
   - short literature-derived reference texts (may be missing or NA)
 
 - A list of metabolite CLASSES in the same module with, for each class:
@@ -34,22 +36,19 @@ Definitions:
 - Class-level Importance_level and Robustness_level summarize the average node-level behavior within that class.
 
 Important notes:
-- Top metabolites represent the strongest node-level statistical signals in the module.
-- The highest-importance metabolites should be weighted most strongly when deciding the PRIMARY module function.
+- Top metabolites are listed in descending priority order, with rank 1 being the strongest signal in the module.
+- High Priority_level metabolites should drive the PRIMARY module function.
 - Literature-derived texts are extracted from PubMed and should be treated as supporting context only; they may be incomplete or indirect.
 
 Using ONLY the metabolite information (top metabolite names, classes, literature-derived texts when available, and class-level structure with proportion and levels) together with the module-level statistics, you must:
 
 1) Propose a concise TITLE (2–5 words) describing the PRIMARY biochemical function of this module.
-   - Prefer established pathway or process names.
-   - Choose the MOST SPECIFIC canonical pathway/process supported by the metabolite pattern. If a textbook pathway name fits, use that pathway name instead of an umbrella category.
-   - Prioritize the highest-importance top metabolites over scattered lower-importance metabolites when deciding the title.
-   - If several of the top-ranked metabolites can be arranged into one coherent biochemical sequence, branch, cycle, or precursor-product relationship, use that canonical pathway/process as the title.
+   - Prefer the most specific established canonical pathway or process supported by the metabolite pattern.
+   - If several early-ranked metabolites form one coherent biochemical sequence, branch, cycle, or precursor-product relationship, use that pathway/process as the title.
    - The title must reflect ONE dominant biochemical process. Do NOT combine multiple functions with 'and', 'or', or commas.
    - The title should name the process itself, not describe it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
-   - Avoid broad category labels (e.g., 'Amino acid metabolism', 'Lipid processing') unless the module is genuinely heterogeneous with low annotation completeness and no single pathway clearly dominates.
-   - If metabolites map to a well-known subpathway or cycle, prefer the subpathway/cycle over the broader parent category.
-   - Do NOT let a few lower-ranked metabolites broaden the title if the top-ranked metabolites already support one dominant pathway.
+   - Do NOT use a broad parent category or broad chemical class label when early-ranked metabolites support a more specific pathway.
+   - Do NOT let a few lower-ranked metabolites broaden the title if one dominant pathway is already supported.
    - The summary may mention secondary signals or broader context, but the title must stay narrow and pathway-like.
    - BAD examples: 
        'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies',
@@ -58,10 +57,9 @@ Using ONLY the metabolite information (top metabolite names, classes, literature
        'Bile acid conjugation', 
        'Sphingolipid biosynthesis', 
        'Purine salvage pathway'
-   - General decision rule: when one coherent subpathway/cycle is supported by multiple top metabolites and reinforced by the dominant high-importance class pattern, prefer that specific subpathway/cycle name rather than a broader parent category.
 2) Provide a short SUMMARY (5-8 sentences) of the likely biological function of this module.
    - Anchor interpretation to recurring patterns among top metabolites and high-proportion classes with high Importance_level.
-   - Start from the highest-importance metabolites, then use class-level structure to confirm or qualify the pathway interpretation.
+   - Start from the early-ranked high-priority metabolites, then use class-level structure to confirm or qualify the pathway interpretation.
    - Use Structural_stability to assess reliability of the module structure.
    - If Signal_concentration is high, consider whether a small number of metabolites are likely driving the function.
    - If Signal_concentration is low, consider whether the module represents a coordinated pathway-level shift.
@@ -135,8 +133,10 @@ build_module_prompt <- function(module_obj, study_context) {
       
       glue::glue(
         "Metabolite (top):
+- Top_rank: {scalar_text(row$top_rank)}
 - Name: {scalar_text(row$Compound_name)}
 - Class: {scalar_text(row$class)}
+- Priority_level: {scalar_text(row$priority_level)}
 - Literature_reference_text: {scalar_text(row$functional_summary)}",
         .na = "NA"
       )
@@ -194,6 +194,7 @@ Module information:
 - Annotation_completeness: {annotation_level}
 
 Top metabolites (strongest statistical signals in the module):
+Listed in descending priority order, where smaller Top_rank means stronger evidence.
 
 {top_text}
 

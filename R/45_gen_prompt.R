@@ -26,8 +26,11 @@ Using ONLY the provided metabolite/class information together with the module-le
    - Name the process itself, not a description of it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
    - Prefer a specific pathway over a broad parent category or chemical class.
    - Secondary signals may appear in the summary, but not in the title.
-   - Bad title style: 'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies'.
-   - Good title style: 'Bile acid conjugation' or 'Sphingolipid biosynthesis'.
+   - BAD examples: 
+       'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies',
+   - GOOD examples: 
+       'Bile acid conjugation', 
+       'Sphingolipid biosynthesis', 
 2) Provide a short SUMMARY (4-6 sentences) of the likely biological function of this module.
    - Focus on the biochemical function itself: the pathway, process, metabolite transformations, and physiological role suggested by the metabolite pattern.
    - Ground the interpretation in early-ranked high-priority metabolites, then use high-priority or high-proportion classes to support or qualify the pathway interpretation.
@@ -35,8 +38,7 @@ Using ONLY the provided metabolite/class information together with the module-le
    - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
 
 3) Assign a CONFIDENCE rating (high/medium/low).
-   - If species is provided, you may use it to prefer biologically plausible pathway interpretations and pathway naming for that organism.
-   - If biospecimen or phenotype is provided, use them only to judge plausibility of the inferred interpretation, not to infer the function itself.
+   - If study context is provided, use it only to judge plausibility of the inferred interpretation, not to infer the function itself.
    - Judge confidence using biological plausibility in the species and biospecimen, together with support from the module-level statistics.
    - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, not as content for the summary.
 
@@ -156,13 +158,10 @@ build_module_prompt <- function(module_obj, study_context = NULL) {
   if (has_context) {
     context_text <- glue::glue(
       "
-Study context:
+Study context (for confidence assessment only):
 - Species: {scalar_text(study_context$species)}
 - Biospecimen: {scalar_text(study_context$biospecimen)}
-- Phenotype: {scalar_text(study_context$phenotype)}
-
-Use species to keep the interpretation biologically plausible for the organism when relevant.
-Use biospecimen and phenotype mainly for plausibility and confidence assessment, not to infer the core function."
+- Phenotype: {scalar_text(study_context$phenotype)}"
     )
   }
 

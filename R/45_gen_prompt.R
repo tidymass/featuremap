@@ -53,19 +53,20 @@ Using ONLY the metabolite information (top metabolite names, classes, literature
        'Bile acid conjugation', 
        'Sphingolipid biosynthesis', 
        'Purine salvage pathway'
-2) Provide a short SUMMARY (5-8 sentences) of the likely biological function of this module.
-   - Anchor interpretation to recurring patterns among top metabolites and high-proportion classes with high Priority_level.
+2) Provide a short SUMMARY (4-6 sentences) of the likely biological function of this module.
+   - Focus on the biochemical function itself: the pathway, process, metabolite transformations, and physiological role suggested by the metabolite pattern.
+   - Anchor interpretation to recurring patterns among early-ranked high-priority metabolites and high-proportion classes with high Priority_level.
    - Start from the early-ranked high-priority metabolites, then use class-level structure to confirm or qualify the pathway interpretation.
-   - Use Structural_stability to assess reliability of the module structure.
-   - If Signal_concentration is high, consider whether a small number of metabolites are likely driving the function.
-   - If Signal_concentration is low, consider whether the module represents a coordinated pathway-level shift.
+   - Explain what the module is doing biologically, not how you evaluated the module.
    - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
 
 3) Assign a CONFIDENCE rating (high/medium/low).
    - If study context is provided, use it only to judge plausibility of the inferred interpretation, not to infer the function itself.
    - Prioritize biological plausibility in the species, plausibility in the biospecimen, and support from the module-level statistics.
+   - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, as support for confidence rather than as content for the summary.
 
 4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
+   - This is the right place to mention module-level statistics if needed.
    - Do NOT mention missing literature as the main reason.
    - Do NOT make the rationale depend mainly on annotation completeness.
 

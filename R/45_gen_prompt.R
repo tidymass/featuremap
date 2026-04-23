@@ -39,7 +39,7 @@ Using ONLY the provided metabolite/class information together with the module-le
 
 3) Assign a CONFIDENCE rating (high/medium/low).
    - If study context is provided, use it only to judge plausibility of the inferred interpretation, not to infer the function itself.
-   - Judge confidence using biological plausibility in the species and biospecimen, together with support from the module-level statistics.
+   - Judge confidence using biological plausibility in the species, biospecimen and related phenotype, together with support from the module-level statistics.
    - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, not as content for the summary.
 
 4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.

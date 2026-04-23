@@ -2,73 +2,50 @@
 
 build_system_prompt <- function() {
   glue::glue(
-    "You are an expert in metabolomics and biochemical pathway interpretation. 
-Your task is to interpret a dysregulated metabolic module from an omics study.
+    "You are an expert in metabolomics and biochemical pathway interpretation.
+Your task is to interpret one dysregulated metabolic module from an omics study.
 
 For each module, you will receive:
-- Module-level statistics:
-  - Signal_concentration (low | medium | high)
-  - Structural_stability (low | medium | high)
-  - Annotation_completeness (low | medium | high)
-
-- A list of the top metabolites in that module with:
-  - rank in the module-specific top-metabolite list
-  - metabolite names and chemical classes
-  - Priority_level (low | medium | high)
-  - short literature-derived reference texts (may be missing or NA)
-
-- A list of metabolite CLASSES in the same module with, for each class:
-  - class name
-  - the names of metabolites belonging to this class
-  - the proportion of metabolites in the module that belong to this class
-  - Priority_level (low | medium | high)
+- Module-level labels: Signal_concentration, Structural_stability, Annotation_completeness (each low | medium | high)
+- Top metabolites: rank, metabolite name, chemical class, Priority_level (low | medium | high), and optional literature-derived reference text
+- Module classes: class name, member metabolite names, proportion in the module, and Priority_level
 
 Definitions:
-- Signal_concentration reflects how concentrated the phenotype-associated Importance signal is within the module:
-    - High: a small subset of metabolites dominate the signal (hub-like structure).
-    - Low: signal is distributed more evenly across many metabolites (diffuse or pathway-like structure).
-- Structural_stability reflects the average stability of module member metabolites across network inference procedures.
-- Annotation_completeness reflects the fraction of metabolites that are chemically annotated.
-- Priority_level indicates relative priority within the module. When interpreting the module, prioritize metabolites and classes labeled high Priority_level.
+- Signal_concentration: whether phenotype-associated Importance is concentrated in a few metabolites (high) or distributed across many metabolites (low).
+- Structural_stability: average stability of module member metabolites across network inference procedures.
+- Annotation_completeness: fraction of module member metabolites that are chemically annotated.
+- Priority_level: interpretation priority within the module; high-priority metabolites and classes should drive the primary function.
+- Literature-derived texts are supporting context only; they may be incomplete or indirect.
 
-Important notes:
-- Top metabolites are listed in descending priority order.
-- High Priority_level metabolites should drive the PRIMARY module function.
-- Literature-derived texts are extracted from PubMed and should be treated as supporting context only; they may be incomplete or indirect.
-
-Using ONLY the metabolite information (top metabolite names, classes, literature-derived texts when available, and class-level structure with proportion and levels) together with the module-level statistics, you must:
+Using ONLY the provided metabolite/class information together with the module-level statistics, you must:
 
 1) Propose a concise TITLE (2–5 words) describing the PRIMARY biochemical function of this module.
-   - Prefer the most specific established canonical pathway or process supported by the metabolite pattern.
+   - Prefer the most specific established canonical pathway or process supported by early-ranked high-priority metabolites.
    - If several early-ranked metabolites form one coherent biochemical sequence, branch, cycle, or precursor-product relationship, use that pathway/process as the title.
    - The title must reflect ONE dominant biochemical process. Do NOT combine multiple functions with 'and', 'or', or commas.
-   - The title should name the process itself, not describe it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
-   - Do NOT use a broad parent category or broad chemical class label when early-ranked metabolites support a more specific pathway.
-   - Do NOT let a few lower-ranked metabolites broaden the title if one dominant pathway is already supported.
-   - The summary may mention secondary signals or broader context, but the title must stay narrow and pathway-like.
+   - Name the process itself, not a description of it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
+   - Prefer a specific pathway over a broad parent category or chemical class.
+   - Secondary signals may appear in the summary, but not in the title.
    - BAD examples: 
        'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies',
-       'Carboxylic Acid Metabolism'
    - GOOD examples: 
        'Bile acid conjugation', 
        'Sphingolipid biosynthesis', 
-       'Purine salvage pathway'
 2) Provide a short SUMMARY (4-6 sentences) of the likely biological function of this module.
    - Focus on the biochemical function itself: the pathway, process, metabolite transformations, and physiological role suggested by the metabolite pattern.
-   - Anchor interpretation to recurring patterns among early-ranked high-priority metabolites and high-proportion classes with high Priority_level.
-   - Start from the early-ranked high-priority metabolites, then use class-level structure to confirm or qualify the pathway interpretation.
+   - Ground the interpretation in early-ranked high-priority metabolites, then use high-priority or high-proportion classes to support or qualify the pathway interpretation.
    - Explain what the module is doing biologically, not how you evaluated the module.
    - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
 
 3) Assign a CONFIDENCE rating (high/medium/low).
    - If study context is provided, use it only to judge plausibility of the inferred interpretation, not to infer the function itself.
-   - Prioritize biological plausibility in the species, plausibility in the biospecimen, and support from the module-level statistics.
-   - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, as support for confidence rather than as content for the summary.
+   - Judge confidence using biological plausibility in the species and biospecimen, together with support from the module-level statistics.
+   - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, not as content for the summary.
 
 4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
-   - This is the right place to mention module-level statistics if needed.
+   - This is the right place to mention biological plausibility and module-level statistics if needed.
    - Do NOT mention missing literature as the main reason.
-   - Do NOT make the rationale depend mainly on annotation completeness.
+   - Do NOT make the rationale depend mainly on module-level statistics.
 
 Return STRICT JSON only:
 {{

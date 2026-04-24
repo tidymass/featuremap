@@ -34,14 +34,14 @@ Using ONLY the provided metabolite/class information together with the module-le
    - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
 
 3) Assign a CONFIDENCE rating (high/medium/low).
-   - Confidence should primarily reflect whether the proposed interpretation is biologically plausible in the provided study context, especially species, biospecimen, and phenotype.
-   - If the proposed primary function mainly depends on pathways, metabolites, or biosynthetic programs that are unlikely to exist or operate in the provided species or biospecimen, the confidence must be low.
-   - Use high confidence only when multiple core metabolites coherently support a known endogenous pathway that is plausible for the species and biospecimen.
-   - Module-level statistics are secondary evidence only: they may refine confidence within a biologically plausible interpretation, but they must not override biological implausibility.
+   - Confidence should judge whether the TITLED PATHWAY itself is biologically realistic in the provided species, biospecimen, and phenotype, not merely whether related compounds could be detected there.
+   - If the titled pathway is mainly exogenous, microbial, plant-specific, environmental, synthetic, drug-derived, or otherwise not a realistic endogenous pathway in the provided species or biospecimen, confidence must be low even if such compounds could appear from diet, microbiota, drugs, or exposure.
+   - Use high confidence only when multiple core metabolites coherently support a known endogenous pathway plausible for the species and biospecimen; use medium only when that pathway is broadly plausible but the evidence is mixed or indirect.
+   - Module-level statistics are secondary only: they may refine confidence within a plausible interpretation, but they must not override biological implausibility.
 
 4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
-   - Start with biological plausibility in the study context and state clearly whether the titled pathway is realistic in that species and biospecimen.
-   - If confidence is low because the pathway appears exogenous or implausible for the study context, say that explicitly.
+   - Start by stating whether the titled pathway is realistic in that species and biospecimen.
+   - If confidence is low because the pathway is exogenous or implausible for the study context, say that explicitly.
    - Mention module-level statistics only as secondary support if needed.
    - Do NOT mention missing literature as the main reason.
 
@@ -161,8 +161,8 @@ Study context:
 - Biospecimen: {scalar_text(study_context$biospecimen)}
 - Phenotype: {scalar_text(study_context$phenotype)}
 
-Use species to keep the interpretation biologically plausible for the organism when relevant.
-Use biospecimen and phenotype mainly to assess plausibility and confidence, especially whether the proposed function is reasonable in this study context.
+Use species to keep the interpretation biologically plausible for the organism.
+Use biospecimen and phenotype mainly to judge whether the titled pathway is realistic in this study context.
 If the titled pathway would not realistically occur in this species and biospecimen, confidence should be low."
     )
   }

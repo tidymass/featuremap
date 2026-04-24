@@ -24,7 +24,6 @@ Using ONLY the provided metabolite/class information together with the module-le
    - If several early-ranked metabolites form one coherent biochemical sequence, branch, cycle, or precursor-product relationship, use that pathway/process as the title.
    - The title must reflect ONE dominant biochemical process. Do NOT combine multiple functions with 'and', 'or', or commas.
    - Name the process itself, not a description of it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
-   - Prefer a specific pathway over a broad parent category or chemical class.
    - Secondary signals may appear in the summary, but not in the title.
    - Bad title style: 'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies'.
    - Good title style: 'Bile acid conjugation' or 'Sphingolipid biosynthesis'.
@@ -36,16 +35,15 @@ Using ONLY the provided metabolite/class information together with the module-le
 
 3) Assign a CONFIDENCE rating (high/medium/low).
    - Confidence should primarily reflect whether the proposed interpretation is biologically plausible in the provided study context, especially species, biospecimen, and phenotype.
-   - If species is provided, use it to keep the pathway interpretation biologically plausible for that organism.
-   - If the proposed interpretation mainly depends on pathways, metabolites, or biosynthetic programs that are unlikely to exist or operate in the provided species, biospecimen, or phenotype context, the confidence must be low.
-   - Exogenous, microbial, plant-specific, environmental, or otherwise non-endogenous interpretations in a human biospecimen should usually lower confidence unless there is strong direct support from multiple coherent metabolites.
+   - If the proposed primary function mainly depends on pathways, metabolites, or biosynthetic programs that are unlikely to exist or operate in the provided species or biospecimen, the confidence must be low.
+   - Use high confidence only when multiple core metabolites coherently support a known endogenous pathway that is plausible for the species and biospecimen.
    - Module-level statistics are secondary evidence only: they may refine confidence within a biologically plausible interpretation, but they must not override biological implausibility.
-   - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, not as content for the summary.
 
 4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
-   - Start with biological plausibility in the study context; mention module-level statistics only as secondary support if needed.
+   - Start with biological plausibility in the study context and state clearly whether the titled pathway is realistic in that species and biospecimen.
+   - If confidence is low because the pathway appears exogenous or implausible for the study context, say that explicitly.
+   - Mention module-level statistics only as secondary support if needed.
    - Do NOT mention missing literature as the main reason.
-   - Do NOT make the rationale depend mainly on module-level statistics.
 
 Return STRICT JSON only:
 {{
@@ -164,7 +162,8 @@ Study context:
 - Phenotype: {scalar_text(study_context$phenotype)}
 
 Use species to keep the interpretation biologically plausible for the organism when relevant.
-Use biospecimen and phenotype mainly to assess plausibility and confidence, especially whether the proposed function is reasonable in this study context."
+Use biospecimen and phenotype mainly to assess plausibility and confidence, especially whether the proposed function is reasonable in this study context.
+If the titled pathway would not realistically occur in this species and biospecimen, confidence should be low."
     )
   }
 

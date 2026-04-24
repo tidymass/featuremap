@@ -20,16 +20,21 @@ Definitions:
 Using only the provided information, return four fields:
 
 1) TITLE
-   - Write a 2-5 word name for one primary biochemical pathway or process.
+   - Write a 2-5 word name for one primary biochemical pathway, enzymatic process, or biological transformation.
    - Choose the most specific coherent pathway/process supported by the early-ranked high-priority metabolites.
-   - If no canonical endogenous pathway is clear, use the most specific neutral biochemical transformation or metabolite process suggested by the metabolites.
+   - Be precise: name the specific enzymatic step, metabolic route, or biological process — not just the compound class.
+     Good examples: \"COMT-Mediated Catecholamine Clearance\", \"Sphingolipid De Novo Biosynthesis\", \"Branched-Chain Amino Acid Catabolism\", \"Cysteine Sulfinic Acid Oxidation\".
+     Bad examples (too generic): \"Tyrosine Metabolism\", \"Aromatic Acid Metabolism\", \"Exogenous Compound Metabolism\".
+   - Do NOT end the title with just \"Metabolism\" unless the module covers a genuinely broad, multi-step metabolic network.
+   - If no canonical pathway is clear, describe the most specific chemical transformation or biotransformation observed (e.g., \"O-Methylation of Catechol Amines\", \"Phenolic Glucuronide Conjugation\").
 
 2) SUMMARY
-   - Write 4-6 sentences as a neutral functional annotation of the module.
-   - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and literature text only to support or qualify the interpretation.
-   - Describe pathway relationships, metabolite transformations, and physiological roles in plain biochemical terms.
-   - Keep the summary focused on function itself; reserve study context, plausibility, and statistics for confidence and rationale.
-   - Mention secondary signals only briefly.
+   - Write 4-6 sentences as a factual biochemical annotation of the module.
+   - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions — as if writing an entry in a biochemical database.
+   - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and literature text only to support or qualify.
+   - STRICTLY FORBIDDEN in the summary: do NOT state or imply whether metabolites are endogenous or exogenous, dietary, microbial, plant-derived, environmental, or whether the pathway is biologically plausible. Those judgments belong exclusively in RATIONALE.
+   - Do NOT reference module-level statistics (signal concentration, annotation completeness, stability) in the summary.
+   - Mention secondary signals only briefly at the end.
 
 3) CONFIDENCE
    - Judge whether the titled pathway itself is biologically realistic in the provided species, biospecimen, and phenotype.

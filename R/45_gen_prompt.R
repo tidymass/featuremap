@@ -14,36 +14,33 @@ Definitions:
 - Signal_concentration: whether phenotype-associated Importance is concentrated in a few metabolites (high) or distributed across many metabolites (low).
 - Structural_stability: average stability of module member metabolites across network inference procedures.
 - Annotation_completeness: fraction of module member metabolites that are chemically annotated.
-- Priority_level: interpretation priority within the module; high-priority metabolites and classes should drive the primary function.
-- Literature-derived texts are supporting context only; they may be incomplete or indirect.
+- Priority_level: interpretation priority within the module; early-ranked high-priority metabolites should anchor the main interpretation.
+- Literature-derived texts: supporting context only.
 
-Using ONLY the provided metabolite/class information together with the module-level statistics, you must:
+Using only the provided information, return four fields:
 
-1) Propose a concise TITLE (2–5 words) describing the PRIMARY biochemical function of this module.
-   - Prefer the most specific established canonical pathway or process supported by early-ranked high-priority metabolites.
-   - If several early-ranked metabolites form one coherent biochemical sequence, branch, cycle, or precursor-product relationship, use that pathway/process as the title.
-   - The title must reflect ONE dominant biochemical process. Do NOT combine multiple functions with 'and', 'or', or commas.
-   - Name the process itself, not a description of it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
-   - Secondary signals may appear in the summary, but not in the title.
-   - Bad title style: 'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies'.
-   - Good title style: 'Bile acid conjugation' or 'Sphingolipid biosynthesis'.
-2) Provide a short SUMMARY (4-6 sentences) of the likely biological function of this module.
-   - Focus on the biochemical function itself: the pathway, process, metabolite transformations, and physiological role suggested by the metabolite pattern.
-   - Ground the interpretation in early-ranked high-priority metabolites, then use high-priority or high-proportion classes to support or qualify the pathway interpretation.
-   - Explain what the module is doing biologically, not how you evaluated the module.
-   - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
+1) TITLE
+   - Write a 2-5 word name for one primary biochemical pathway or process.
+   - Choose the most specific coherent pathway/process supported by the early-ranked high-priority metabolites.
+   - If no canonical endogenous pathway is clear, use the most specific neutral biochemical transformation or metabolite process suggested by the metabolites.
 
-3) Assign a CONFIDENCE rating (high/medium/low).
-   - Confidence should judge whether the TITLED PATHWAY itself is biologically realistic in the provided species, biospecimen, and phenotype, not merely whether related compounds could be detected there.
-   - If the titled pathway is mainly exogenous, microbial, plant-specific, environmental, synthetic, drug-derived, or otherwise not a realistic endogenous pathway in the provided species or biospecimen, confidence must be low even if such compounds could appear from diet, microbiota, drugs, or exposure.
-   - Use high confidence only when multiple core metabolites coherently support a known endogenous pathway plausible for the species and biospecimen; use medium only when that pathway is broadly plausible but the evidence is mixed or indirect.
-   - Module-level statistics are secondary only: they may refine confidence within a plausible interpretation, but they must not override biological implausibility.
+2) SUMMARY
+   - Write 4-6 sentences as a neutral functional annotation of the module.
+   - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and literature text only to support or qualify the interpretation.
+   - Describe pathway relationships, metabolite transformations, and physiological roles in plain biochemical terms.
+   - Keep the summary focused on function itself; reserve study context, plausibility, and statistics for confidence and rationale.
+   - Mention secondary signals only briefly.
 
-4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
-   - Start by stating whether the titled pathway is realistic in that species and biospecimen.
-   - If confidence is low because the pathway is exogenous or implausible for the study context, say that explicitly.
-   - Mention module-level statistics only as secondary support if needed.
-   - Do NOT mention missing literature as the main reason.
+3) CONFIDENCE
+   - Judge whether the titled pathway itself is biologically realistic in the provided species, biospecimen, and phenotype.
+   - High: multiple core metabolites support a known endogenous pathway that fits the study context.
+   - Medium: the pathway is broadly plausible, but support is mixed or indirect.
+   - Low: the pathway is mainly exogenous, microbial, plant-specific, environmental, synthetic, drug-derived, or otherwise not a realistic endogenous process for the provided species or biospecimen.
+   - Module-level statistics are secondary and may refine confidence, but cannot rescue a biologically implausible pathway.
+
+4) RATIONALE
+   - Write 1-2 sentences explaining the confidence decision.
+   - Start with biological plausibility in the study context, then mention module-level statistics only if they add useful secondary support.
 
 Return STRICT JSON only:
 {{
@@ -53,7 +50,7 @@ Return STRICT JSON only:
   \"rationale\": \"1-2 short sentences explaining the confidence decision.\"
 }}
 
-Do NOT invent unsupported pathways or mechanisms."
+Do not invent unsupported pathways or mechanisms."
   )
 }
 
@@ -161,9 +158,7 @@ Study context:
 - Biospecimen: {scalar_text(study_context$biospecimen)}
 - Phenotype: {scalar_text(study_context$phenotype)}
 
-Use species to keep the interpretation biologically plausible for the organism.
-Use biospecimen and phenotype mainly to judge whether the titled pathway is realistic in this study context.
-If the titled pathway would not realistically occur in this species and biospecimen, confidence should be low."
+Use this context mainly to judge whether the titled pathway is biologically realistic in the study setting."
     )
   }
 

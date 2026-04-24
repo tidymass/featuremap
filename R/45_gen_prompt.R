@@ -37,15 +37,19 @@ Using only the provided information, return four fields:
    - Mention secondary signals only briefly at the end.
 
 3) CONFIDENCE
-   - Judge whether the titled pathway itself is biologically realistic in the provided species, biospecimen, and phenotype.
-   - High: multiple core metabolites support a known endogenous pathway that fits the study context.
-   - Medium: the pathway is broadly plausible, but support is mixed or indirect.
-   - Low: the pathway is mainly exogenous, microbial, plant-specific, environmental, synthetic, drug-derived, or otherwise not a realistic endogenous process for the provided species or biospecimen.
-   - Module-level statistics are secondary and may refine confidence, but cannot rescue a biologically implausible pathway.
+   - Evaluate confidence across three dimensions using the Study context (species, biospecimen, phenotype):
+     (a) Species validity: Does the study species possess this metabolic function? Is it an established pathway in that organism, or is it specific to other taxa (bacteria, plants, fungi)?
+     (b) Biospecimen appropriateness: Is this pathway known to be active or detectable in the study biospecimen? Some pathways are tissue-specific (e.g., liver-specific) and may not be reflected in plasma or urine.
+     (c) Phenotype relevance: Is this pathway plausibly perturbed in the study phenotype, or is it consistent with the biological question being asked?
+   - Score holistically across all three dimensions:
+   - High: the pathway is an established function in the study species (a), is appropriate for the biospecimen type (b), and is plausibly relevant to the study phenotype (c). Core module metabolites are recognized substrates or products of this pathway.
+   - Medium: the pathway exists in the study species and fits the biospecimen, but one dimension is uncertain or indirect — e.g., phenotype relevance is speculative, substrates are primarily exogenous, or the pathway is active but not specific to the biospecimen.
+   - Low: the pathway fails on the species dimension — it is not a known function in the study species (e.g., bacterial or plant biosynthesis), OR the module is dominated by synthetic, industrial, or drug-derived compounds that reflect exposure rather than active endogenous metabolism.
+   - Module-level statistics (signal concentration, structural stability, annotation completeness) are secondary; they may refine confidence within a tier but cannot override a biologically implausible assignment.
 
 4) RATIONALE
-   - Write 1-2 sentences explaining the confidence decision.
-   - Start with biological plausibility in the study context, then mention module-level statistics only if they add useful secondary support.
+   - Write 1-2 sentences explaining the confidence decision, explicitly addressing the three dimensions: species validity, biospecimen appropriateness, and phenotype relevance.
+   - Mention module-level statistics only if they provide meaningful additional support or concern.
 
 Return STRICT JSON only:
 {{

@@ -20,13 +20,14 @@ Definitions:
 Using only the provided information, return four fields:
 
 1) TITLE
-   - Write a 2-5 word name for one primary biochemical pathway, enzymatic process, or biological transformation.
-   - Choose the most specific coherent pathway/process supported by the early-ranked high-priority metabolites.
-   - Be precise: name the specific enzymatic step, metabolic route, or biological process — not just the compound class.
-     Good examples: \"COMT-Mediated Catecholamine Clearance\", \"Sphingolipid De Novo Biosynthesis\", \"Branched-Chain Amino Acid Catabolism\", \"Cysteine Sulfinic Acid Oxidation\".
-     Bad examples (too generic): \"Tyrosine Metabolism\", \"Aromatic Acid Metabolism\", \"Exogenous Compound Metabolism\".
-   - Do NOT end the title with just \"Metabolism\" unless the module covers a genuinely broad, multi-step metabolic network.
-   - If no canonical pathway is clear, describe the most specific chemical transformation or biotransformation observed (e.g., \"O-Methylation of Catechol Amines\", \"Phenolic Glucuronide Conjugation\").
+   - Name the pathway in KEGG style: concise, standardized, and anchored to a specific biochemical pathway or process.
+   - Follow KEGG naming conventions:
+     - Use \"X metabolism\" when the module spans multiple steps of a compound class (e.g., \"Tyrosine metabolism\", \"Sphingolipid metabolism\").
+     - Use \"X biosynthesis\" or \"X degradation\" when the directionality is clear from the metabolites (e.g., \"Sphingolipid biosynthesis\", \"Fatty acid degradation\").
+     - Use a specific reaction or enzyme-level name when the module is anchored by a single well-defined step (e.g., \"Cysteine sulfinic acid oxidation\", \"Bilirubin glucuronidation\").
+     - Use a physiological or system-level name when appropriate (e.g., \"Insulin signaling pathway\", \"MAPK signaling pathway\").
+   - Choose the most specific level of granularity supported by the early-ranked high-priority metabolites — do not over-generalize (e.g., prefer \"Tyrosine metabolism\" over \"Amino acid metabolism\") but do not force artificial precision when the module is genuinely broad.
+   - If no canonical pathway fits, use the most specific neutral description of the dominant chemical transformation (e.g., \"Aromatic compound glucuronidation\", \"Phenolic sulfation\").
 
 2) SUMMARY
    - Write 4-6 sentences as a factual biochemical annotation of the module.
@@ -48,7 +49,7 @@ Using only the provided information, return four fields:
    - Module-level statistics (signal concentration, structural stability, annotation completeness) are secondary; they may refine confidence within a tier but cannot override a biologically implausible assignment.
 
 4) RATIONALE
-   - Write 1-2 sentences explaining the confidence decision, explicitly addressing the three dimensions: species validity, biospecimen appropriateness, and phenotype relevance.
+   - Write 2-3 sentences explaining the confidence decision, explicitly addressing all three dimensions: species validity, biospecimen appropriateness, and phenotype relevance.
    - Mention module-level statistics only if they provide meaningful additional support or concern.
 
 Return STRICT JSON only:
@@ -56,7 +57,7 @@ Return STRICT JSON only:
   \"title\": \"...\",
   \"summary\": \"...\",
   \"confidence_label\": \"high\" | \"medium\" | \"low\",
-  \"rationale\": \"1-2 short sentences explaining the confidence decision.\"
+  \"rationale\": \"2-3 sentences covering species validity, biospecimen appropriateness, and phenotype relevance.\"
 }}
 
 Do not invent unsupported pathways or mechanisms."

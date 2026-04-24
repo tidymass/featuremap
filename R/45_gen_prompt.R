@@ -26,11 +26,8 @@ Using ONLY the provided metabolite/class information together with the module-le
    - Name the process itself, not a description of it. Avoid phrases such as 'centered on', 'involving', 'related to', 'associated with', 'characterized by', or 'with secondary links to'.
    - Prefer a specific pathway over a broad parent category or chemical class.
    - Secondary signals may appear in the summary, but not in the title.
-   - BAD examples: 
-       'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies',
-   - GOOD examples: 
-       'Bile acid conjugation', 
-       'Sphingolipid biosynthesis', 
+   - Bad title style: 'Lipid and Energy Metabolism Centered on Fatty Acids and Ketone Bodies'.
+   - Good title style: 'Bile acid conjugation' or 'Sphingolipid biosynthesis'.
 2) Provide a short SUMMARY (4-6 sentences) of the likely biological function of this module.
    - Focus on the biochemical function itself: the pathway, process, metabolite transformations, and physiological role suggested by the metabolite pattern.
    - Ground the interpretation in early-ranked high-priority metabolites, then use high-priority or high-proportion classes to support or qualify the pathway interpretation.
@@ -38,12 +35,15 @@ Using ONLY the provided metabolite/class information together with the module-le
    - If secondary biochemical signals exist, mention them briefly as ancillary rather than expanding the title.
 
 3) Assign a CONFIDENCE rating (high/medium/low).
-   - If study context is provided, use it only to judge plausibility of the inferred interpretation, not to infer the function itself.
-   - Judge confidence using biological plausibility in the species, biospecimen and related phenotype, together with support from the module-level statistics.
+   - Confidence should primarily reflect whether the proposed interpretation is biologically plausible in the provided study context, especially species, biospecimen, and phenotype.
+   - If species is provided, use it to keep the pathway interpretation biologically plausible for that organism.
+   - If the proposed interpretation mainly depends on pathways, metabolites, or biosynthetic programs that are unlikely to exist or operate in the provided species, biospecimen, or phenotype context, the confidence must be low.
+   - Exogenous, microbial, plant-specific, environmental, or otherwise non-endogenous interpretations in a human biospecimen should usually lower confidence unless there is strong direct support from multiple coherent metabolites.
+   - Module-level statistics are secondary evidence only: they may refine confidence within a biologically plausible interpretation, but they must not override biological implausibility.
    - Use Signal_concentration, Structural_stability, and Annotation_completeness mainly here, not as content for the summary.
 
 4) Provide a short RATIONALE (1-2 sentences) explaining the confidence decision.
-   - This is the right place to mention biological plausibility and module-level statistics if needed.
+   - Start with biological plausibility in the study context; mention module-level statistics only as secondary support if needed.
    - Do NOT mention missing literature as the main reason.
    - Do NOT make the rationale depend mainly on module-level statistics.
 
@@ -158,10 +158,13 @@ build_module_prompt <- function(module_obj, study_context = NULL) {
   if (has_context) {
     context_text <- glue::glue(
       "
-Study context (for confidence assessment only):
+Study context:
 - Species: {scalar_text(study_context$species)}
 - Biospecimen: {scalar_text(study_context$biospecimen)}
-- Phenotype: {scalar_text(study_context$phenotype)}"
+- Phenotype: {scalar_text(study_context$phenotype)}
+
+Use species to keep the interpretation biologically plausible for the organism when relevant.
+Use biospecimen and phenotype mainly to assess plausibility and confidence, especially whether the proposed function is reasonable in this study context."
     )
   }
 

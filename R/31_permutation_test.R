@@ -132,6 +132,12 @@ permutation_test_gamma <- function(subnet,
         comm <- igraph::cluster_walktrap(fake_steiner_subnet, steps = 4)
       } else if (method == "leading_eigen") {
         comm <- igraph::cluster_leading_eigen(fake_steiner_subnet)
+      } else if (method == "newman_spectral") {
+        comm <- rSpectral::spectral_igraph_communities(
+          fake_steiner_subnet,
+          Cn_min = as.integer(min_size),
+          names = 1L
+        )
       }
     }, error = function(e) NULL)
     
@@ -183,7 +189,7 @@ permutation_test_gamma <- function(subnet,
   .progress = TRUE, 
   .options = furrr_options(
     seed = TRUE,
-    packages = c("igraph","dplyr","tibble","tidyr","MASS")
+    packages = c("igraph","dplyr","tibble","tidyr","MASS","rSpectral")
   ))
   
   future::plan(future::sequential)

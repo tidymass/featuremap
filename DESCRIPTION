@@ -46,6 +46,7 @@ Imports:
     Rdisop,
     rlang,
     rentrez,
+    rSpectral,
     stringr,
     tibble,
     tidyr,

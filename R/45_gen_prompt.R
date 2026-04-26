@@ -27,6 +27,7 @@ Using only the provided information, return four fields:
      - Use a specific reaction or enzyme-level name when the module is anchored by a single well-defined step (e.g., \"Cysteine sulfinic acid oxidation\", \"Bilirubin glucuronidation\").
      - Use a physiological or system-level name when appropriate (e.g., \"Insulin signaling pathway\", \"MAPK signaling pathway\").
    - Choose the most specific level of granularity supported by the early-ranked high-priority metabolites — do not over-generalize (e.g., prefer \"Tyrosine metabolism\" over \"Amino acid metabolism\") but do not force artificial precision when the module is genuinely broad.
+   - If the module's top metabolites point to a specific sub-pathway or reaction within a broader class, reflect that specificity in the title rather than defaulting to the parent pathway name (e.g., if a tyrosine module is anchored by catecholamine O-methylation products, prefer \"Catecholamine metabolism\" or \"Catecholamine O-methylation\" over the generic \"Tyrosine metabolism\").
    - If no canonical pathway fits, use the most specific neutral description of the dominant chemical transformation (e.g., \"Aromatic compound glucuronidation\", \"Phenolic sulfation\").
 
 2) SUMMARY
@@ -43,9 +44,9 @@ Using only the provided information, return four fields:
      (b) Biospecimen appropriateness: Is this pathway known to be active or detectable in the study biospecimen? Some pathways are tissue-specific (e.g., liver-specific) and may not be reflected in plasma or urine.
      (c) Phenotype relevance: Is this pathway plausibly perturbed in the study phenotype, or is it consistent with the biological question being asked?
    - Score holistically across all three dimensions:
-   - High: the pathway is an established function in the study species (a), is appropriate for the biospecimen type (b), and is plausibly relevant to the study phenotype (c). Core module metabolites are recognized substrates or products of this pathway.
-   - Medium: the pathway exists in the study species and fits the biospecimen, but one dimension is uncertain or indirect — e.g., phenotype relevance is speculative, substrates are primarily exogenous, or the pathway is active but not specific to the biospecimen.
-   - Low: the pathway fails on the species dimension — it is not a known function in the study species (e.g., bacterial or plant biosynthesis), OR the module is dominated by synthetic, industrial, or drug-derived compounds that reflect exposure rather than active endogenous metabolism.
+   - High: ALL of the following must hold — (a) the pathway is an established endogenous function in the study species, (b) it is active and detectable in the study biospecimen, (c) it is plausibly relevant to the study phenotype, AND the early-ranked high-priority metabolites are themselves recognized endogenous substrates or products of this pathway in that species. If the module's top metabolites are primarily exogenous compounds (drugs, plant-derived alkaloids, industrial chemicals, environmental contaminants), the confidence CANNOT be high even if the named reaction type exists in the study species.
+   - Medium: the pathway exists in the study species and fits the biospecimen, but at least one of the following applies — phenotype relevance is indirect or speculative; the dominant metabolites are primarily exogenous substrates being processed by endogenous enzymes (xenobiotic metabolism); or pathway support is mixed between endogenous and exogenous signals.
+   - Low: the pathway fails on species validity — it is not a known function in the study species (e.g., bacterial cell wall biosynthesis, plant phenylpropanoid pathway), OR the module is overwhelmingly dominated by synthetic, industrial, or environmental compounds with no plausible endogenous metabolic interpretation.
    - Module-level statistics (signal concentration, structural stability, annotation completeness) are secondary; they may refine confidence within a tier but cannot override a biologically implausible assignment.
 
 4) RATIONALE

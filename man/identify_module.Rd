@@ -6,7 +6,7 @@
 \usage{
 identify_module(
   res = NULL,
-  method = c("louvain", "leading_eigen", "fast_greedy", "walktrap"),
+  method = c("louvain", "leading_eigen", "fast_greedy", "walktrap", "newman_spectral"),
   min_size = 3,
   max_size = 1e+05,
   n_perm = 100,
@@ -26,7 +26,7 @@ Expected stage is \code{"subnetwork_extracted"} or later.}
 
 \item{method}{Character. Community detection algorithm. One of
 \code{"louvain"}, \code{"leading_eigen"}, \code{"fast_greedy"},
-or \code{"walktrap"}.}
+\code{"walktrap"}, or \code{"newman_spectral"}.}
 
 \item{min_size}{Integer. Minimum module size (number of nodes) to keep.}
 

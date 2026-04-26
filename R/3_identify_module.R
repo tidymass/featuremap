@@ -11,7 +11,7 @@
 #'   \code{feature_table}. Expected stage is \code{"subnetwork_extracted"} or later.
 #' @param method Character. Community detection algorithm. One of
 #'   \code{"louvain"}, \code{"leading_eigen"}, \code{"fast_greedy"},
-#'   \code{"walktrap"}, or \code{"newman_spectral"}.
+#'   or \code{"walktrap"}.
 #' @param min_size Integer. Minimum module size (number of nodes) to keep.
 #' @param max_size Integer. Maximum module size (number of nodes) to keep.
 #' @param n_perm Integer. Number of permutations for module-level significance
@@ -66,7 +66,7 @@
 #' @export
 
 identify_module = function(res = NULL,
-                           method = c("louvain","leading_eigen","fast_greedy","walktrap","newman_spectral"),
+                           method = c("louvain","leading_eigen","fast_greedy","walktrap"),
                            min_size = 3,
                            max_size = 100000,
                            n_perm = 100,
@@ -157,12 +157,6 @@ identify_module = function(res = NULL,
     comm <- igraph::cluster_walktrap(steiner_subnet, weights = E(steiner_subnet)$weight, steps = walktrap_steps)
   } else if (method == "leading_eigen") {
     comm <- igraph::cluster_leading_eigen(steiner_subnet, weights = E(steiner_subnet)$weight)
-  } else if (method == "newman_spectral") {
-    comm <- rSpectral::spectral_igraph_communities(
-      steiner_subnet,
-      Cn_min = as.integer(min_size),
-      names = 1L
-    )
   }
 
   member <- igraph::membership(comm)

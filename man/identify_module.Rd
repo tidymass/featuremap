@@ -55,7 +55,9 @@ The input \code{res} object updated with:
 \item \code{module_table}: node-to-module assignments with node type,
 node frequency, aggregated importance, and both HMDB/KEGG identifiers.
 The \code{Module} column stores character module IDs such as
-\code{"M1"}, \code{"M2"}, ...
+\code{"M1"}, \code{"M2"}, ... The \code{Use_for_annotation}
+column is \code{FALSE} for non-annotated terminal nodes removed by
+iterative within-module pruning, and \code{TRUE} otherwise.
 \item \code{module_score}: module activity scores with permutation-based
 \code{p} and \code{fdr}. The \code{Module} column uses the same
 character IDs as \code{module_table}

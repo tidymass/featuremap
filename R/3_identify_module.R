@@ -31,7 +31,9 @@
 #'   \item \code{module_table}: node-to-module assignments with node type,
 #'         node frequency, aggregated importance, and both HMDB/KEGG identifiers.
 #'         The \code{Module} column stores character module IDs such as
-#'         \code{"M1"}, \code{"M2"}, ...
+#'         \code{"M1"}, \code{"M2"}, ... The \code{Use_for_annotation}
+#'         column is \code{FALSE} for non-annotated terminal nodes removed by
+#'         iterative within-module pruning, and \code{TRUE} otherwise.
 #'   \item \code{module_score}: module activity scores with permutation-based
 #'         \code{p} and \code{fdr}. The \code{Module} column uses the same
 #'         character IDs as \code{module_table}
@@ -223,6 +225,36 @@ identify_module = function(res = NULL,
       Type = Type,
       Importance = Importance
     )
+
+  annotation_flag <- res$module_table %>%
+    dplyr::group_by(Module) %>%
+    dplyr::group_modify(function(.x, .y) {
+      module_graph <- igraph::induced_subgraph(steiner_subnet, vids = .x$INCHI_ID)
+      keep_nodes <- igraph::V(module_graph)$name
+
+      repeat {
+        module_degree <- igraph::degree(module_graph)
+        terminal_hidden <- igraph::V(module_graph)$name[
+          module_degree <= 1 &
+            igraph::V(module_graph)$type != "annotated"
+        ]
+
+        if (length(terminal_hidden) == 0) break
+
+        module_graph <- igraph::delete_vertices(module_graph, terminal_hidden)
+        keep_nodes <- igraph::V(module_graph)$name
+      }
+
+      .x %>%
+        dplyr::mutate(
+          Use_for_annotation = INCHI_ID %in% keep_nodes
+        ) %>%
+        dplyr::select(INCHI_ID, Use_for_annotation)
+    }) %>%
+    dplyr::ungroup()
+
+  res$module_table <- res$module_table %>%
+    dplyr::left_join(annotation_flag, by = c("Module", "INCHI_ID"))
 
   cli::cli_alert_success(
     "Detected {.val {length(unique(res$module_table$Module))}} modules using the {.val {method}} method."

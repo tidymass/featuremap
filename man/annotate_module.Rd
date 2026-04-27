@@ -118,6 +118,9 @@ literature retrieval is performed for top metabolites derived from each
 significant module; phenotype is not injected into the PubMed query itself.
 Module IDs are consumed exactly as stored by \code{\link{identify_module}},
 using character labels such as \code{"M1"}, \code{"M2"}, ...
+If \code{res$module_table} contains \code{Use_for_annotation}, only rows
+marked \code{TRUE} are used for database, literature, and LLM annotation;
+statistical module scores remain based on the original module table.
 
 Only statistically significant modules (based on \code{p} and \code{pcutoff})
 are annotated. If no modules pass the threshold, an empty result is returned.

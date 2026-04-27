@@ -77,6 +77,9 @@
 #' significant module; phenotype is not injected into the PubMed query itself.
 #' Module IDs are consumed exactly as stored by \code{\link{identify_module}},
 #' using character labels such as \code{"M1"}, \code{"M2"}, ...
+#' If \code{res$module_table} contains \code{Use_for_annotation}, only rows
+#' marked \code{TRUE} are used for database, literature, and LLM annotation;
+#' statistical module scores remain based on the original module table.
 #'
 #' Only statistically significant modules (based on \code{p} and \code{pcutoff})
 #' are annotated. If no modules pass the threshold, an empty result is returned.
@@ -232,13 +235,21 @@ annotate_module = function(res = NULL,
     dplyr::filter(.data[[p]] < pcutoff) %>%
     dplyr::pull(Module)
 
-  sig_module <- res$module_table %>%
+  module_table_for_annotation <- res$module_table
+  if (!"Use_for_annotation" %in% colnames(module_table_for_annotation)) {
+    module_table_for_annotation$Use_for_annotation <- TRUE
+  }
+  module_table_for_annotation <- module_table_for_annotation %>%
+    dplyr::mutate(Use_for_annotation = dplyr::coalesce(Use_for_annotation, TRUE))
+
+  sig_module <- module_table_for_annotation %>%
     dplyr::mutate(
       .module_order = match(Module, module_levels),
       Robustness = Node_freq,
       Compound_ID = dplyr::coalesce(HMDB_ID, KEGG_ID)
     ) %>%
     dplyr::filter(Module %in% sig_modules) %>%
+    dplyr::filter(Use_for_annotation) %>%
     dplyr::arrange(.module_order, desc(Importance), desc(Robustness), Type) %>%
     dplyr::select(-.module_order) %>%
     combine_function_refs(hmdb_ref = ref_data$hmdb, kegg_ref = ref_data$kegg)
@@ -367,7 +378,8 @@ annotate_module = function(res = NULL,
   ## Module-level statistics summary ----
   module_statistics <- {
 
-    full_module_table <- res$module_table %>%
+    full_module_table <- module_table_for_annotation %>%
+      dplyr::filter(Use_for_annotation) %>%
       mutate(Robustness = Node_freq)
 
     module_list_all <- full_module_table %>%

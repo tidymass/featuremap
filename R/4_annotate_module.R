@@ -24,8 +24,10 @@
 #' @param biospecimen Character. Biospecimen type (e.g. plasma, urine, tissue).
 #' @param phenotype Character. Phenotype/disease string used in PubMed retrieval
 #'   (when \code{pubmed = TRUE}) and confidence assessment.
-#' @param pubmed Logical. Whether to search PubMed after LLM Call 1 to retrieve
-#'   phenotype-relevant abstracts for LLM Call 2.
+#' @param pubmed Logical. Whether to retrieve PubMed evidence after LLM Call 1.
+#'   When \code{TRUE}, the module title and every top metabolite are searched
+#'   separately; up to three papers are retained per query and deduplicated by
+#'   PMID before LLM Call 2.
 #' @param years Integer. PubMed look-back years when \code{pubmed = TRUE}.
 #' @param provider Character. LLM provider (\code{"openai"}, \code{"siliconflow"},
 #'   \code{"gemini"}).
@@ -40,8 +42,8 @@
 #'         functional_summary, phenotype_relationship, confidence_label,
 #'         rationale, global_direction, core_drivers, origin fractions,
 #'         top pathway names).
-#'   \item \code{module_top_metabolite_pmids}: empty tibble (Fast Mode does not
-#'         produce per-metabolite PMID tables).
+#'   \item \code{module_top_metabolite_pmids}: empty tibble in the current fast
+#'         mode. PubMed evidence is passed directly to LLM Call 2.
 #'   \item \code{stage}: updated to \code{"module_annotated"}.
 #' }
 #'
@@ -53,7 +55,8 @@
 #'   \item Compute per-module: Signal_concentration (HHI), pathway coverage
 #'         (KEGG + HMDB), global directionality, and origin profile.
 #'   \item LLM Call 1 — title + functional_summary (no study context).
-#'   \item Optional PubMed search using module title + phenotype.
+#'   \item Optional PubMed search using module title, all top metabolites,
+#'         phenotype, and PMID deduplication.
 #'   \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
 #' }
 #'

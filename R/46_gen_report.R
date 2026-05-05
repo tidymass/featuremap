@@ -283,7 +283,7 @@ annotate_one_module <- function(module_obj,
   }
 
   # ==================================================================
-  # PUBMED SEARCH (optional) – uses module title + phenotype
+  # PUBMED SEARCH (optional) – module title plus every top metabolite
   # ==================================================================
   pubmed_context <- NULL
 
@@ -292,7 +292,7 @@ annotate_one_module <- function(module_obj,
     if (!is.null(module_obj$topN_metabolites) &&
         nrow(module_obj$topN_metabolites) > 0 &&
         "Compound_name" %in% colnames(module_obj$topN_metabolites)) {
-      top_met_names <- head(module_obj$topN_metabolites$Compound_name, 3)
+      top_met_names <- unique(module_obj$topN_metabolites$Compound_name)
     }
     phenotype_val <- NULL
     if (!is.null(study_context$phenotype)) {
@@ -301,12 +301,12 @@ annotate_one_module <- function(module_obj,
     }
 
     pubmed_context <- tryCatch(
-      search_pubmed_for_module(
+      search_pubmed_for_annotation_evidence(
         module_title         = title,
         top_metabolite_names = top_met_names,
         phenotype            = phenotype_val,
         NCBI_api_key         = NCBI_api_key,
-        retmax               = 5,
+        retmax_per_query     = 3,
         years                = years
       ),
       error = function(e) {

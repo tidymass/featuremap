@@ -211,7 +211,8 @@ You will receive:
 - Origin profile: proportions of endogenous, exogenous, and unknown-origin metabolites
   (based on HMDB-annotated module members only)
 - Study context: species, biospecimen, phenotype
-- Literature evidence: PubMed abstracts retrieved by searching the module title and phenotype
+- Literature evidence: PubMed abstracts retrieved by searching the module title,
+  all top metabolites, and phenotype
   (may be absent if pubmed = FALSE or no papers were found)
 
 Definitions:
@@ -327,19 +328,28 @@ build_phenotype_confidence_prompt <- function(module_obj,
       length(pubmed_context$titles)    > 0) {
 
     n_papers   <- min(length(pubmed_context$titles), length(pubmed_context$abstracts))
+    ctx_value <- function(field, i, default = "NA") {
+      x <- pubmed_context[[field]]
+      if (is.null(x) || length(x) < i) return(default)
+      x[[i]] %||% default
+    }
     paper_blocks <- vapply(seq_len(n_papers), function(i) {
-      ttl <- trimws(as.character(pubmed_context$titles[[i]] %||% ""))
-      abs <- trimws(as.character(pubmed_context$abstracts[[i]] %||% ""))
+      ttl <- trimws(as.character(ctx_value("titles", i, "")))
+      abs <- trimws(as.character(ctx_value("abstracts", i, "")))
+      pmid <- trimws(as.character(ctx_value("pmids", i, "NA")))
+      src_type <- trimws(as.character(ctx_value("source_type", i, "unknown")))
+      src_term <- trimws(as.character(ctx_value("source_term", i, "NA")))
       # Truncate abstract to 400 chars to keep prompt manageable
       if (nchar(abs) > 400) abs <- paste0(substr(abs, 1, 400), "...")
       if (!nzchar(ttl) && !nzchar(abs)) return(NA_character_)
-      sprintf("[%d] Title: %s\n    Abstract excerpt: %s", i, ttl, abs)
+      sprintf("[%d] PMID: %s\n    Source: %s (%s)\n    Title: %s\n    Abstract excerpt: %s",
+              i, pmid, src_type, src_term, ttl, abs)
     }, character(1))
     paper_blocks <- paper_blocks[!is.na(paper_blocks)]
 
     if (length(paper_blocks) > 0) {
       lit_text <- paste0(
-        "Literature evidence (PubMed, module title + phenotype search):\n",
+        "Literature evidence (PubMed, deduplicated by PMID after module title and top metabolite searches):\n",
         paste(paper_blocks, collapse = "\n\n")
       )
     } else {

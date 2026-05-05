@@ -135,8 +135,7 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
 #'   condition (numeric: log2FC or correlation/regression coefficient).
 #' @param anno_feature_table2 Data frame linking features to compounds. Must
 #'   contain variable_id, and at least one of HMDB.ID / HMDB_ID, KEGG.ID /
-#'   KEGG_ID, plus a score column (weighted_anno_score preferred, else
-#'   score_norm).
+#'   KEGG_ID, plus \code{weighted_anno_score}.
 #'
 #' @return A named list:
 #'   \item{direction_label}{Character: "up", "down", or "mixed". NA if input
@@ -158,12 +157,9 @@ compute_global_direction <- function(module_df, feature_table, anno_feature_tabl
     return(na_result)
   }
 
-  # Detect the annotation score column
-  score_col <- NULL
-  for (sc in c("weighted_anno_score", "score_norm")) {
-    if (sc %in% colnames(anno_feature_table2)) { score_col <- sc; break }
+  if (!"weighted_anno_score" %in% colnames(anno_feature_table2)) {
+    return(na_result)
   }
-  if (is.null(score_col)) return(na_result)
 
   # Detect ID columns in anno_feature_table2
   hmdb_col <- NULL
@@ -193,7 +189,7 @@ compute_global_direction <- function(module_df, feature_table, anno_feature_tabl
   if (!any(keep)) return(na_result)
 
   anno_sub <- anno_feature_table2[keep, , drop = FALSE]
-  anno_sub <- anno_sub[, c("variable_id", score_col), drop = FALSE]
+  anno_sub <- anno_sub[, c("variable_id", "weighted_anno_score"), drop = FALSE]
   colnames(anno_sub)[2] <- "score"
   anno_sub <- anno_sub[!duplicated(anno_sub$variable_id), , drop = FALSE]
 
@@ -268,9 +264,9 @@ compute_pathway_coverage <- function(module_df,
     if (nrow(hits) == 0) return(tibble::tibble())
 
     agg <- aggregate(
-      formula = as.formula(paste(id_col, "~ pathway_id + pathway_name")),
-      data    = hits,
-      FUN     = function(x) length(unique(x))
+      as.formula(paste(id_col, "~ pathway_id + pathway_name")),
+      data = hits,
+      FUN  = function(x) length(unique(x))
     )
     colnames(agg)[colnames(agg) == id_col] <- "n_hit"
 

@@ -741,6 +741,7 @@ build_module_phenotype_query <- function(module_title,
 #'
 #' @return A named list with:
 #'   \item{query}{The PubMed query string used.}
+#'   \item{pmids}{Character vector of PubMed IDs.}
 #'   \item{titles}{Character vector of article titles.}
 #'   \item{abstracts}{Character vector of article abstracts.}
 #'   All text vectors are \code{character(0)} when no results are found.
@@ -752,7 +753,8 @@ search_pubmed_for_module <- function(module_title,
                                       years                = 5) {
 
   if (is.null(module_title) || !nzchar(trimws(as.character(module_title[1])))) {
-    return(list(query = NA_character_, titles = character(0), abstracts = character(0)))
+    return(list(query = NA_character_, pmids = character(0),
+                titles = character(0), abstracts = character(0)))
   }
 
   query <- build_module_phenotype_query(
@@ -765,7 +767,8 @@ search_pubmed_for_module <- function(module_title,
   pmids <- search_pubmed(query, retmax = retmax, NCBI_api_key = NCBI_api_key)
 
   if (length(pmids) == 0) {
-    return(list(query = query, titles = character(0), abstracts = character(0)))
+    return(list(query = query, pmids = character(0),
+                titles = character(0), abstracts = character(0)))
   }
 
   recs <- tryCatch(
@@ -775,7 +778,108 @@ search_pubmed_for_module <- function(module_title,
 
   list(
     query     = query,
+    pmids     = pmids,
     titles    = recs$titles %||% character(0),
     abstracts = recs$abstracts %||% character(0)
+  )
+}
+
+
+#' Search PubMed Evidence for a Module and All Top Metabolites
+#'
+#' Searches the module title and every top metabolite name separately, keeping
+#' up to \code{retmax_per_query} articles per search term. Results are merged
+#' and deduplicated by PMID before being passed to LLM Call 2.
+search_pubmed_for_annotation_evidence <- function(module_title,
+                                                  top_metabolite_names = NULL,
+                                                  phenotype            = NULL,
+                                                  NCBI_api_key         = NULL,
+                                                  retmax_per_query     = 3,
+                                                  years                = 5) {
+
+  clean_terms <- function(x) {
+    if (is.null(x) || length(x) == 0) return(character(0))
+    x <- trimws(as.character(x))
+    unique(x[!is.na(x) & nzchar(x) & x != "NA"])
+  }
+
+  module_terms <- clean_terms(module_title)
+  if (length(module_terms) > 1) module_terms <- module_terms[1]
+  metabolite_terms <- clean_terms(top_metabolite_names)
+
+  source_parts <- list()
+  if (length(module_terms) > 0) {
+    source_parts[[length(source_parts) + 1L]] <- data.frame(
+      source_type = rep("module_title", length(module_terms)),
+      source_term = module_terms,
+      stringsAsFactors = FALSE
+    )
+  }
+  if (length(metabolite_terms) > 0) {
+    source_parts[[length(source_parts) + 1L]] <- data.frame(
+      source_type = rep("top_metabolite", length(metabolite_terms)),
+      source_term = metabolite_terms,
+      stringsAsFactors = FALSE
+    )
+  }
+  sources <- if (length(source_parts) > 0) do.call(rbind, source_parts) else {
+    data.frame(source_type = character(0), source_term = character(0),
+               stringsAsFactors = FALSE)
+  }
+
+  if (nrow(sources) == 0) {
+    return(list(query = character(0), pmids = character(0),
+                titles = character(0), abstracts = character(0),
+                source_type = character(0), source_term = character(0)))
+  }
+
+  hits <- lapply(seq_len(nrow(sources)), function(i) {
+    src <- sources[i, , drop = FALSE]
+    res <- search_pubmed_for_module(
+      module_title         = src$source_term,
+      top_metabolite_names = NULL,
+      phenotype            = phenotype,
+      NCBI_api_key         = NCBI_api_key,
+      retmax               = retmax_per_query,
+      years                = years
+    )
+
+    n <- min(length(res$pmids), length(res$titles), length(res$abstracts))
+    if (n == 0) {
+      return(data.frame(
+        query = character(0), pmid = character(0), title = character(0),
+        abstract = character(0), source_type = character(0),
+        source_term = character(0), stringsAsFactors = FALSE
+      ))
+    }
+
+    data.frame(
+      query       = rep(res$query %||% NA_character_, n),
+      pmid        = as.character(res$pmids[seq_len(n)]),
+      title       = as.character(res$titles[seq_len(n)]),
+      abstract    = as.character(res$abstracts[seq_len(n)]),
+      source_type = rep(src$source_type, n),
+      source_term = rep(src$source_term, n),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  hit_df <- do.call(rbind, hits)
+  if (is.null(hit_df) || nrow(hit_df) == 0) {
+    return(list(query = character(0), pmids = character(0),
+                titles = character(0), abstracts = character(0),
+                source_type = character(0), source_term = character(0)))
+  }
+
+  hit_df <- hit_df[!is.na(hit_df$pmid) & nzchar(hit_df$pmid), , drop = FALSE]
+  hit_df <- hit_df[!duplicated(hit_df$pmid), , drop = FALSE]
+
+  list(
+    query       = hit_df$query,
+    pmids       = hit_df$pmid,
+    titles      = hit_df$title,
+    abstracts   = hit_df$abstract,
+    source_type = hit_df$source_type,
+    source_term = hit_df$source_term
   )
 }

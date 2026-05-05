@@ -117,6 +117,278 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
 #' module_data$topN_metabolites
 #' module_data$other_metabolites
 #' }
+
+
+# ============================================================
+# New helper: compute_global_direction
+# ============================================================
+
+#' Compute Global Directionality for a Metabolic Module
+#'
+#' Matches module metabolites to features via anno_feature_table2 and computes
+#' a weighted mean of condition values (log2FC or correlation coefficients).
+#' The result is stored as an output label only — it does NOT enter LLM prompts.
+#'
+#' @param module_df Data frame of module metabolites. Must contain HMDB_ID and
+#'   KEGG_ID columns.
+#' @param feature_table Data frame with at least variable_id (character) and
+#'   condition (numeric: log2FC or correlation/regression coefficient).
+#' @param anno_feature_table2 Data frame linking features to compounds. Must
+#'   contain variable_id, and at least one of HMDB.ID / HMDB_ID, KEGG.ID /
+#'   KEGG_ID, plus a score column (weighted_anno_score preferred, else
+#'   score_norm).
+#'
+#' @return A named list:
+#'   \item{direction_label}{Character: "up", "down", or "mixed". NA if input
+#'     is unavailable.}
+#'   \item{weighted_mean_condition}{Numeric weighted mean of condition, or NA.}
+#'   \item{n_features}{Integer. Number of matched features used.}
+compute_global_direction <- function(module_df, feature_table, anno_feature_table2) {
+
+  na_result <- list(direction_label = NA_character_,
+                    weighted_mean_condition = NA_real_,
+                    n_features = 0L)
+
+  if (is.null(feature_table) || !is.data.frame(feature_table) ||
+      !all(c("variable_id", "condition") %in% colnames(feature_table))) {
+    return(na_result)
+  }
+  if (is.null(anno_feature_table2) || !is.data.frame(anno_feature_table2) ||
+      !"variable_id" %in% colnames(anno_feature_table2)) {
+    return(na_result)
+  }
+
+  # Detect the annotation score column
+  score_col <- NULL
+  for (sc in c("weighted_anno_score", "score_norm")) {
+    if (sc %in% colnames(anno_feature_table2)) { score_col <- sc; break }
+  }
+  if (is.null(score_col)) return(na_result)
+
+  # Detect ID columns in anno_feature_table2
+  hmdb_col <- NULL
+  for (hc in c("HMDB.ID", "HMDB_ID")) {
+    if (hc %in% colnames(anno_feature_table2)) { hmdb_col <- hc; break }
+  }
+  kegg_col <- NULL
+  for (kc in c("KEGG.ID", "KEGG_ID")) {
+    if (kc %in% colnames(anno_feature_table2)) { kegg_col <- kc; break }
+  }
+
+  hmdb_ids <- unique(module_df$HMDB_ID[
+    !is.na(module_df$HMDB_ID) & nzchar(as.character(module_df$HMDB_ID))])
+  kegg_ids <- unique(module_df$KEGG_ID[
+    !is.na(module_df$KEGG_ID) & nzchar(as.character(module_df$KEGG_ID))])
+
+  # Build row-selection filter
+  keep <- rep(FALSE, nrow(anno_feature_table2))
+  if (!is.null(hmdb_col) && length(hmdb_ids) > 0) {
+    v <- anno_feature_table2[[hmdb_col]]
+    keep <- keep | (!is.na(v) & v %in% hmdb_ids)
+  }
+  if (!is.null(kegg_col) && length(kegg_ids) > 0) {
+    v <- anno_feature_table2[[kegg_col]]
+    keep <- keep | (!is.na(v) & v %in% kegg_ids)
+  }
+  if (!any(keep)) return(na_result)
+
+  anno_sub <- anno_feature_table2[keep, , drop = FALSE]
+  anno_sub <- anno_sub[, c("variable_id", score_col), drop = FALSE]
+  colnames(anno_sub)[2] <- "score"
+  anno_sub <- anno_sub[!duplicated(anno_sub$variable_id), , drop = FALSE]
+
+  combined <- merge(
+    anno_sub,
+    feature_table[, c("variable_id", "condition"), drop = FALSE],
+    by = "variable_id"
+  )
+  combined <- combined[
+    !is.na(combined$condition) & is.finite(combined$condition) &
+    !is.na(combined$score)     & is.finite(combined$score) &
+    combined$score > 0, , drop = FALSE]
+
+  if (nrow(combined) == 0) return(na_result)
+
+  wmean <- sum(combined$condition * combined$score) / sum(combined$score)
+
+  direction_label <- if (wmean > 0) "up" else if (wmean < 0) "down" else "mixed"
+
+  list(
+    direction_label         = direction_label,
+    weighted_mean_condition = round(wmean, 4),
+    n_features              = nrow(combined)
+  )
+}
+
+
+# ============================================================
+# New helper: compute_pathway_coverage
+# ============================================================
+
+#' Compute Pathway Coverage for a Module
+#'
+#' For each pathway database (HMDB and KEGG), counts how many module
+#' metabolites appear in each pathway and computes the hit/total coverage
+#' fraction.  Returns the top \code{top_n} pathways sorted by hit count then
+#' coverage.
+#'
+#' @param module_df Data frame of module metabolites. Must contain HMDB_ID and
+#'   KEGG_ID columns.
+#' @param pathway_hmdb Data frame loaded via
+#'   \code{featuremap_load_resource("pathway_hmdb")} with columns
+#'   pathway_id, pathway_name, HMDB_ID, n_metabolites. Pass \code{NULL} to
+#'   skip.
+#' @param pathway_kegg Data frame loaded via
+#'   \code{featuremap_load_resource("pathway_kegg")} with columns
+#'   pathway_id, pathway_name, KEGG_ID, n_metabolites. Pass \code{NULL} to
+#'   skip.
+#' @param top_n Integer. Maximum number of pathways to return per database
+#'   (default: 3).
+#'
+#' @return A named list with components \code{hmdb} and \code{kegg}, each a
+#'   tibble with columns pathway_name, n_hit, n_metabolites, coverage.
+#'   Empty tibble when the database is unavailable or no hits are found.
+compute_pathway_coverage <- function(module_df,
+                                     pathway_hmdb = NULL,
+                                     pathway_kegg = NULL,
+                                     top_n = 3) {
+
+  compute_one <- function(module_ids, pathway_db, id_col) {
+    if (is.null(pathway_db) || !is.data.frame(pathway_db)) return(tibble::tibble())
+    if (!id_col %in% colnames(pathway_db))                 return(tibble::tibble())
+    if (!all(c("pathway_id", "pathway_name", "n_metabolites") %in% colnames(pathway_db)))
+      return(tibble::tibble())
+    if (length(module_ids) == 0)                           return(tibble::tibble())
+
+    # Per-pathway total size (one canonical value per pathway_id)
+    pathway_sizes <- pathway_db[!duplicated(pathway_db$pathway_id),
+                                c("pathway_id", "n_metabolites"), drop = FALSE]
+
+    hits <- pathway_db[pathway_db[[id_col]] %in% module_ids, , drop = FALSE]
+    if (nrow(hits) == 0) return(tibble::tibble())
+
+    agg <- aggregate(
+      formula = as.formula(paste(id_col, "~ pathway_id + pathway_name")),
+      data    = hits,
+      FUN     = function(x) length(unique(x))
+    )
+    colnames(agg)[colnames(agg) == id_col] <- "n_hit"
+
+    agg <- merge(agg, pathway_sizes, by = "pathway_id", all.x = TRUE)
+    agg$coverage <- round(agg$n_hit / pmax(agg$n_metabolites, 1L), 3)
+    agg <- agg[order(-agg$n_hit, -agg$coverage), , drop = FALSE]
+    agg <- agg[seq_len(min(top_n, nrow(agg))), , drop = FALSE]
+    tibble::as_tibble(agg[, c("pathway_name", "n_hit", "n_metabolites", "coverage"),
+                          drop = FALSE])
+  }
+
+  hmdb_ids <- unique(module_df$HMDB_ID[
+    !is.na(module_df$HMDB_ID) & nzchar(as.character(module_df$HMDB_ID))])
+  kegg_ids <- unique(module_df$KEGG_ID[
+    !is.na(module_df$KEGG_ID) & nzchar(as.character(module_df$KEGG_ID))])
+
+  list(
+    hmdb = compute_one(hmdb_ids, pathway_hmdb, "HMDB_ID"),
+    kegg = compute_one(kegg_ids, pathway_kegg, "KEGG_ID")
+  )
+}
+
+
+# ============================================================
+# New helper: compute_origin_profile
+# ============================================================
+
+#' Compute Origin Profile for a Module
+#'
+#' Looks up the compound origin (endogenous vs. exogenous) for module
+#' metabolites in the HMDB functional reference and returns proportions.
+#' Only HMDB-annotated metabolites are counted.
+#'
+#' @param module_df Data frame of module metabolites with an HMDB_ID column.
+#' @param hmdb_function_ref Data frame. HMDB functional reference loaded via
+#'   \code{featuremap_load_resource("functional_reference_hmdb")}. Must
+#'   contain an \code{id} column (HMDB IDs) and an origin / source column
+#'   (detected automatically by name pattern).
+#'
+#' @return A named list with numeric slots endogenous_frac, exogenous_frac,
+#'   and integer slots endogenous_n, exogenous_n, unknown_n, n_annotated.
+#'   All slots are NA when the reference or origin column cannot be found.
+compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
+
+  na_result <- list(
+    endogenous_frac = NA_real_,
+    exogenous_frac  = NA_real_,
+    endogenous_n    = NA_integer_,
+    exogenous_n     = NA_integer_,
+    unknown_n       = NA_integer_,
+    n_annotated     = NA_integer_
+  )
+
+  if (is.null(hmdb_function_ref) || !is.data.frame(hmdb_function_ref)) {
+    return(na_result)
+  }
+
+  # Normalise id column
+  ref <- hmdb_function_ref
+  if (!"id" %in% colnames(ref)) {
+    id_cand <- grep("^hmdb_?id$", colnames(ref), ignore.case = TRUE, value = TRUE)[1]
+    if (!is.na(id_cand)) {
+      colnames(ref)[colnames(ref) == id_cand] <- "id"
+    } else {
+      warning("[compute_origin_profile] Cannot find id column. Available: ",
+              paste(colnames(ref), collapse = ", "))
+      return(na_result)
+    }
+  }
+
+  # Detect origin column
+  origin_col <- grep("origin|source", colnames(ref), ignore.case = TRUE, value = TRUE)[1]
+  if (is.na(origin_col)) {
+    warning("[compute_origin_profile] No origin/source column found. Available: ",
+            paste(colnames(ref), collapse = ", "))
+    return(na_result)
+  }
+
+  hmdb_ids <- unique(module_df$HMDB_ID[
+    !is.na(module_df$HMDB_ID) & nzchar(as.character(module_df$HMDB_ID))])
+
+  zero_result <- list(endogenous_frac = NA_real_, exogenous_frac = NA_real_,
+                      endogenous_n = 0L, exogenous_n = 0L,
+                      unknown_n = 0L, n_annotated = 0L)
+
+  if (length(hmdb_ids) == 0) return(zero_result)
+
+  module_ref <- ref[ref$id %in% hmdb_ids,
+                    c("id", origin_col), drop = FALSE]
+  module_ref <- module_ref[!duplicated(module_ref$id), , drop = FALSE]
+
+  n_annotated <- nrow(module_ref)
+  if (n_annotated == 0) return(zero_result)
+
+  origins_lc <- tolower(as.character(module_ref[[origin_col]]))
+
+  endogenous_n <- sum(grepl("endogenous", origins_lc), na.rm = TRUE)
+  exogenous_n  <- sum(
+    grepl("exogenous|dietary|microbial|drug|xenobiotic|environmental|food|plant",
+          origins_lc),
+    na.rm = TRUE)
+  unknown_n <- as.integer(max(0L, n_annotated - endogenous_n - exogenous_n))
+
+  list(
+    endogenous_frac = round(endogenous_n / n_annotated, 3),
+    exogenous_frac  = round(exogenous_n  / n_annotated, 3),
+    endogenous_n    = as.integer(endogenous_n),
+    exogenous_n     = as.integer(exogenous_n),
+    unknown_n       = unknown_n,
+    n_annotated     = as.integer(n_annotated)
+  )
+}
+
+
+# ============================================================
+# Updated: prepare_module  (adds pathway_coverage, global_direction, origin_profile)
+# ============================================================
+
 prepare_module <- function(
     k,
     module_list_top,
@@ -124,7 +396,10 @@ prepare_module <- function(
     module_pubmed_embed_refined,
     module_statistics,
     module_class,
-    pubmed = TRUE      
+    pathway_coverage_list = NULL,
+    direction_list        = NULL,
+    origin_profile_list   = NULL,
+    pubmed = TRUE
 ) {
   make_lookup_keys <- function(module_id, fallback_key) {
     unique(as.character(stats::na.omit(c(
@@ -213,10 +488,18 @@ prepare_module <- function(
   
   stats <- pick_named_entry(module_statistics, lookup_keys, fallback = k)
 
+  # ---- New fields: pathway coverage, direction, origin ----
+  pathway_cv <- pick_named_entry(pathway_coverage_list, lookup_keys, fallback = k)
+  direction   <- pick_named_entry(direction_list,        lookup_keys, fallback = k)
+  origin      <- pick_named_entry(origin_profile_list,   lookup_keys, fallback = k)
+
   list(
     module_id          = module_id,
     module_stats       = stats,
     topN_metabolites   = module_topN_merged,
-    other_metabolites  = module_other
+    other_metabolites  = module_other,
+    pathway_coverage   = pathway_cv,
+    global_direction   = direction,
+    origin_profile     = origin
   )
 }

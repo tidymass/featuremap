@@ -661,3 +661,121 @@ annotate_pubmed_for_module <- function(module_anno,
   names(res_mets) <- mets
   res_mets
 }
+
+
+# ============================================================
+# 9. Module-level PubMed search  (Fast Mode – after Call 1)
+# ============================================================
+
+#' Build a PubMed Query for a Module Title + Phenotype
+#'
+#' Constructs a Boolean PubMed query that combines the module pathway title,
+#' up to three hub metabolite names, and the study phenotype.  Used in the
+#' Fast Mode pipeline after LLM Call 1 has generated a module title, to
+#' retrieve phenotype-relevant literature for LLM Call 2.
+#'
+#' @param module_title Character. Pathway title returned by LLM Call 1.
+#' @param top_metabolite_names Character vector or NULL. Up to 3 hub metabolite
+#'   names to broaden the query.
+#' @param phenotype Character or NULL. Study phenotype (e.g. "type 2 diabetes").
+#'   When NULL the date filter is applied without a phenotype constraint.
+#' @param years Numeric. Number of years to look back for the publication date
+#'   filter.
+#'
+#' @return Character. A fully formed PubMed Boolean query string.
+build_module_phenotype_query <- function(module_title,
+                                          top_metabolite_names = NULL,
+                                          phenotype            = NULL,
+                                          years                = 5) {
+
+  ## ---- title + metabolite name block ----
+  title_term <- sprintf('"%s"[Title/Abstract]', trimws(module_title))
+
+  if (!is.null(top_metabolite_names) && length(top_metabolite_names) > 0) {
+    safe_names <- top_metabolite_names[
+      !is.na(top_metabolite_names) & nzchar(trimws(top_metabolite_names))]
+    safe_names <- head(safe_names, 3)
+    met_terms  <- purrr::map_chr(safe_names,
+                                  ~ sprintf('"%s"[Title/Abstract]', trimws(.x)))
+    name_block <- sprintf("(%s)", paste(c(title_term, met_terms), collapse = " OR "))
+  } else {
+    name_block <- sprintf("(%s)", title_term)
+  }
+
+  ## ---- phenotype block ----
+  phenotype_block <- NULL
+  if (!is.null(phenotype)) {
+    ph <- trimws(as.character(phenotype[1]))
+    if (nzchar(ph) && !identical(ph, "NA")) {
+      phenotype_block <- sprintf('("%s"[Title/Abstract])', ph)
+    }
+  }
+
+  ## ---- date block ----
+  start_year <- as.numeric(format(Sys.Date(), "%Y")) - years
+  year_part  <- sprintf("(%d:%d[pdat])",
+                        start_year, as.numeric(format(Sys.Date(), "%Y")))
+
+  ## ---- assemble ----
+  query_parts <- c(name_block, phenotype_block, year_part)
+  query_parts <- query_parts[!vapply(query_parts, is.null, logical(1))]
+  paste(query_parts, collapse = " AND ")
+}
+
+
+#' Search PubMed for Module-Level Phenotype Evidence (Fast Mode)
+#'
+#' Performs a single module-level PubMed search using the module pathway title
+#' and phenotype to retrieve phenotype-relevant abstracts for LLM Call 2.
+#' Called inside \code{annotate_one_module()} after LLM Call 1 has produced
+#' a module title.
+#'
+#' @param module_title Character. Pathway title from LLM Call 1.
+#' @param top_metabolite_names Character vector or NULL. Names of hub
+#'   metabolites used to widen the query (up to 3 are used).
+#' @param phenotype Character or NULL. Study phenotype string.
+#' @param NCBI_api_key Character or NULL. NCBI API key for elevated rate limits.
+#' @param retmax Integer. Maximum number of PubMed records to retrieve
+#'   (default: 5).
+#' @param years Numeric. Publication year look-back window (default: 5).
+#'
+#' @return A named list with:
+#'   \item{query}{The PubMed query string used.}
+#'   \item{titles}{Character vector of article titles.}
+#'   \item{abstracts}{Character vector of article abstracts.}
+#'   All text vectors are \code{character(0)} when no results are found.
+search_pubmed_for_module <- function(module_title,
+                                      top_metabolite_names = NULL,
+                                      phenotype            = NULL,
+                                      NCBI_api_key         = NULL,
+                                      retmax               = 5,
+                                      years                = 5) {
+
+  if (is.null(module_title) || !nzchar(trimws(as.character(module_title[1])))) {
+    return(list(query = NA_character_, titles = character(0), abstracts = character(0)))
+  }
+
+  query <- build_module_phenotype_query(
+    module_title         = module_title,
+    top_metabolite_names = top_metabolite_names,
+    phenotype            = phenotype,
+    years                = years
+  )
+
+  pmids <- search_pubmed(query, retmax = retmax, NCBI_api_key = NCBI_api_key)
+
+  if (length(pmids) == 0) {
+    return(list(query = query, titles = character(0), abstracts = character(0)))
+  }
+
+  recs <- tryCatch(
+    fetch_pubmed_records(pmids, NCBI_api_key = NCBI_api_key),
+    error = function(e) list(titles = character(0), abstracts = character(0))
+  )
+
+  list(
+    query     = query,
+    titles    = recs$titles %||% character(0),
+    abstracts = recs$abstracts %||% character(0)
+  )
+}

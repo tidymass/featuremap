@@ -1022,13 +1022,19 @@ collapse_pubmed_pmids <- function(pph) {
 # Helper: serialize full pubmed_per_hyp to JSON (all hypotheses, full archive)
 serialize_pubmed_evidence <- function(pph) {
   if (is.null(pph) || length(pph) == 0) return(NA_character_)
-  tryCatch(jsonlite::toJSON(pph, auto_unbox = TRUE), error = function(e) NA_character_)
+  tryCatch(
+    as.character(jsonlite::toJSON(pph, auto_unbox = TRUE)),
+    error = function(e) NA_character_
+  )
 }
 
 # Helper: serialize ONE hypothesis's PubMed evidence to JSON (per-row column)
 serialize_pubmed_evidence_one <- function(hyp_pph) {
   if (is.null(hyp_pph)) return(NA_character_)
-  tryCatch(jsonlite::toJSON(hyp_pph, auto_unbox = TRUE), error = function(e) NA_character_)
+  tryCatch(
+    as.character(jsonlite::toJSON(hyp_pph, auto_unbox = TRUE)),
+    error = function(e) NA_character_
+  )
 }
 
 
@@ -1209,7 +1215,7 @@ assemble_advanced_output_row <- function(module_obj,
 
   # Full hypothesis JSON (all verdicts, for archival)
   all_hyp_json <- tryCatch(
-    jsonlite::toJSON(lapply(verdicts, function(v) {
+    as.character(jsonlite::toJSON(lapply(verdicts, function(v) {
       h_final <- Filter(function(h) h$hypothesis_id == v$hypothesis_id, hypotheses_final)
       h_obj   <- if (length(h_final) > 0) h_final[[1]] else {
         h_v0 <- Filter(function(h) h$hypothesis_id == v$hypothesis_id, hypotheses_v0)
@@ -1222,7 +1228,7 @@ assemble_advanced_output_row <- function(module_obj,
         confidence_label       = v$confidence_label       %||% NA_character_,
         confidence_rationale   = v$confidence_rationale   %||% NA_character_
       ))
-    }), auto_unbox = TRUE),
+    }), auto_unbox = TRUE)),
     error = function(e) NA_character_
   )
 

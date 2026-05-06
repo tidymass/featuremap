@@ -951,7 +951,7 @@ pubmed_evidence_to_df <- function(pubmed_context, hypothesis_id = NA_character_)
 serialize_pubmed_evidence <- function(pubmed_context) {
   df <- pubmed_evidence_to_df(pubmed_context)
   if (is.null(df) || nrow(df) == 0) return(NA_character_)
-  jsonlite::toJSON(df, dataframe = "rows", auto_unbox = TRUE, na = "null")
+  as.character(jsonlite::toJSON(df, dataframe = "rows", auto_unbox = TRUE, na = "null"))
 }
 
 collapse_pubmed_pmids <- function(pubmed_context) {

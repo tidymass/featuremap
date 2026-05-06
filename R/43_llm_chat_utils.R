@@ -57,6 +57,12 @@ siliconflow_base_urls <- function() {
   explicit <- trimws(as.character(explicit[1]))
   if (nzchar(explicit)) return(sub("/+$", "", explicit))
 
+  cached <- getOption("featuremap.siliconflow.active_base_url", "")
+  if (!is.null(cached) && length(cached) > 0) {
+    cached <- trimws(as.character(cached[1]))
+    if (nzchar(cached)) return(sub("/+$", "", cached))
+  }
+
   region <- getOption(
     "featuremap.siliconflow.region",
     Sys.getenv("SILICONFLOW_REGION", unset = "auto")
@@ -71,7 +77,7 @@ siliconflow_base_urls <- function() {
     return("https://api.siliconflow.com")
   }
 
-  c("https://api.siliconflow.cn", "https://api.siliconflow.com")
+  c("https://api.siliconflow.com", "https://api.siliconflow.cn")
 }
 
 chat_siliconflow_call <- function(
@@ -82,8 +88,12 @@ chat_siliconflow_call <- function(
     temperature = 0
 ) {
   base_urls <- siliconflow_base_urls()
-  for (base_url in base_urls) {
-    message("Trying SiliconFlow endpoint: ", base_url)
+  for (i in seq_along(base_urls)) {
+    base_url <- base_urls[[i]]
+    if (i > 1) {
+      message("SiliconFlow endpoint ", base_urls[[i - 1]],
+              " failed; trying ", base_url, ".")
+    }
     out <- chat_openai_silicon_call(
       messages = messages,
       api_key = api_key,
@@ -94,6 +104,7 @@ chat_siliconflow_call <- function(
     )
     if (!is.null(out)) {
       out$base_url <- base_url
+      options(featuremap.siliconflow.active_base_url = base_url)
       return(out)
     }
   }

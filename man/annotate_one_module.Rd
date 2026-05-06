@@ -2,7 +2,7 @@
 % Please edit documentation in R/46_gen_report.R
 \name{annotate_one_module}
 \alias{annotate_one_module}
-\title{Annotate a Single Module Using LLM}
+\title{Annotate a Single Module Using Two Sequential LLM Calls  (Fast Mode)}
 \usage{
 annotate_one_module(
   module_obj,
@@ -11,57 +11,62 @@ annotate_one_module(
   llm_api_key,
   model,
   max_tokens = 5000,
-  temperature = 0
+  temperature = 0,
+  pubmed = FALSE,
+  NCBI_api_key = NULL,
+  years = 5
 )
 }
 \arguments{
-\item{module_obj}{List containing module data with fields:
-\itemize{
-\item \code{module_id}: module identifier (for example \code{"M1"}).
-\item \code{module_stats}: module-level statistics (Importance, Robustness, Annotated_fraction).
-\item \code{top_N_metabolites}: data frame of top metabolites with
-\code{HMDB_ID}, \code{Compound_name}, \code{Importance}, \code{Robustness}, \code{class},
-and optional \code{functional_summary}.
-\item \code{other_metabolites}: data frame of additional metabolites aggregated at class level.
-}}
+\item{module_obj}{List produced by \code{prepare_module()}. Must contain:
+\code{module_id}, \code{module_stats}, \code{topN_metabolites},
+\code{other_metabolites}, \code{pathway_coverage}, \code{global_direction},
+\code{origin_profile}.}
 
-\item{study_context}{List containing study metadata:
-\itemize{
-\item \code{biospecimen}: biological specimen type.
-\item \code{phenotype}: phenotype of interest.
-\item \code{design}: study design description (optional).
-}}
+\item{study_context}{List with \code{species}, \code{biospecimen},
+\code{phenotype}.  Used only in Call 2.}
 
-\item{provider}{Character. LLM provider passed to \code{chat_api_call()}
-(e.g. \code{"openai"}, \code{"siliconflow"}, \code{"gemini"}).}
+\item{provider}{Character. LLM provider (\code{"openai"}, \code{"siliconflow"},
+\code{"gemini"}).}
 
-\item{llm_api_key}{Character. API key for the LLM service}
+\item{llm_api_key}{Character. API key for the LLM service.}
 
-\item{model}{Character. Model name (e.g., "gpt-4", "gpt-3.5-turbo")}
+\item{model}{Character. Model identifier (e.g. \code{"gpt-4.1-mini"}).}
 
-\item{max_tokens}{Integer. Maximum number of tokens in the response (default: 800)}
+\item{max_tokens}{Integer. Maximum response tokens (default: 5000).}
 
-\item{temperature}{Numeric. Sampling temperature for the LLM (default: 0 for deterministic output)}
+\item{temperature}{Numeric. Sampling temperature, 0 for deterministic
+(default: 0).}
+
+\item{pubmed}{Logical. Whether to search PubMed after Call 1 (default: FALSE).}
+
+\item{NCBI_api_key}{Character or NULL. NCBI API key for PubMed.}
+
+\item{years}{Numeric. PubMed look-back years (default: 5).}
 }
 \value{
-A data frame with one row containing \code{module_id}, \code{title},
-\code{summary}, \code{confidence_label}, \code{rationale}, and \code{raw_response}.
+A one-row data frame with columns:
+\code{module_id}, \code{title}, \code{functional_summary},
+\code{phenotype_relationship}, \code{confidence_label}, \code{rationale},
+\code{global_direction}, \code{core_drivers},
+\code{origin_endogenous_frac}, \code{origin_exogenous_frac},
+\code{top_kegg_pathways}, \code{top_hmdb_pathways},
+\code{pubmed_pmids}, \code{pubmed_evidence_json},
+\code{raw_response_call1}, \code{raw_response_call2}.
 }
 \description{
-Sends a single module's data to an LLM API (e.g., GPT) to generate a biological
-interpretation including a title, summary, confidence label, and rationale.
+Implements the Fast Mode two-call pipeline for one metabolic module:
 }
 \details{
-This function:
 \enumerate{
-\item Constructs system and user prompts using \code{build_system_prompt()}
-and \code{build_module_prompt()}
-\item Sends the prompts to the LLM API via \code{gpt_api_call()}
-\item Parses the JSON response into structured fields
-\item Handles errors gracefully by returning NA values when parsing fails
+\item \strong{Call 1} — Biochemical annotation (no study context):
+generates \code{title} and \code{functional_summary} from metabolite
+structure, class composition, and pathway coverage.
+\item \strong{PubMed search} (optional) — retrieves phenotype-relevant
+abstracts using the module title and study phenotype.
+\item \strong{Call 2} — Phenotype and confidence assessment:
+generates \code{phenotype_relationship}, \code{confidence_label},
+and \code{rationale} using origin profile, study context, and the
+PubMed evidence collected in step 2.
 }
-}
-\note{
-If the API returns an empty response or JSON parsing fails, the function
-returns a data frame with NA values and logs a message.
 }

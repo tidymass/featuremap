@@ -790,6 +790,16 @@ search_pubmed_for_module <- function(module_title,
 #' Searches the module title and every top metabolite name separately, keeping
 #' up to \code{retmax_per_query} articles per search term. Results are merged
 #' and deduplicated by PMID before being passed to LLM Call 2.
+#'
+#' @param module_title Character or NULL. Module or hypothesis title.
+#' @param top_metabolite_names Character vector or NULL. Top metabolite names.
+#' @param phenotype Character or NULL. Study phenotype string.
+#' @param NCBI_api_key Character or NULL. NCBI Entrez API key.
+#' @param retmax_per_query Integer. Maximum records to retrieve for each query.
+#' @param years Numeric. Publication year look-back window.
+#'
+#' @return A list with query, pmids, titles, abstracts, source_type, and
+#'   source_term vectors.
 search_pubmed_for_annotation_evidence <- function(module_title,
                                                   top_metabolite_names = NULL,
                                                   phenotype            = NULL,
@@ -882,4 +892,71 @@ search_pubmed_for_annotation_evidence <- function(module_title,
     source_type = hit_df$source_type,
     source_term = hit_df$source_term
   )
+}
+
+
+pubmed_evidence_to_df <- function(pubmed_context, hypothesis_id = NA_character_) {
+  one_context_to_df <- function(x, hid) {
+    empty <- data.frame(
+      hypothesis_id = character(0),
+      pmid = character(0),
+      title = character(0),
+      abstract = character(0),
+      source_type = character(0),
+      source_term = character(0),
+      query = character(0),
+      stringsAsFactors = FALSE
+    )
+
+    if (is.null(x) || length(x$pmids) == 0) return(empty)
+
+    n <- min(length(x$pmids), length(x$titles), length(x$abstracts))
+    if (n == 0) return(empty)
+
+    get_field <- function(field, default) {
+      val <- x[[field]]
+      if (is.null(val) || length(val) < n) rep(default, n) else as.character(val[seq_len(n)])
+    }
+
+    data.frame(
+      hypothesis_id = rep(hid %||% NA_character_, n),
+      pmid          = as.character(x$pmids[seq_len(n)]),
+      title         = as.character(x$titles[seq_len(n)]),
+      abstract      = as.character(x$abstracts[seq_len(n)]),
+      source_type   = get_field("source_type", NA_character_),
+      source_term   = get_field("source_term", NA_character_),
+      query         = get_field("query", NA_character_),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  if (is.null(pubmed_context) || !is.list(pubmed_context)) {
+    return(one_context_to_df(NULL, hypothesis_id))
+  }
+
+  if (!is.null(pubmed_context$pmids)) {
+    return(one_context_to_df(pubmed_context, hypothesis_id))
+  }
+
+  if (length(pubmed_context) == 0 || length(names(pubmed_context)) == 0) {
+    return(one_context_to_df(NULL, hypothesis_id))
+  }
+
+  pieces <- lapply(names(pubmed_context), function(hid) {
+    one_context_to_df(pubmed_context[[hid]], hid)
+  })
+  do.call(rbind, pieces)
+}
+
+serialize_pubmed_evidence <- function(pubmed_context) {
+  df <- pubmed_evidence_to_df(pubmed_context)
+  if (is.null(df) || nrow(df) == 0) return(NA_character_)
+  jsonlite::toJSON(df, dataframe = "rows", auto_unbox = TRUE, na = "null")
+}
+
+collapse_pubmed_pmids <- function(pubmed_context) {
+  df <- pubmed_evidence_to_df(pubmed_context)
+  if (is.null(df) || nrow(df) == 0) return(NA_character_)
+  pmids <- unique(df$pmid[!is.na(df$pmid) & nzchar(df$pmid)])
+  if (length(pmids) == 0) NA_character_ else paste(pmids, collapse = "; ")
 }

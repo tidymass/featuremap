@@ -58,6 +58,7 @@
 #' @importFrom furrr future_map
 #' @importFrom data.table as.data.table rbindlist
 #'
+#' @noRd
 build_isotope_rows <- function(temp_iso_input,
                                feature_table_mode,
                                annotation_row,

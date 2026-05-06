@@ -37,6 +37,7 @@
 #'   \code{global_direction}, \code{core_drivers},
 #'   \code{origin_endogenous_frac}, \code{origin_exogenous_frac},
 #'   \code{top_kegg_pathways}, \code{top_hmdb_pathways},
+#'   \code{pubmed_pmids}, \code{pubmed_evidence_json},
 #'   \code{raw_response_call1}, \code{raw_response_call2}.
 annotate_one_module <- function(module_obj,
                                 study_context,
@@ -416,6 +417,8 @@ annotate_one_module <- function(module_obj,
     origin_exogenous_frac  = origin_exo_frac,
     top_kegg_pathways      = kegg_pathways,
     top_hmdb_pathways      = hmdb_pathways,
+    pubmed_pmids           = collapse_pubmed_pmids(pubmed_context),
+    pubmed_evidence_json   = serialize_pubmed_evidence(pubmed_context),
     raw_response_call1     = res1$raw_text  %||% NA_character_,
     raw_response_call2     = res2$raw_text  %||% NA_character_,
     stringsAsFactors = FALSE

@@ -8,14 +8,14 @@ combine_topN_with_pubmed(module_top_df, pubmed_top_df)
 }
 \arguments{
 \item{module_top_df}{A data frame containing the top metabolites with columns:
-HMDB_ID, Compound_name, Importance, Robustness, class}
+top_rank, Compound_ID, Compound_name, class, priority_level}
 
 \item{pubmed_top_df}{A data frame containing PubMed data with columns:
 HMDB_ID, functional_summary}
 }
 \value{
-A tibble with columns ordered as: HMDB_ID, Compound_name, Importance,
-Robustness, class, functional_summary
+A tibble with columns ordered as: top_rank, Compound_ID, Compound_name,
+class, priority_level, functional_summary
 }
 \description{
 Performs a left join to merge the top metabolites data frame with

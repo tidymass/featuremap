@@ -18,147 +18,126 @@ annotate_module(
   provider = "openai",
   llm_model = "gpt-4.1-mini",
   NCBI_api_key = "",
-  llm_api_key = ""
+  llm_api_key = "",
+  proposer_temperature = 0.3,
+  sleep_sec = 0
 )
 }
 \arguments{
 \item{res}{A \code{featuremap_result} object returned by
 \code{\link{identify_module}} (or already module-annotated). Must contain
-\code{module_table} and \code{module_score}. Expected stage is
-\code{"module_identified"} or \code{"module_annotated"}.}
+\code{module_table} and \code{module_score}.}
 
 \item{p}{Character. Column name in \code{res$module_score} used for module
-significance filtering (for example \code{"p"} or \code{"fdr"}).}
+significance filtering (e.g. \code{"p"} or \code{"fdr"}).}
 
-\item{pcutoff}{Numeric. Threshold applied to \code{res$module_score[[p]]}
-for selecting modules to annotate.}
+\item{pcutoff}{Numeric. Threshold applied to \code{res$module_score[[p]]}.}
 
-\item{ref_data}{Functional reference metadata. Can be either:
+\item{ref_data}{Functional reference metadata. Can be:
 \itemize{
-\item \code{NULL}, in which case cached HMDB and KEGG reference resources
-are loaded automatically
-\item a single data frame with an \code{id} column (used for both HMDB
-and KEGG lookups)
-\item a list with components \code{hmdb} and \code{kegg}, each containing
-a data frame with an \code{id} column
-}
-Module annotation uses HMDB reference metadata first and fills remaining
-missing annotations with KEGG reference metadata.}
+\item \code{NULL}: cached HMDB and KEGG references are loaded automatically.
+\item A single data frame with an \code{id} column (used for both lookups).
+\item A list with components \code{hmdb} and \code{kegg}.
+}}
 
-\item{mode}{Character. Annotation mode. \code{"fast"} runs the current
-two-call pipeline with database annotation, pathway coverage, optional
-PubMed evidence, and LLM confidence assessment. \code{"advanced"} is
-reserved for a future workflow and currently raises an error.}
+\item{mode}{Character. \code{"fast"} (default) runs the two-call pipeline
+with pathway coverage, origin profiling, and directed confidence scoring.
+\code{"advanced"} runs the multi-agent debate pipeline: Proposer generates
+2-3 competing hypotheses, Skeptic challenges them (up to 2 rounds), and an
+Arbiter delivers final \code{accepted / uncertain / rejected} verdicts with
+confidence scores.}
 
-\item{species}{Character. Species context used in the second LLM call for
-confidence assessment.}
+\item{species}{Character. Species context for LLM confidence scoring.}
 
-\item{biospecimen}{Character. Biospecimen context (e.g., plasma, serum, tissue)
-used in the second LLM call for confidence assessment.}
+\item{biospecimen}{Character. Biospecimen type (e.g. plasma, urine, tissue).}
 
-\item{phenotype}{Character. Phenotype or disease context used for PubMed
-retrieval when \code{pubmed = TRUE} and for confidence assessment.}
+\item{phenotype}{Character. Phenotype/disease string used in PubMed retrieval
+(when \code{pubmed = TRUE}) and confidence assessment.}
 
-\item{pubmed}{Logical. Whether to retrieve PubMed evidence after the first
-LLM call. When \code{TRUE}, the module title is searched with up to three
-papers retained, and every top metabolite is searched separately with up to
-three papers retained per metabolite. Results are deduplicated by PMID before
-being passed to the second LLM call.}
+\item{pubmed}{Logical. Whether to retrieve PubMed evidence after LLM Call 1.
+When \code{TRUE}, the module title and every top metabolite are searched
+separately; up to three papers are retained per query and deduplicated by
+PMID before LLM Call 2.}
 
-\item{years}{Integer. Look-back years for PubMed search when
-\code{pubmed = TRUE}.}
+\item{years}{Integer. PubMed look-back years when \code{pubmed = TRUE}.}
 
-\item{provider}{Character. LLM provider name used by generation helper
-functions. Supported values are \code{"openai"}, \code{"siliconflow"}, and
-\code{"gemini"}.}
+\item{provider}{Character. LLM provider (\code{"openai"}, \code{"siliconflow"},
+\code{"gemini"}).}
 
-\item{llm_model}{Character. LLM model identifier used for the two LLM calls.}
+\item{llm_model}{Character. LLM model identifier.}
 
-\item{NCBI_api_key}{Character. NCBI Entrez API key passed to
-\code{rentrez::set_entrez_key()} when \code{pubmed = TRUE}.}
+\item{NCBI_api_key}{Character. NCBI Entrez API key when \code{pubmed = TRUE}.}
 
-\item{llm_api_key}{Character. API key for \code{provider}. Required for LLM
-module annotation.}
+\item{llm_api_key}{Character. API key for \code{provider}.}
+
+\item{proposer_temperature}{Numeric. Sampling temperature for the Proposer's
+initial hypothesis generation in advanced mode (default 0.3). Skeptic,
+Proposer revision, and Arbiter always run at temperature 0.}
+
+\item{sleep_sec}{Numeric. Pause in seconds between modules (default 0).}
 }
 \value{
 The input \code{res} object updated with:
 \itemize{
-\item \code{module_function}: data frame with one row per annotated module,
-including \code{module_id}, \code{title}, \code{functional_summary},
-\code{phenotype_relationship}, \code{confidence_label}, \code{rationale},
-\code{global_direction}, \code{core_drivers}, origin fractions, top pathway
-summaries, and raw LLM responses.
-\item \code{module_top_metabolite_pmids}: an empty tibble in the current fast
-mode. PubMed evidence is passed directly to the second LLM call rather than
-stored as a per-metabolite PMID table.
-\item \code{stage}: updated to \code{"module_annotated"}
+\item \code{module_function}: data frame with one row per annotated module
+and columns covering all seven annotation dimensions (title,
+functional_summary, phenotype_relationship, confidence_label,
+rationale, global_direction, core_drivers, origin fractions,
+top pathway names, and PubMed evidence columns
+\code{pubmed_pmids} and \code{pubmed_evidence_json}.
+\item \code{module_top_metabolite_pmids}: compact PubMed evidence export
+with \code{module_id}, \code{pubmed_pmids}, and
+\code{pubmed_evidence_json}.
+\item \code{stage}: updated to \code{"module_annotated"}.
 }
 }
 \description{
-Perform functional annotation of statistically significant metabolic
-modules by integrating:
-\itemize{
-\item Database-derived metabolite annotations
-\item Literature evidence from PubMed (optional)
-\item Large language model (LLM)-based functional interpretation
-}
+Perform functional annotation of statistically significant metabolic modules
+by integrating database-derived annotations, optional PubMed literature
+evidence, and large language model (LLM) functional interpretation.
 }
 \details{
-Fast mode proceeds as follows:
+\strong{Fast Mode pipeline (default):}
 \enumerate{
-\item Load HMDB and KEGG functional references, plus HMDB and KEGG pathway
-references.
-\item Select statistically significant modules using \code{res$module_score[[p]]}
-and \code{pcutoff}. If \code{res$module_table} contains
-\code{Use_for_annotation}, only rows marked \code{TRUE} are used for
-annotation.
-\item Annotate module metabolites by HMDB/KEGG lookup. HMDB metadata is used
-first and KEGG fills remaining missing fields.
-\item Rank top metabolites using \code{0.7 * Importance + 0.3 * Robustness},
-where \code{Robustness} is \code{Node_freq}. The selected top metabolites and
-class-level structure are used for LLM interpretation.
-\item Compute non-LLM module features: signal concentration (HHI), KEGG/HMDB
-pathway coverage, global direction, and origin profile.
-\item LLM call 1 generates a biochemical \code{title} and
-\code{functional_summary} without study context or phenotype interpretation.
-\item If \code{pubmed = TRUE}, PubMed is searched using the module title and
-each top metabolite separately, constrained by phenotype when provided and by
-the \code{years} date window. Up to three articles are retained for the module
-title and up to three for each top metabolite, then records are deduplicated by
-PMID.
-\item LLM call 2 receives the title, origin profile, study context, and
-deduplicated PubMed evidence, and returns \code{phenotype_relationship},
-\code{confidence_label}, and \code{rationale}.
+\item Load functional reference databases (HMDB + KEGG).
+\item Annotate significant module metabolites via database lookup.
+\item Compute per-module: Signal_concentration (HHI), pathway coverage
+(KEGG + HMDB), global directionality, and origin profile.
+\item LLM Call 1 — title + functional_summary (no study context).
+\item Optional PubMed search using module title, all top metabolites,
+phenotype, and PMID deduplication.
+\item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
 }
 
-Module IDs are consumed exactly as stored by \code{\link{identify_module}},
-using character labels such as \code{"M1"}, \code{"M2"}, ...
-
-Only statistically significant modules (based on \code{p} and \code{pcutoff})
-are annotated. If no modules pass the threshold, empty annotation outputs are
-returned and the object stage is still updated to \code{"module_annotated"}.
-
-Global direction is computed only when \code{res$feature_table} contains
-\code{condition} and \code{res$anno_feature_table2} contains
-\code{weighted_anno_score}. The direction is based on the weighted mean of
-feature-level \code{condition} values and does not fall back to
-\code{score_norm}.
+\strong{Advanced Mode pipeline:}
+\enumerate{
+\item Same data preparation as fast mode (steps 1-3).
+\item P0 Proposer: generates 2-3 competing hypotheses from metabolite
+data only (no study context).
+\item S1 Skeptic: challenges each hypothesis on biochemical, origin,
+species, and biospecimen grounds (no phenotype, no PubMed).
+\item P1 Proposer revision: keep / modify / drop each hypothesis.
+\item (Conditional) S2 + P2: second debate round if revisions were made
+or major challenges were kept without revision.
+\item Optional PubMed: per-hypothesis title search + shared metabolite
+search, results held for Arbiter only.
+\item A0 Arbiter: final accepted / uncertain / rejected verdicts with
+full study context and PubMed evidence.
+}
 }
 \examples{
 \dontrun{
-# res should be generated by identify_module() first
 res <- annotate_module(
-  res = res,
-  p = "fdr",
-  pcutoff = 0.05,
-  ref_data = NULL,
-  mode = "fast",
-  species = "human",
+  res        = res,
+  p          = "fdr",
+  pcutoff    = 0.05,
+  mode       = "fast",
+  species    = "human",
   biospecimen = "plasma",
-  phenotype = "disease phenotype",
-  pubmed = FALSE,
-  provider = "openai",
-  llm_model = "gpt-4.1-mini",
+  phenotype  = "type 2 diabetes",
+  pubmed     = FALSE,
+  provider   = "openai",
+  llm_model  = "gpt-4.1-mini",
   llm_api_key = Sys.getenv("OPENAI_API_KEY")
 )
 }

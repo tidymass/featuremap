@@ -21,8 +21,8 @@ identify_module(
 \item{res}{A \code{featuremap_result} object returned by
 \code{\link{extract_subnetwork}} (or later). It should contain at least:
 \code{pcsf_subnet}, \code{mrn}, \code{edge_frequency},
-\code{node_frequency}, \code{anno_feature_table2}, and \code{feature_table}.
-Expected stage is \code{"subnetwork_extracted"} or later.}
+\code{node_frequency}, \code{anno_feature_table2}, and
+\code{feature_table}. Expected stage is \code{"subnetwork_extracted"} or later.}
 
 \item{method}{Character. Community detection algorithm. One of
 \code{"louvain"}, \code{"leading_eigen"}, \code{"fast_greedy"},

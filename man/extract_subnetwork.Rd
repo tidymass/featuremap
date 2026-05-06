@@ -88,15 +88,15 @@ sub-network from annotated metabolomics features and a reference
 metabolic reaction network (MRN).
 }
 \details{
-Annotation rows are projected to the MRN at the metabolite-node level using
-\code{HMDB.ID} first and \code{KEGG.ID} as fallback when no HMDB-based match
-is available. Only annotation rows supported by the final PCSF subnetwork are
-retained in \code{anno_feature_table2}.
-
 This function integrates feature-level statistical scores with a
 metabolic reaction network and identifies a robust sub-network
 through repeated PCSF optimization. Optional grid tuning of
 parameters \code{b} and \code{w} is supported.
+
+Annotation rows are projected to the MRN at the metabolite-node level using
+\code{HMDB.ID} first and \code{KEGG.ID} as fallback when no HMDB-based match
+is available. Only annotation rows supported by the final PCSF subnetwork are
+retained in \code{anno_feature_table2}.
 
 Feature importance scores are derived from effects value and p-value.
 The PCSF algorithm is executed multiple times with randomized edge

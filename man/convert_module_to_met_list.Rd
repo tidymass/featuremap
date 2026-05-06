@@ -4,7 +4,7 @@
 \alias{convert_module_to_met_list}
 \title{Convert Module Data Frame to Metabolite List}
 \usage{
-convert_module_to_met_list(module_df, refdata = c("hmdb", "kegg"))
+convert_module_to_met_list(module_df, refdata = c("hmdb", "kegg", "auto"))
 }
 \arguments{
 \item{module_df}{Data frame. Metabolite annotation table. Required

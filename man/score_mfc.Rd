@@ -8,19 +8,20 @@ score_mfc(mfc)
 }
 \arguments{
 \item{mfc}{A data frame representing a single metabolite feature cluster. Must contain at least the columns:
-\code{Adduct}, \code{polarity}, \code{isotope}, and optionally \code{SS} (spectral similarity score).}
+\code{Adduct}, \code{polarity}, \code{isotope}, and optionally \code{ms2_confirmed} / \code{Level}.}
 }
 \value{
 A numeric score representing the confidence or quality of the MFC annotation.
 }
 \description{
 Computes a heuristic score for a metabolite feature cluster (\code{mfc}) based on MS annotation features such as
-adduct type, polarity, isotopic composition, and spectral similarity.
+adduct type, polarity, isotopic composition, and MS2-supported annotation level.
 }
 \details{
 The scoring logic is based on heuristic rules:
 \itemize{
-\item +150 points if any feature has a non-missing \code{SS} (spectrum similarity)
+\item +150 points if any feature has \code{ms2_confirmed == TRUE}, indicating
+user-supplied MS2-backed confirmation
 \item +50 for canonical adducts: \verb{(M+H)+} in positive mode or \verb{(M-H)-} in negative mode
 \item +20 if isotopic peaks are observed for canonical adducts
 \item +20–10 for secondary adducts or isotopic forms
@@ -33,7 +34,7 @@ mfc <- data.frame(
   Adduct = c("(M+H)+", "(M+H)+"),
   polarity = c("positive", "positive"),
   isotope = c("[M]", "[M+1]"),
-  SS = c(0.9, NA),
+  ms2_confirmed = c(TRUE, TRUE),
   stringsAsFactors = FALSE
 )
 

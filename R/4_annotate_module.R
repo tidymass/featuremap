@@ -18,8 +18,14 @@
 #'   }
 #' @param mode Character. \code{"fast"} (default) runs the two-call pipeline
 #'   with pathway coverage, origin profiling, and directed confidence scoring.
-#'   \code{"advanced"} is reserved for a future multi-agent pipeline and is not
-#'   yet implemented.
+#'   \code{"advanced"} runs the multi-agent debate pipeline: Proposer generates
+#'   2-3 competing hypotheses, Skeptic challenges them (up to 2 rounds), and an
+#'   Arbiter delivers final \code{accepted / uncertain / rejected} verdicts with
+#'   confidence scores.
+#' @param proposer_temperature Numeric. Sampling temperature for the Proposer's
+#'   initial hypothesis generation in advanced mode (default 0.3). Skeptic,
+#'   Proposer revision, and Arbiter always run at temperature 0.
+#' @param sleep_sec Numeric. Pause in seconds between modules (default 0).
 #' @param species Character. Species context for LLM confidence scoring.
 #' @param biospecimen Character. Biospecimen type (e.g. plasma, urine, tissue).
 #' @param phenotype Character. Phenotype/disease string used in PubMed retrieval
@@ -41,9 +47,11 @@
 #'         and columns covering all seven annotation dimensions (title,
 #'         functional_summary, phenotype_relationship, confidence_label,
 #'         rationale, global_direction, core_drivers, origin fractions,
-#'         top pathway names).
-#'   \item \code{module_top_metabolite_pmids}: empty tibble in the current fast
-#'         mode. PubMed evidence is passed directly to LLM Call 2.
+#'         top pathway names, and PubMed evidence columns
+#'         \code{pubmed_pmids} and \code{pubmed_evidence_json}.
+#'   \item \code{module_top_metabolite_pmids}: compact PubMed evidence export
+#'         with \code{module_id}, \code{pubmed_pmids}, and
+#'         \code{pubmed_evidence_json}.
 #'   \item \code{stage}: updated to \code{"module_annotated"}.
 #' }
 #'
@@ -60,8 +68,21 @@
 #'   \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
 #' }
 #'
-#' \strong{Advanced Mode:} placeholder only; calling with \code{mode = "advanced"}
-#' raises an informative error.
+#' \strong{Advanced Mode pipeline:}
+#' \enumerate{
+#'   \item Same data preparation as fast mode (steps 1-3).
+#'   \item P0 Proposer: generates 2-3 competing hypotheses from metabolite
+#'         data only (no study context).
+#'   \item S1 Skeptic: challenges each hypothesis on biochemical, origin,
+#'         species, and biospecimen grounds (no phenotype, no PubMed).
+#'   \item P1 Proposer revision: keep / modify / drop each hypothesis.
+#'   \item (Conditional) S2 + P2: second debate round if revisions were made
+#'         or major challenges were kept without revision.
+#'   \item Optional PubMed: per-hypothesis title search + shared metabolite
+#'         search, results held for Arbiter only.
+#'   \item A0 Arbiter: final accepted / uncertain / rejected verdicts with
+#'         full study context and PubMed evidence.
+#' }
 #'
 #' @examples
 #' \dontrun{
@@ -81,30 +102,24 @@
 #' }
 #'
 #' @export
-annotate_module <- function(res         = NULL,
-                             p           = "fdr",
-                             pcutoff     = 0.05,
-                             ref_data    = NULL,
-                             mode        = c("fast", "advanced"),
-                             species     = "human",
-                             biospecimen = NULL,
-                             phenotype   = NULL,
-                             pubmed      = TRUE,
-                             years       = 5,
-                             provider    = "openai",
-                             llm_model   = "gpt-4.1-mini",
-                             NCBI_api_key = "",
-                             llm_api_key  = "") {
+annotate_module <- function(res                  = NULL,
+                             p                    = "fdr",
+                             pcutoff              = 0.05,
+                             ref_data             = NULL,
+                             mode                 = c("fast", "advanced"),
+                             species              = "human",
+                             biospecimen          = NULL,
+                             phenotype            = NULL,
+                             pubmed               = TRUE,
+                             years                = 5,
+                             provider             = "openai",
+                             llm_model            = "gpt-4.1-mini",
+                             NCBI_api_key         = "",
+                             llm_api_key          = "",
+                             proposer_temperature = 0.3,
+                             sleep_sec            = 0) {
 
   mode <- match.arg(mode)
-
-  # Advanced mode placeholder
-  if (identical(mode, "advanced")) {
-    stop(
-      "[annotate_module] Advanced mode is not yet implemented. ",
-      "Please use mode = \"fast\" (the default)."
-    )
-  }
 
   # ---- Inner helpers -------------------------------------------------------
 
@@ -398,8 +413,7 @@ annotate_module <- function(res         = NULL,
     "Pathway coverage computed; {.val {n_pathways_found}} pathway hits across all modules."
   )
 
-  # ---- PubMed info (passed as parameters; per-module search is deferred  ---
-  # to inside annotate_one_module() in fast mode)                           ---
+  # ---- PubMed info (per-module search is deferred to LLM annotation) -------
   res$module_top_metabolite_pmids <- tibble::tibble()
 
   # ---- Prepare module objects for LLM annotation ---------------------------
@@ -411,7 +425,7 @@ annotate_module <- function(res         = NULL,
         module_list_top       = module_list_top,
         module_list           = module_list,
         module_class          = module_class,
-        module_pubmed_embed_refined = NULL,   # not used in fast mode
+        module_pubmed_summaries = NULL,
         module_statistics     = module_statistics,
         pathway_coverage_list = pathway_coverage_list,
         direction_list        = direction_list,
@@ -432,10 +446,10 @@ annotate_module <- function(res         = NULL,
     "Prepared annotation inputs for {.val {length(all_modules_ready)}} significant modules."
   )
 
-  # ---- Step 3/4: LLM annotation (Call 1 → PubMed → Call 2) ----------------
+  # ---- Step 3/4: LLM annotation ----------------------------------------
   llm_step <- if (pubmed) "4" else "3"
   cli::cli_alert_info(
-    "[{llm_step}/{total_steps}] Running LLM annotation (two-call fast mode)."
+    "[{llm_step}/{total_steps}] Running LLM annotation (mode = {mode})."
   )
 
   if (length(all_modules_ready) == 0) {
@@ -449,21 +463,42 @@ annotate_module <- function(res         = NULL,
     rentrez::set_entrez_key(NCBI_api_key)
   }
 
-  all_results <- annotate_all_modules(
-    all_modules_ready = all_modules_ready,
-    study_context     = study_context,
-    provider          = provider,
-    llm_api_key       = llm_api_key,
-    model             = llm_model,
-    max_tokens        = if (identical(provider, "gemini")) 4000L else 2000L,
-    temperature       = 0,
-    sleep_sec         = 0,
-    pubmed            = pubmed,
-    NCBI_api_key      = NCBI_api_key,
-    years             = years
-  )
+  all_results <- if (identical(mode, "advanced")) {
+    annotate_all_modules_advanced(
+      all_modules_ready    = all_modules_ready,
+      study_context        = study_context,
+      provider             = provider,
+      llm_api_key          = llm_api_key,
+      model                = llm_model,
+      max_tokens           = if (identical(provider, "gemini")) 4000L else 2000L,
+      proposer_temperature = proposer_temperature,
+      temperature          = 0,
+      sleep_sec            = sleep_sec,
+      pubmed               = pubmed,
+      NCBI_api_key         = NCBI_api_key,
+      years                = years
+    )
+  } else {
+    annotate_all_modules(
+      all_modules_ready = all_modules_ready,
+      study_context     = study_context,
+      provider          = provider,
+      llm_api_key       = llm_api_key,
+      model             = llm_model,
+      max_tokens        = if (identical(provider, "gemini")) 4000L else 2000L,
+      temperature       = 0,
+      sleep_sec         = sleep_sec,
+      pubmed            = pubmed,
+      NCBI_api_key      = NCBI_api_key,
+      years             = years
+    )
+  }
 
   res$module_function <- all_results
+  if ("pubmed_evidence_json" %in% colnames(all_results)) {
+    res$module_top_metabolite_pmids <-
+      all_results[, c("module_id", "pubmed_pmids", "pubmed_evidence_json"), drop = FALSE]
+  }
 
   elapsed_min <- round(as.numeric(difftime(Sys.time(), start_time, units = "mins")), 2)
   cli::cli_alert_success(

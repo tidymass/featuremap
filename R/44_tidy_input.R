@@ -61,64 +61,6 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
 
 
 
-#' Prepare Comprehensive Module Data for Analysis or Reporting
-#'
-#' Combines top metabolites, PubMed functional summaries, other metabolites,
-#' and module statistics into a structured list for a single module.
-#'
-#' @param k Integer or character. Index or identifier for the module to prepare
-#' @param module_list_top List of data frames, each containing top 10 metabolites
-#'   for a module. Each data frame must have columns including Module, Compound_ID
-#'   (or HMDB_ID / KEGG_ID), Compound_name, class, top_rank, and priority_level
-#' @param module_list Named list of data frames containing all metabolites for each module.
-#'   Names should match the module IDs returned by \code{\link{identify_module}}
-#'   (for example \code{"M1"}, \code{"M2"}, ...)
-#' @param module_pubmed_embed_refined List of PubMed data for each module. Each element
-#'   is a named list where names are HMDB IDs
-#' @param module_statistics List of statistics for each module. Names should match
-#'   the character module IDs returned by \code{\link{identify_module}}
-#' @param module_class Optional list of class-level summaries for each module.
-#' @param pubmed Logical. If TRUE (default), attempts to merge PubMed functional summaries.
-#'   If FALSE, functional_summary column will be NA
-#'
-#' @return A named list with four elements:
-#'   \item{module_id}{Character. The module identifier (for example \code{"M1"})}
-#'   \item{module_stats}{Statistics data for the module}
-#'   \item{topN_metabolites}{Tibble of top 10 metabolites with functional summaries (if available)}
-#'   \item{other_metabolites}{Tibble of remaining metabolites not in top 10}
-#'
-#' @details This function orchestrates the preparation of module data by:
-#'   \enumerate{
-#'     \item Extracting the top 10 metabolites for the specified module
-#'     \item Optionally merging PubMed functional summaries (with warning if data missing)
-#'     \item Extracting metabolites not in the top 10
-#'     \item Retrieving module statistics
-#'     \item Packaging everything into a structured list
-#'   }
-#'
-#' @section Warning:
-#'   If pubmed = TRUE but PubMed data is missing or empty for the module,
-#'   a warning is issued and functional_summary will be set to NA for all metabolites.
-#'
-#' @examples
-#' \dontrun{
-#' # Prepare the first module entry with PubMed data
-#' module_data <- prepare_module(
-#'   k = 1,
-#'   module_list_top = topN_list,
-#'   module_list = all_modules,
-#'   module_pubmed_embed_refined = pubmed_data,
-#'   module_statistics = stats_list,
-#'   pubmed = TRUE
-#' )
-#'
-#' # Access components
-#' module_data$module_id
-#' module_data$topN_metabolites
-#' module_data$other_metabolites
-#' }
-
-
 # ============================================================
 # New helper: compute_global_direction
 # ============================================================
@@ -389,7 +331,7 @@ prepare_module <- function(
     k,
     module_list_top,
     module_list,
-    module_pubmed_embed_refined,
+    module_pubmed_summaries,
     module_statistics,
     module_class,
     pathway_coverage_list = NULL,
@@ -442,10 +384,10 @@ prepare_module <- function(
 
   if (pubmed) {
 
-    if (!is.null(module_pubmed_embed_refined[[k]]) &&
-        length(module_pubmed_embed_refined[[k]]) > 0) {
+    if (!is.null(module_pubmed_summaries[[k]]) &&
+        length(module_pubmed_summaries[[k]]) > 0) {
 
-      pubmed_df <- flatten_pubmed_for_one_module(module_pubmed_embed_refined[[k]])
+      pubmed_df <- flatten_pubmed_for_one_module(module_pubmed_summaries[[k]])
 
       module_topN_merged <- combine_topN_with_pubmed(
         module_top_df = module_topN,

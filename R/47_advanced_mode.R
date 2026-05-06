@@ -15,11 +15,14 @@
 #   P0  : full module data (metabolites, class, pathway, Signal_concentration)
 #   S1/S2: compressed module summary + origin_profile + species + biospecimen
 #          + current hypothesis titles/claims/anchors/tensions (NO full mechanism)
-#   P1/P2: same as S1/S2 + Skeptic challenges
-#   A0  : all of the above + phenotype + PubMed evidence + debate history digest
+#   P1/P2: same as S1/S2 input + Skeptic challenges + full hypothesis text
+#   A0  : surviving hypotheses (full) + debate history digest
+#          + origin_profile + species + biospecimen + phenotype
+#          + per-hypothesis PubMed evidence
 #
-# global_direction is computed but NOT passed to any agent
-# (direction is complex for modules; used only in final output row)
+# global_direction: computed from module data, stored in output row ONLY.
+# It is NOT passed to any agent — module-level direction is too complex
+# to use as a mechanistic constraint.
 # ============================================================
 
 
@@ -400,6 +403,34 @@ parse_revision_output <- function(parsed) {
 
 
 # ============================================================
+# SECTION 3b – Challenge routing helpers
+# ============================================================
+
+# Check whether a challenge object targets a given hypothesis_id.
+# Handles both exact targets ("H1") and compound targets ("H1_H2") produced
+# by the "redundant" challenge type, where Skeptic flags two hypotheses at once.
+#
+# Returns TRUE if hid is the sole target OR one of the joined targets.
+challenge_targets_hid <- function(ch, hid) {
+  tid   <- ch$target_hypothesis_id %||% ""
+  parts <- strsplit(tid, "_", fixed = TRUE)[[1]]
+  identical(tid, hid) || hid %in% parts
+}
+
+# Format one challenge for display in a Proposer or Arbiter prompt.
+# Adds a "[cross-hypothesis: H1_H2]" annotation when the challenge is compound,
+# so the recipient knows the same challenge also applies to another hypothesis.
+format_challenge_line <- function(ch, current_hid) {
+  tid       <- ch$target_hypothesis_id %||% ""
+  cross_tag <- if (!identical(tid, current_hid))
+    sprintf(" [cross-hypothesis target: %s]", tid) else ""
+  sprintf("  [%s] %s%s: %s",
+          toupper(ch$severity %||% ""), ch$challenge_type %||% "", cross_tag,
+          ch$challenge %||% "")
+}
+
+
+# ============================================================
 # SECTION 4 – Round 2 decision logic
 # ============================================================
 
@@ -420,11 +451,12 @@ should_run_round2 <- function(surviving, s1_challenges, p1_revisions) {
     sapply(p1_revisions, `[[`, "hypothesis_id")
   )
 
-  # For each surviving hypothesis, find its max severity in S1
+  # For each surviving hypothesis, find its max severity in S1.
+  # Uses challenge_targets_hid() to handle compound "H1_H2" redundant targets.
   max_sev <- function(hid) {
-    relevant <- Filter(function(c) c$target_hypothesis_id == hid, s1_challenges)
+    relevant <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
     if (length(relevant) == 0) return("none")
-    if (any(sapply(relevant, function(c) c$severity == "major"))) "major" else "minor"
+    if (any(sapply(relevant, function(c) identical(c$severity, "major")))) "major" else "minor"
   }
 
   actions      <- sapply(surviving, function(h) rev_map[[h$hypothesis_id]] %||% "keep")
@@ -467,13 +499,12 @@ build_debate_history_digest <- function(hypotheses_v0,
     hid <- h$hypothesis_id
     lines <- c(sprintf('%s — "%s" (original claim: %s)', hid, h$title, h$claim))
 
-    # Round 1 challenges for this hypothesis
-    r1_ch <- Filter(function(c) c$target_hypothesis_id == hid, s1_challenges)
+    # Round 1 challenges for this hypothesis (compound targets included)
+    r1_ch <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
     if (length(r1_ch) > 0) {
       lines <- c(lines, "  Round 1 — Skeptic challenges:")
       for (c in r1_ch)
-        lines <- c(lines, sprintf("    [%s] %s: %s",
-                                  toupper(c$severity), c$challenge_type, c$challenge))
+        lines <- c(lines, paste0("    ", format_challenge_line(c, hid)))
     } else {
       lines <- c(lines, "  Round 1 — Skeptic: no challenges raised")
     }
@@ -497,13 +528,11 @@ build_debate_history_digest <- function(hypotheses_v0,
 
     # Round 2 (if ran)
     if (!is.null(s2_challenges)) {
-      # Find current hypothesis_id after revision (might be same hid)
-      r2_ch <- Filter(function(c) c$target_hypothesis_id == hid, s2_challenges)
+      r2_ch <- Filter(function(c) challenge_targets_hid(c, hid), s2_challenges)
       if (length(r2_ch) > 0) {
         lines <- c(lines, "  Round 2 — Skeptic challenges:")
         for (c in r2_ch)
-          lines <- c(lines, sprintf("    [%s] %s: %s",
-                                    toupper(c$severity), c$challenge_type, c$challenge))
+          lines <- c(lines, paste0("    ", format_challenge_line(c, hid)))
       } else {
         lines <- c(lines, "  Round 2 — Skeptic: no further challenges")
       }
@@ -721,13 +750,15 @@ build_proposer_revision_user_prompt <- function(compressed_summary,
                                                  history_text = NULL) {
   hyp_text <- format_hypotheses_full(hypotheses)
 
-  # Format challenges grouped by hypothesis
+  # Format challenges grouped by hypothesis.
+  # challenge_targets_hid() ensures compound targets ("H1_H2") are distributed
+  # to both H1 and H2 entries.  format_challenge_line() adds a cross-hypothesis
+  # annotation so the Proposer can see which other hypothesis shares the issue.
   ch_blocks <- lapply(hypotheses, function(h) {
     hid  <- h$hypothesis_id
-    chs  <- Filter(function(c) c$target_hypothesis_id == hid, challenges)
+    chs  <- Filter(function(c) challenge_targets_hid(c, hid), challenges)
     if (length(chs) == 0) return(sprintf("  %s: no challenges", hid))
-    ch_lines <- sapply(chs, function(c)
-      sprintf("  [%s] %s: %s", toupper(c$severity), c$challenge_type, c$challenge))
+    ch_lines <- sapply(chs, function(c) format_challenge_line(c, hid))
     paste(c(sprintf("  Challenges for %s:", hid), ch_lines), collapse = "\n")
   })
   ch_text <- paste(ch_blocks, collapse = "\n\n")
@@ -979,6 +1010,27 @@ format_pubmed_for_arbiter <- function(pubmed_per_hyp) {
           paste(sections, collapse = "\n\n")), collapse = "\n")
 }
 
+# Helper: collapse all PMIDs across ALL hypotheses (full-archive, same for every output row)
+collapse_pubmed_pmids <- function(pph) {
+  if (is.null(pph) || length(pph) == 0) return(NA_character_)
+  all_pmids <- unique(unlist(lapply(pph, function(h) h$pmids %||% character(0))))
+  all_pmids <- all_pmids[!is.na(all_pmids) & nzchar(trimws(all_pmids))]
+  if (length(all_pmids) == 0) return(NA_character_)
+  paste(all_pmids, collapse = "; ")
+}
+
+# Helper: serialize full pubmed_per_hyp to JSON (all hypotheses, full archive)
+serialize_pubmed_evidence <- function(pph) {
+  if (is.null(pph) || length(pph) == 0) return(NA_character_)
+  tryCatch(jsonlite::toJSON(pph, auto_unbox = TRUE), error = function(e) NA_character_)
+}
+
+# Helper: serialize ONE hypothesis's PubMed evidence to JSON (per-row column)
+serialize_pubmed_evidence_one <- function(hyp_pph) {
+  if (is.null(hyp_pph)) return(NA_character_)
+  tryCatch(jsonlite::toJSON(hyp_pph, auto_unbox = TRUE), error = function(e) NA_character_)
+}
+
 
 # ============================================================
 # SECTION 8 – Gemini response schemas
@@ -1184,36 +1236,40 @@ assemble_advanced_output_row <- function(module_obj,
 
   # ---- Helper: build one output row for a verdict ----
   make_row <- function(v) {
-    hid  <- v$hypothesis_id %||% NA_character_
-    hobj <- hyp_lookup[[hid]]
+    hid      <- v$hypothesis_id %||% NA_character_
+    hobj     <- hyp_lookup[[hid]]
+    hyp_pub  <- if (!is.null(pubmed_per_hyp)) pubmed_per_hyp[[hid]] else NULL
     data.frame(
-      module_id              = mid,
-      hypothesis_id          = hid,
-      verdict_status         = v$status %||% NA_character_,
-      title                  = hobj$title   %||% NA_character_,
-      functional_summary     = hobj$summary %||% NA_character_,
-      phenotype_relationship = v$phenotype_relationship %||% NA_character_,
-      confidence_label       = v$confidence_label       %||% NA_character_,
-      rationale              = v$confidence_rationale   %||% NA_character_,
-      global_direction       = global_direction,
-      core_drivers           = core_drivers,
-      origin_endogenous_frac = origin_endo,
-      origin_exogenous_frac  = origin_exo,
-      top_kegg_pathways      = kegg_pw,
-      top_hmdb_pathways      = hmdb_pw,
-      pubmed_pmids           = collapse_pubmed_pmids(pubmed_per_hyp),
-      pubmed_evidence_json   = serialize_pubmed_evidence(pubmed_per_hyp),
-      raw_response_call1     = raw_texts$p0      %||% NA_character_,
-      raw_response_call2     = raw_texts$arbiter %||% NA_character_,
-      annotation_mode        = "advanced",
-      n_proposed             = length(hypotheses_v0),
-      n_survived_debate      = length(hypotheses_final),
-      n_accepted             = n_accepted,
-      n_uncertain            = n_uncertain,
-      n_rejected             = n_rejected,
-      residual_ambiguity     = residual_amb,
-      all_hypotheses_json    = all_hyp_json,
-      stringsAsFactors       = FALSE
+      module_id                  = mid,
+      hypothesis_id              = hid,
+      verdict_status             = v$status %||% NA_character_,
+      title                      = hobj$title   %||% NA_character_,
+      functional_summary         = hobj$summary %||% NA_character_,
+      phenotype_relationship     = v$phenotype_relationship %||% NA_character_,
+      confidence_label           = v$confidence_label       %||% NA_character_,
+      rationale                  = v$confidence_rationale   %||% NA_character_,
+      global_direction           = global_direction,
+      core_drivers               = core_drivers,
+      origin_endogenous_frac     = origin_endo,
+      origin_exogenous_frac      = origin_exo,
+      top_kegg_pathways          = kegg_pw,
+      top_hmdb_pathways          = hmdb_pw,
+      # per-hypothesis PubMed (this row only)
+      pubmed_pmids               = collapse_pubmed_pmids(list(hyp_pub)),
+      pubmed_evidence_json       = serialize_pubmed_evidence_one(hyp_pub),
+      # full archive: all hypotheses' PubMed evidence
+      all_pubmed_json            = serialize_pubmed_evidence(pubmed_per_hyp),
+      raw_response_call1         = raw_texts$p0      %||% NA_character_,
+      raw_response_call2         = raw_texts$arbiter %||% NA_character_,
+      annotation_mode            = "advanced",
+      n_proposed                 = length(hypotheses_v0),
+      n_survived_debate          = length(hypotheses_final),
+      n_accepted                 = n_accepted,
+      n_uncertain                = n_uncertain,
+      n_rejected                 = n_rejected,
+      residual_ambiguity         = residual_amb,
+      all_hypotheses_json        = all_hyp_json,
+      stringsAsFactors           = FALSE
     )
   }
 
@@ -1223,35 +1279,36 @@ assemble_advanced_output_row <- function(module_obj,
   if (length(non_rejected) > 0) {
     do.call(rbind, lapply(non_rejected, make_row))
   } else {
-    # All hypotheses rejected → one summary row
+    # All hypotheses rejected → one summary row (no per-hypothesis PubMed)
     data.frame(
-      module_id              = mid,
-      hypothesis_id          = NA_character_,
-      verdict_status         = "rejected",
-      title                  = NA_character_,
-      functional_summary     = NA_character_,
-      phenotype_relationship = NA_character_,
-      confidence_label       = "rejected",
-      rationale              = NA_character_,
-      global_direction       = global_direction,
-      core_drivers           = core_drivers,
-      origin_endogenous_frac = origin_endo,
-      origin_exogenous_frac  = origin_exo,
-      top_kegg_pathways      = kegg_pw,
-      top_hmdb_pathways      = hmdb_pw,
-      pubmed_pmids           = collapse_pubmed_pmids(pubmed_per_hyp),
-      pubmed_evidence_json   = serialize_pubmed_evidence(pubmed_per_hyp),
-      raw_response_call1     = raw_texts$p0      %||% NA_character_,
-      raw_response_call2     = raw_texts$arbiter %||% NA_character_,
-      annotation_mode        = "advanced",
-      n_proposed             = length(hypotheses_v0),
-      n_survived_debate      = length(hypotheses_final),
-      n_accepted             = 0L,
-      n_uncertain            = 0L,
-      n_rejected             = n_rejected,
-      residual_ambiguity     = residual_amb,
-      all_hypotheses_json    = all_hyp_json,
-      stringsAsFactors       = FALSE
+      module_id                  = mid,
+      hypothesis_id              = NA_character_,
+      verdict_status             = "rejected",
+      title                      = NA_character_,
+      functional_summary         = NA_character_,
+      phenotype_relationship     = NA_character_,
+      confidence_label           = "rejected",
+      rationale                  = NA_character_,
+      global_direction           = global_direction,
+      core_drivers               = core_drivers,
+      origin_endogenous_frac     = origin_endo,
+      origin_exogenous_frac      = origin_exo,
+      top_kegg_pathways          = kegg_pw,
+      top_hmdb_pathways          = hmdb_pw,
+      pubmed_pmids               = collapse_pubmed_pmids(pubmed_per_hyp),
+      pubmed_evidence_json       = NA_character_,
+      all_pubmed_json            = serialize_pubmed_evidence(pubmed_per_hyp),
+      raw_response_call1         = raw_texts$p0      %||% NA_character_,
+      raw_response_call2         = raw_texts$arbiter %||% NA_character_,
+      annotation_mode            = "advanced",
+      n_proposed                 = length(hypotheses_v0),
+      n_survived_debate          = length(hypotheses_final),
+      n_accepted                 = 0L,
+      n_uncertain                = 0L,
+      n_rejected                 = n_rejected,
+      residual_ambiguity         = residual_amb,
+      all_hypotheses_json        = all_hyp_json,
+      stringsAsFactors           = FALSE
     )
   }
 }

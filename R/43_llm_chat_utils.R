@@ -6,6 +6,7 @@ chat_openai_silicon_call <- function(
     max_tokens = 2000,
     temperature = 0
 ) {
+  base_url <- sub("/+$", "", base_url)
   url <- paste0(base_url, "/v1/chat/completions")
 
   headers <- httr::add_headers(
@@ -45,6 +46,58 @@ chat_openai_silicon_call <- function(
   }
 
   list(content = content_txt, raw = cont, finish_reason = finish_reason)
+}
+
+siliconflow_base_urls <- function() {
+  explicit <- getOption(
+    "featuremap.siliconflow.base_url",
+    Sys.getenv("SILICONFLOW_BASE_URL", unset = "")
+  )
+  if (is.null(explicit) || length(explicit) == 0) explicit <- ""
+  explicit <- trimws(as.character(explicit[1]))
+  if (nzchar(explicit)) return(sub("/+$", "", explicit))
+
+  region <- getOption(
+    "featuremap.siliconflow.region",
+    Sys.getenv("SILICONFLOW_REGION", unset = "auto")
+  )
+  if (is.null(region) || length(region) == 0) region <- "auto"
+  region <- tolower(trimws(as.character(region[1])))
+
+  if (region %in% c("cn", "china", "domestic", "mainland")) {
+    return("https://api.siliconflow.cn")
+  }
+  if (region %in% c("com", "global", "international", "intl", "overseas", "foreign")) {
+    return("https://api.siliconflow.com")
+  }
+
+  c("https://api.siliconflow.cn", "https://api.siliconflow.com")
+}
+
+chat_siliconflow_call <- function(
+    messages,
+    api_key,
+    model,
+    max_tokens = 2000,
+    temperature = 0
+) {
+  base_urls <- siliconflow_base_urls()
+  for (base_url in base_urls) {
+    message("Trying SiliconFlow endpoint: ", base_url)
+    out <- chat_openai_silicon_call(
+      messages = messages,
+      api_key = api_key,
+      model = model,
+      base_url = base_url,
+      max_tokens = max_tokens,
+      temperature = temperature
+    )
+    if (!is.null(out)) {
+      out$base_url <- base_url
+      return(out)
+    }
+  }
+  NULL
 }
 
 chat_gemini_call <- function(
@@ -149,11 +202,10 @@ chat_api_call <- function(
   provider <- match.arg(provider)
 
   if (provider == "siliconflow") {
-    return(chat_openai_silicon_call(
+    return(chat_siliconflow_call(
       messages = messages,
       api_key = api_key,
       model = model,
-      base_url = "https://api.siliconflow.cn",
       max_tokens = max_tokens,
       temperature = temperature
     ))

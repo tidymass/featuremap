@@ -41,7 +41,11 @@ annotate_one_module_advanced(
 Data frame compatible with fast mode output plus advanced columns.
 Accepted and uncertain hypotheses are returned as separate rows; rejected
 modules return one rejected summary row. PubMed evidence is exported in
-\code{pubmed_pmids} and \code{pubmed_evidence_json}.
+\code{pubmed_pmids} and \code{pubmed_evidence_json}. Debate trace is
+exported in \code{raw_response_p0}, \code{raw_response_s1},
+\code{raw_response_p1}, \code{raw_response_s2},
+\code{raw_response_p2}, \code{raw_response_pubmed_relationship},
+\code{raw_response_arbiter}, and \code{debate_digest}.
 }
 \description{
 Annotate a Single Module Using the Advanced Multi-Agent Debate Pipeline

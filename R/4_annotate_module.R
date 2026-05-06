@@ -19,12 +19,20 @@
 #' @param mode Character. \code{"fast"} (default) runs the two-call pipeline
 #'   with pathway coverage, origin profiling, and directed confidence scoring.
 #'   \code{"advanced"} runs the multi-agent debate pipeline: Proposer generates
-#'   2-3 competing hypotheses, Skeptic challenges them (up to 2 rounds), and an
+#'   1-3 candidate biochemical hypotheses, Skeptic challenges them (up to 2 rounds), and an
 #'   Arbiter delivers final \code{accepted / uncertain / rejected} verdicts with
 #'   confidence scores.
 #' @param proposer_temperature Numeric. Sampling temperature for the Proposer's
 #'   initial hypothesis generation in advanced mode (default 0.3). Skeptic,
 #'   Proposer revision, and Arbiter always run at temperature 0.
+#' @param synthesize Logical. In advanced mode, whether to run the final
+#'   cross-module synthesis agent after module annotation. When \code{TRUE},
+#'   accepted and uncertain hypotheses are integrated into
+#'   \code{res$module_synthesis}. Ignored in fast mode.
+#' @param synthesis_model Character. LLM model used by the synthesis agent.
+#'   Defaults to \code{llm_model}.
+#' @param synthesis_max_tokens Integer. Max response tokens for the synthesis
+#'   agent (default 4000).
 #' @param sleep_sec Numeric. Pause in seconds between modules (default 0).
 #' @param species Character. Species context for LLM confidence scoring.
 #' @param biospecimen Character. Biospecimen type (e.g. plasma, urine, tissue).
@@ -48,10 +56,20 @@
 #'         functional_summary, phenotype_relationship, confidence_label,
 #'         rationale, global_direction, core_drivers, origin fractions,
 #'         top pathway names, and PubMed evidence columns
-#'         \code{pubmed_pmids} and \code{pubmed_evidence_json}.
+#'         \code{pubmed_pmids} and \code{pubmed_evidence_json}. Advanced mode
+#'         also includes debate trace columns \code{raw_response_p0},
+#'         \code{raw_response_s1}, \code{raw_response_p1},
+#'         \code{raw_response_s2}, \code{raw_response_p2},
+#'         \code{raw_response_pubmed_relationship},
+#'         \code{raw_response_arbiter}, and \code{debate_digest}.
 #'   \item \code{module_top_metabolite_pmids}: compact PubMed evidence export
 #'         with \code{module_id}, \code{pubmed_pmids}, and
 #'         \code{pubmed_evidence_json}.
+#'   \item \code{module_synthesis}: optional list created when
+#'         \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
+#'         hypothesis nodes, thematic clusters, sparse and completed
+#'         relationship tables, the final summary, and the raw synthesis
+#'         response.
 #'   \item \code{stage}: updated to \code{"module_annotated"}.
 #' }
 #'
@@ -71,7 +89,7 @@
 #' \strong{Advanced Mode pipeline:}
 #' \enumerate{
 #'   \item Same data preparation as fast mode (steps 1-3).
-#'   \item P0 Proposer: generates 2-3 competing hypotheses from metabolite
+#'   \item P0 Proposer: generates 1-3 candidate biochemical hypotheses from metabolite
 #'         data only (no study context).
 #'   \item S1 Skeptic: challenges each hypothesis on biochemical, origin,
 #'         species, and biospecimen grounds (no phenotype, no PubMed).
@@ -80,8 +98,14 @@
 #'         or major challenges were kept without revision.
 #'   \item Optional PubMed: per-hypothesis title search + shared metabolite
 #'         search, results held for Arbiter only.
-#'   \item A0 Arbiter: final accepted / uncertain / rejected verdicts with
-#'         full study context and PubMed evidence.
+#'   \item Optional PubMed: phenotype relationships are summarized per
+#'         hypothesis before Arbiter.
+#'   \item A0 Arbiter: final accepted / uncertain / rejected verdicts using
+#'         the surviving hypotheses, debate digest, study context, and
+#'         pre-computed phenotype relationship summaries.
+#'   \item Optional synthesis agent: if \code{synthesize = TRUE}, accepted and
+#'         uncertain hypotheses across modules are integrated into thematic
+#'         clusters, a completed relationship table, and an overall summary.
 #' }
 #'
 #' @examples
@@ -117,6 +141,9 @@ annotate_module <- function(res                  = NULL,
                              NCBI_api_key         = "",
                              llm_api_key          = "",
                              proposer_temperature = 0.3,
+                             synthesize           = FALSE,
+                             synthesis_model      = llm_model,
+                             synthesis_max_tokens = 4000L,
                              sleep_sec            = 0) {
 
   mode <- match.arg(mode)
@@ -181,7 +208,8 @@ annotate_module <- function(res                  = NULL,
   has_user_ref_data <- !is.null(ref_data)
 
   # ---- Step 1: Load reference databases ------------------------------------
-  total_steps <- if (pubmed) 4L else 3L
+  run_synthesis <- identical(mode, "advanced") && isTRUE(synthesize)
+  total_steps <- 3L + as.integer(pubmed) + as.integer(run_synthesis)
   cli::cli_alert_info("[1/{total_steps}] Loading functional and pathway references.")
 
   if (is.null(ref_data)) {
@@ -498,6 +526,34 @@ annotate_module <- function(res                  = NULL,
   if ("pubmed_evidence_json" %in% colnames(all_results)) {
     res$module_top_metabolite_pmids <-
       all_results[, c("module_id", "pubmed_pmids", "pubmed_evidence_json"), drop = FALSE]
+  }
+
+  if (isTRUE(synthesize) && !identical(mode, "advanced")) {
+    cli::cli_alert_warning(
+      "synthesize = TRUE is only available for mode = \"advanced\"; skipping synthesis."
+    )
+  }
+
+  if (run_synthesis) {
+    cli::cli_alert_info(
+      "[{total_steps}/{total_steps}] Running cross-module synthesis."
+    )
+    res <- tryCatch(
+      synthesize_modules(
+        res           = res,
+        study_context = study_context,
+        provider      = provider,
+        llm_api_key   = llm_api_key,
+        llm_model     = synthesis_model,
+        max_tokens    = synthesis_max_tokens,
+        temperature   = 0,
+        sleep_sec     = sleep_sec
+      ),
+      error = function(e) {
+        cli::cli_warn("Cross-module synthesis skipped: {e$message}")
+        res
+      }
+    )
   }
 
   elapsed_min <- round(as.numeric(difftime(Sys.time(), start_time, units = "mins")), 2)

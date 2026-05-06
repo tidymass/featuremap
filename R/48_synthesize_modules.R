@@ -93,7 +93,6 @@ into an integrated biological picture.
 You will receive:
 - A list of hypothesis nodes, each with: node_id, module_id, verdict_status,
   title, functional_summary, and phenotype_relationship
-  (nodes from the same module share the same module_id)
 - Study context: species, biospecimen, phenotype
 
 Your output has three parts:
@@ -113,13 +112,7 @@ For each cluster provide:
 ────────────────────────────────────────
 PART 2 — RELATIONSHIPS (cross-module only, sparse)
 ────────────────────────────────────────
-IMPORTANT: Do NOT judge pairs that share the same module_id.
-Same-module pairs are competing hypotheses from the same debate and will be
-labeled automatically by the pipeline — they are outside your scope here.
-
-List ONLY cross-module pairs (different module_id) that have a direct or indirect
-biological relationship. Pairs NOT listed are treated as unrelated by the pipeline —
-do NOT force or invent relationships.
+List node pairs that have a direct or indirect biological relationship.
 
 Relationship taxonomy (use exactly one subtype):
   direct   | shared_pathway      : same or tightly adjacent pathway
@@ -130,7 +123,7 @@ Relationship taxonomy (use exactly one subtype):
 
 For each relationship provide:
 - node_1         : node_id
-- node_2         : node_id  (node_1 < node_2 lexicographically to avoid duplicates)
+- node_2         : node_id
 - relation_class : \"direct\" | \"indirect\"
 - subtype        : one of the five subtypes above
 - rationale      : 1-2 sentences citing specific metabolites, pathways, or phenotype evidence
@@ -148,8 +141,6 @@ RULES:
 - Base all statements on the provided node information only
 - Do NOT invent metabolites, pathways, or literature not present in the inputs
 - Do NOT comment on accepted vs uncertain status in the summary (treat all nodes equally)
-- When two nodes share the same module_id, you may briefly note that they represent
-  competing interpretations of the same module if it helps explain network structure
 
 Return STRICT JSON only:
 {{

@@ -469,6 +469,7 @@ annotate_module <- function(res                  = NULL,
     biospecimen = biospecimen,
     phenotype   = phenotype
   )
+  res$study_context <- study_context
 
   cli::cli_alert_success(
     "Prepared annotation inputs for {.val {length(all_modules_ready)}} significant modules."

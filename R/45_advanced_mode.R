@@ -396,11 +396,19 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
   )
 
   out <- lapply(chs_raw, function(c) {
+    ct <- trimws(tolower(as.character(c$challenge_type %||% "")))
+    sv <- trimws(tolower(as.character(c$severity      %||% "minor")))
+    # Bidirectional normalization: challenge_type and severity must agree on no_challenge.
+    # If either side says "no_challenge", force both sides to "no_challenge".
+    if (identical(ct, "no_challenge") || identical(sv, "no_challenge")) {
+      ct <- "no_challenge"
+      sv <- "no_challenge"
+    }
     list(
       target_hypothesis_id = trimws(as.character(c$target_hypothesis_id %||% "")),
-      challenge_type       = trimws(tolower(as.character(c$challenge_type %||% ""))),
+      challenge_type       = ct,
       challenge            = trimws(as.character(c$challenge             %||% "")),
-      severity             = trimws(tolower(as.character(c$severity      %||% "minor")))
+      severity             = sv
     )
   })
   # "no_challenge" is a valid severity alongside "major" and "minor".
@@ -546,13 +554,19 @@ build_round1_history_for_s2 <- function(hypotheses_v0,
 
   rev_map <- setNames(p1_revisions, sapply(p1_revisions, `[[`, "hypothesis_id"))
 
+  fmt_vec <- function(v) {
+    v <- trimws(v %||% character(0))
+    v <- v[nzchar(v)]
+    if (length(v) == 0) "none" else paste(v, collapse = ", ")
+  }
+
   blocks <- lapply(hypotheses_v0, function(h) {
-    hid   <- h$hypothesis_id
-    anc   <- paste(h$anchor_metabolites %||% character(0), collapse = ", ")
+    hid <- h$hypothesis_id
     lines <- c(
       sprintf('%s — "%s" (P0 original)', hid, h$title),
-      sprintf("  Original summary: %s", h$summary %||% ""),
-      sprintf("  Original anchors: %s", if (nzchar(anc)) anc else "none")
+      sprintf("  Original summary:  %s", h$summary %||% ""),
+      sprintf("  Original anchors:  %s", fmt_vec(h$anchor_metabolites)),
+      sprintf("  Original tensions: %s", fmt_vec(h$tension_metabolites))
     )
 
     # S1 challenges for this hypothesis
@@ -565,18 +579,26 @@ build_round1_history_for_s2 <- function(hypotheses_v0,
       lines <- c(lines, "  S1: (no challenge objects returned for this hypothesis)")
     }
 
-    # P1 decision
+    # P1 decision — include full revised state
     rev <- rev_map[[hid]]
     if (!is.null(rev)) {
       lines <- c(lines, sprintf("  P1 decision (%s): %s",
                                 toupper(rev$action), rev$justification))
       if (identical(rev$action, "modify")) {
         if (nzchar(rev$revised_title %||% ""))
-          lines <- c(lines, sprintf("    → Revised title: \"%s\"", rev$revised_title))
-        # Look up the revised summary from hypotheses_v1
+          lines <- c(lines, sprintf("    → Revised title:    \"%s\"", rev$revised_title))
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
-        if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
-          lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+        if (length(h_v1) > 0) {
+          if (nzchar(h_v1[[1]]$summary %||% ""))
+            lines <- c(lines, sprintf("    → Revised summary:  %s", h_v1[[1]]$summary))
+          rv_anc <- fmt_vec(h_v1[[1]]$anchor_metabolites)
+          rv_ten <- fmt_vec(h_v1[[1]]$tension_metabolites)
+          lines <- c(lines,
+                     sprintf("    → Revised anchors:  %s", rv_anc),
+                     sprintf("    → Revised tensions: %s", rv_ten))
+        }
+      } else if (identical(rev$action, "drop")) {
+        lines <- c(lines, "    → DROPPED in Round 1")
       }
     } else {
       lines <- c(lines, "  P1: (no revision decision recorded)")
@@ -635,6 +657,9 @@ build_round1_history_for_p2 <- function(hypotheses_v0,
         anc_v1 <- paste(h_v1[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
         if (nzchar(anc_v1))
           lines <- c(lines, sprintf("    → Revised anchors: %s", anc_v1))
+        ten_v1 <- paste(h_v1[[1]]$tension_metabolites %||% character(0), collapse = ", ")
+        if (nzchar(ten_v1))
+          lines <- c(lines, sprintf("    → Revised tensions: %s", ten_v1))
       } else if (identical(rev$action, "drop")) {
         lines <- c(lines, "    → DROPPED in Round 1")
       }
@@ -701,10 +726,18 @@ build_debate_history_digest <- function(hypotheses_v0,
       if (r1_rev$action == "modify") {
         if (nzchar(r1_rev$revised_title %||% ""))
           lines <- c(lines, sprintf("    → Revised title: \"%s\"", r1_rev$revised_title))
-        # Retrieve P1-revised summary from hypotheses_v1 if available
+        # Retrieve P1-revised summary/anchors/tensions from hypotheses_v1 if available
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
         if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
           lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+        if (length(h_v1) > 0) {
+          anc_v1 <- paste(h_v1[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
+          if (nzchar(anc_v1))
+            lines <- c(lines, sprintf("    → Revised anchors: %s", anc_v1))
+          ten_v1 <- paste(h_v1[[1]]$tension_metabolites %||% character(0), collapse = ", ")
+          if (nzchar(ten_v1))
+            lines <- c(lines, sprintf("    → Revised tensions: %s", ten_v1))
+        }
       }
     }
 
@@ -732,10 +765,18 @@ build_debate_history_digest <- function(hypotheses_v0,
         if (r2_rev$action == "modify") {
           if (nzchar(r2_rev$revised_title %||% ""))
             lines <- c(lines, sprintf("    → Revised title: \"%s\"", r2_rev$revised_title))
-          # Retrieve P2-revised summary from hypotheses_final if available
+          # Retrieve P2-revised summary/anchors/tensions from hypotheses_final if available
           h_fin <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
           if (length(h_fin) > 0 && nzchar(h_fin[[1]]$summary %||% ""))
             lines <- c(lines, sprintf("    → Revised summary: %s", h_fin[[1]]$summary))
+          if (length(h_fin) > 0) {
+            anc_fin <- paste(h_fin[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
+            if (nzchar(anc_fin))
+              lines <- c(lines, sprintf("    → Revised anchors: %s", anc_fin))
+            ten_fin <- paste(h_fin[[1]]$tension_metabolites %||% character(0), collapse = ", ")
+            if (nzchar(ten_fin))
+              lines <- c(lines, sprintf("    → Revised tensions: %s", ten_fin))
+          }
         }
         if (identical(r2_rev$action, "drop")) {
           lines <- c(lines, "  STATUS: Dropped in Round 2")
@@ -2210,6 +2251,27 @@ annotate_one_module_advanced <- function(module_obj,
   }
 
   # ----------------------------------------------------------------
+  # Generate debate HTML visualization
+  # ----------------------------------------------------------------
+  tryCatch(
+    generate_debate_html(
+      module_id        = mid,
+      module_obj       = module_obj,
+      study_context    = study_context,
+      hypotheses_v0    = hypotheses_v0,
+      s1_challenges    = s1_challenges,
+      p1_revisions     = p1_revisions,
+      hypotheses_v1    = hypotheses_after_r1,
+      s2_challenges    = s2_challenges,
+      p2_revisions     = p2_revisions,
+      hypotheses_final = hypotheses_final,
+      arbiter_result   = arbiter_result,
+      output_dir       = getwd()
+    ),
+    error = function(e) message("[HTML] Skipped (", e$message, ")")
+  )
+
+  # ----------------------------------------------------------------
   # Assemble output row
   # ----------------------------------------------------------------
   assemble_advanced_output_row(
@@ -2226,7 +2288,19 @@ annotate_one_module_advanced <- function(module_obj,
 
 
 # ============================================================
-# SECTION 11 – Loop over all modules
+# SECTION 11 – Debate HTML visualizer (sourced from separate file)
+# ============================================================
+local({
+  this_dir <- tryCatch(
+    dirname(normalizePath(sys.frame(1)$ofile)),
+    error = function(e) getwd()
+  )
+  source(file.path(this_dir, "45_debate_html.R"), local = FALSE)
+})
+
+
+# ============================================================
+# SECTION 12 – Loop over all modules
 # ============================================================
 
 #' Annotate All Modules Using the Advanced Multi-Agent Debate Pipeline

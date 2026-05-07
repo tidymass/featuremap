@@ -42,7 +42,9 @@
 #'
 #' @param module_df  Data frame from \code{res$module_function}.
 #' @return Data frame with columns: node_id, module_id, hypothesis_id,
-#'   verdict_status, title, functional_summary, phenotype_relationship.
+#'   verdict_status, title, functional_summary, phenotype_relationship,
+#'   confidence_label, rationale, core_drivers, pathway summaries, and
+#'   phenotype literature support fields when available.
 prepare_synthesis_nodes <- function(module_df) {
   if (is.null(module_df) || nrow(module_df) == 0)
     stop("module_df is empty — run annotate_module(mode = \"advanced\") first.")
@@ -74,9 +76,19 @@ prepare_synthesis_nodes <- function(module_df) {
   # Deduplicate (guard against accidental duplicates)
   df <- df[!duplicated(df$node_id), , drop = FALSE]
 
+  optional_cols <- c(
+    "confidence_label", "rationale", "core_drivers",
+    "top_kegg_pathways", "top_hmdb_pathways",
+    "phenotype_literature_support", "phenotype_evidence_note"
+  )
+  for (nm in optional_cols) {
+    if (!nm %in% colnames(df)) df[[nm]] <- NA_character_
+  }
+
   df[, c("node_id", "module_id",
          "hypothesis_id", "verdict_status",
-         "title", "functional_summary", "phenotype_relationship")]
+         "title", "functional_summary", "phenotype_relationship",
+         optional_cols)]
 }
 
 
@@ -92,7 +104,8 @@ into an integrated biological picture.
 
 You will receive:
 - A list of hypothesis nodes, each with: node_id, module_id, verdict_status,
-  title, functional_summary, and phenotype_relationship
+  title, functional_summary, phenotype_relationship, confidence/rationale,
+  core driver metabolites, pathway evidence, and phenotype literature support
 - Study context: species, biospecimen, phenotype
 
 Your output has three parts:
@@ -140,6 +153,8 @@ Write a 4-7 sentence narrative integrating the findings. Structure it as:
 RULES:
 - Base all statements on the provided node information only
 - Do NOT invent metabolites, pathways, or literature not present in the inputs
+- Use core drivers and pathway evidence when deciding shared pathways, containment, or cross-talk
+- Use phenotype relationship and literature support when deciding phenotype_convergent relationships
 - Do NOT comment on accepted vs uncertain status in the summary (treat all nodes equally)
 
 Return STRICT JSON only:
@@ -199,15 +214,24 @@ build_synthesis_user_prompt <- function(nodes_df, study_context = NULL) {
       r <- rows[i, ]
       fs <- scalar(r$functional_summary)
       pr <- scalar(r$phenotype_relationship)
+      rat <- scalar(r$rationale)
       # Truncate to keep prompt manageable
       if (nchar(fs) > 500) fs <- paste0(substr(fs, 1, 500), "...")
       if (nchar(pr) > 300) pr <- paste0(substr(pr, 1, 300), "...")
+      if (nchar(rat) > 300) rat <- paste0(substr(rat, 1, 300), "...")
       glue::glue(
         "Node: {r$node_id}
   Module: {r$module_id}  |  Status: {scalar(r$verdict_status)}
   Title: {scalar(r$title)}
+  Confidence: {scalar(r$confidence_label)}
+  Confidence rationale: {rat}
+  Core drivers: {scalar(r$core_drivers)}
+  Top KEGG pathways: {scalar(r$top_kegg_pathways)}
+  Top HMDB pathways: {scalar(r$top_hmdb_pathways)}
   Functional summary: {fs}
-  Phenotype relationship: {pr}"
+  Phenotype relationship: {pr}
+  Phenotype literature support: {scalar(r$phenotype_literature_support)}
+  Phenotype evidence note: {scalar(r$phenotype_evidence_note)}"
       )
     })
   }), recursive = FALSE)
@@ -282,7 +306,7 @@ synth_gemini_schema <- function() {
 # function completes the full N*(N-1)/2 pairwise table by:
 #
 #   1. same_module pairs  → relation_class = "same_module"
-#                           subtype        = "alternative_hypotheses"
+#                           subtype        = "same_module_hypotheses"
 #                           rationale      = (auto-generated note)
 #
 #   2. LLM direct/indirect pairs → kept as-is (cross-module only)
@@ -327,7 +351,7 @@ complete_relationship_table <- function(llm_relationships, nodes_df) {
     m2 <- unname(mid_lookup[n2] %||% NA_character_)
 
     if (!is.na(m1) && !is.na(m2) && identical(m1, m2)) {
-      # Same module — competing hypotheses from the same debate
+      # Same module — hypotheses from the same debate; may be complementary or alternative.
       data.frame(
         node_1         = n1,
         node_2         = n2,
@@ -335,9 +359,9 @@ complete_relationship_table <- function(llm_relationships, nodes_df) {
         module_id_2    = m2,
         same_module    = TRUE,
         relation_class = "same_module",
-        subtype        = "alternative_hypotheses",
+        subtype        = "same_module_hypotheses",
         rationale      = paste0("Both nodes are hypotheses for module ", m1,
-                                " generated in the same debate round."),
+                                " generated in the same module-level debate."),
         stringsAsFactors = FALSE
       )
     } else if (key %in% llm_key) {
@@ -414,24 +438,25 @@ parse_synthesis_output <- function(parsed, nodes_df) {
   relationships_df <- tryCatch({
     rl <- parsed$relationships
     if (is.null(rl) || length(rl) == 0) {
-      return(data.frame(node_1 = character(), node_2 = character(),
-                        relation_class = character(), subtype = character(),
-                        rationale = character(), stringsAsFactors = FALSE))
+      data.frame(node_1 = character(), node_2 = character(),
+                 relation_class = character(), subtype = character(),
+                 rationale = character(), stringsAsFactors = FALSE)
+    } else {
+      do.call(rbind, lapply(rl, function(r) {
+        n1 <- trimws(as.character(r$node_1 %||% ""))
+        n2 <- trimws(as.character(r$node_2 %||% ""))
+        # Enforce lexicographic ordering to avoid duplicate pairs
+        if (n1 > n2) { tmp <- n1; n1 <- n2; n2 <- tmp }
+        data.frame(
+          node_1         = n1,
+          node_2         = n2,
+          relation_class = trimws(tolower(as.character(r$relation_class %||% ""))),
+          subtype        = trimws(as.character(r$subtype        %||% "")),
+          rationale      = trimws(as.character(r$rationale      %||% "")),
+          stringsAsFactors = FALSE
+        )
+      }))
     }
-    do.call(rbind, lapply(rl, function(r) {
-      n1 <- trimws(as.character(r$node_1 %||% ""))
-      n2 <- trimws(as.character(r$node_2 %||% ""))
-      # Enforce lexicographic ordering to avoid duplicate pairs
-      if (n1 > n2) { tmp <- n1; n1 <- n2; n2 <- tmp }
-      data.frame(
-        node_1         = n1,
-        node_2         = n2,
-        relation_class = trimws(tolower(as.character(r$relation_class %||% ""))),
-        subtype        = trimws(as.character(r$subtype        %||% "")),
-        rationale      = trimws(as.character(r$rationale      %||% "")),
-        stringsAsFactors = FALSE
-      )
-    }))
   }, error = function(e) {
     data.frame(node_1 = character(), node_2 = character(),
                relation_class = character(), subtype = character(),

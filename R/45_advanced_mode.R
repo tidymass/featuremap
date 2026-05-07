@@ -343,7 +343,29 @@ apply_revisions <- function(hypotheses, revisions) {
 }
 
 # Parse Proposer output into a clean list of hypothesis objects.
-parse_proposer_output <- function(parsed) {
+adv_top_metabolite_names <- function(module_obj) {
+  top_df <- module_obj$topN_metabolites
+  if (is.null(top_df) || !is.data.frame(top_df) || nrow(top_df) == 0 ||
+      !"Compound_name" %in% colnames(top_df)) {
+    return(character(0))
+  }
+  unique(trimws(as.character(top_df$Compound_name)))
+}
+
+restrict_to_top_metabolites <- function(x, valid_metabolites = NULL) {
+  if (is.null(x)) return(character(0))
+  x <- unique(trimws(as.character(x)))
+  x <- x[nzchar(x)]
+  if (is.null(valid_metabolites) || length(valid_metabolites) == 0) return(x)
+
+  valid_metabolites <- unique(trimws(as.character(valid_metabolites)))
+  valid_metabolites <- valid_metabolites[nzchar(valid_metabolites)]
+  valid_key <- stats::setNames(valid_metabolites, tolower(valid_metabolites))
+  matched <- valid_key[tolower(x)]
+  unique(unname(matched[!is.na(matched)]))
+}
+
+parse_proposer_output <- function(parsed, valid_metabolites = NULL) {
   if (is.null(parsed)) return(NULL)
   hyps_raw <- parsed$hypotheses
   if (is.null(hyps_raw) || length(hyps_raw) == 0) return(NULL)
@@ -359,8 +381,12 @@ parse_proposer_output <- function(parsed) {
       hypothesis_id        = trimws(as.character(h$hypothesis_id %||% "H?")),
       title                = trimws(as.character(h$title         %||% "")),
       summary              = trimws(as.character(h$summary       %||% "")),
-      anchor_metabolites   = ensure_char_vec(h$anchor_metabolites),
-      tension_metabolites  = ensure_char_vec(h$tension_metabolites)
+      anchor_metabolites   = restrict_to_top_metabolites(
+        ensure_char_vec(h$anchor_metabolites), valid_metabolites
+      ),
+      tension_metabolites  = restrict_to_top_metabolites(
+        ensure_char_vec(h$tension_metabolites), valid_metabolites
+      )
     )
   })
   clean_hypotheses(out)
@@ -428,7 +454,9 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
 }
 
 # Parse Proposer revision output into a clean list of revision objects.
-parse_revision_output <- function(parsed, valid_hypothesis_ids = NULL) {
+parse_revision_output <- function(parsed,
+                                  valid_hypothesis_ids = NULL,
+                                  valid_metabolites = NULL) {
   if (is.null(parsed)) return(list())
   revs_raw <- parsed$revisions
   if (is.null(revs_raw) || length(revs_raw) == 0) return(list())
@@ -446,8 +474,12 @@ parse_revision_output <- function(parsed, valid_hypothesis_ids = NULL) {
       justification               = trimws(as.character(r$justification %||% "")),
       revised_title               = trimws(as.character(r$revised_title %||% "")),
       revised_summary             = trimws(as.character(r$revised_summary %||% "")),
-      revised_anchor_metabolites  = ensure_char_vec(r$revised_anchor_metabolites),
-      revised_tension_metabolites = ensure_char_vec(r$revised_tension_metabolites)
+      revised_anchor_metabolites  = restrict_to_top_metabolites(
+        ensure_char_vec(r$revised_anchor_metabolites), valid_metabolites
+      ),
+      revised_tension_metabolites = restrict_to_top_metabolites(
+        ensure_char_vec(r$revised_tension_metabolites), valid_metabolites
+      )
     )
   })
   Filter(function(r) {
@@ -825,7 +857,8 @@ For each hypothesis provide:
 2. title         : KEGG-style pathway/process name (see title rules below)
 3. summary       : 4-6 sentences describing the biochemical mechanism (see summary rules below)
 4. anchor_metabolites  : metabolite names that STRONGLY support this hypothesis
-5. tension_metabolites : metabolite names that are DIFFICULT to explain under this hypothesis
+5. tension_metabolites : optional metabolite names that materially conflict with, or remain
+                         difficult to explain under, this hypothesis
 
 Title rules
    - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.
@@ -850,8 +883,14 @@ Summary rules:
 
 Rules:
 - Every hypothesis must be anchored by at least one high-priority metabolite
+- anchor_metabolites and tension_metabolites MUST be selected only from the provided Top
+  metabolites list. Class-level metabolites, pathway members, or other non-top metabolites
+  may be used only as supporting context in the summary, not as anchors or tensions.
 - anchor_metabolites should be as non-overlapping as the data allow; if two hypotheses rely on
   the same central anchor, they are probably not separate hypotheses
+- tension_metabolites should be empty unless a metabolite creates a real biochemical conflict
+  with the proposed mechanism. Do NOT list peripheral or merely non-central metabolites as
+  tensions simply because they are not part of the main pathway.
 - Do NOT reference study phenotype, disease, or origin (endogenous/exogenous)
 - Do NOT invent metabolites not present in the module data
 - Do NOT invent unsupported pathways or mechanisms
@@ -924,7 +963,8 @@ Challenge types (use exactly one per challenge):
                          or one is a sub-pathway of another. Distinct physiological emphasis,
                          distinct anchors, or distinct unresolved tensions justify separate hypotheses.
                          Use target_hypothesis_id \"H1_H2\" (compound format) when raising this challenge.
-- tension_unresolved    : the hypothesis lists metabolites as tensions but its biochemical mechanism ignores them entirely
+- tension_unresolved    : the hypothesis lists high-priority metabolites as tensions but its
+                           biochemical mechanism ignores them entirely
 - inadequate_revision   : (round 2 only) a Round 1 revision failed to address the original challenge{round2_addon}
 
 Severity rules:
@@ -938,7 +978,9 @@ FORBIDDEN:
 - Do not challenge based on phenotype relevance or disease association
 - Anchor each challenge to specific metabolites, pathway names, or biochemical mechanisms
 
-Return STRICT JSON only. You MUST include one entry per hypothesis even if no challenge exists.
+Return STRICT JSON only. Do NOT force one challenge per hypothesis. If no substantive
+challenge exists for a hypothesis, either omit it from the challenges array or return one
+no_challenge entry for that hypothesis.
 {{
   \"challenges\": [
     {{
@@ -995,6 +1037,12 @@ Rules:
 - modify : revise to address the challenges; provide updated title, summary,
            anchor_metabolites, tension_metabolites; a modification must change either
            the title OR the mechanism text — renaming alone is not valid.
+           Revised anchor_metabolites and revised_tension_metabolites MUST be selected only
+           from the current hypotheses' top-metabolite-derived anchors/tensions or from the
+           module's Top metabolites list. Do NOT promote class-level or other non-top
+           metabolites into anchors or tensions.
+           Remove tension_metabolites when they are merely peripheral rather than genuinely
+           conflicting with the revised mechanism.
 - drop   : hypothesis is fundamentally flawed; provide a clear reason.
 
 You MUST respond to every major-severity challenge explicitly.
@@ -1931,6 +1979,7 @@ annotate_one_module_advanced <- function(module_obj,
   # ----------------------------------------------------------------
   skeptic_evidence <- build_skeptic_module_evidence(module_obj)
   context_block    <- build_context_block(module_obj, study_context)
+  valid_top_metabolites <- adv_top_metabolite_names(module_obj)
 
   # ----------------------------------------------------------------
   # P0 – Proposer: initial hypothesis generation
@@ -1951,7 +2000,10 @@ annotate_one_module_advanced <- function(module_obj,
   )
   raw_texts$p0 <- p0_res$raw_text
 
-  hypotheses_v0 <- parse_proposer_output(p0_res$parsed)
+  hypotheses_v0 <- parse_proposer_output(
+    p0_res$parsed,
+    valid_metabolites = valid_top_metabolites
+  )
 
   if (is.null(hypotheses_v0) || length(hypotheses_v0) == 0) {
     message("[advanced] Module ", mid, ": P0 failed, falling back to fast mode.")
@@ -2025,7 +2077,11 @@ annotate_one_module_advanced <- function(module_obj,
     max_tokens  = max_tokens, temperature = temperature
   )
   raw_texts$p1 <- p1_res$raw_text
-  p1_revisions      <- parse_revision_output(p1_res$parsed, valid_hypothesis_ids = hids_v0)
+  p1_revisions      <- parse_revision_output(
+    p1_res$parsed,
+    valid_hypothesis_ids = hids_v0,
+    valid_metabolites = valid_top_metabolites
+  )
   hypotheses_after_r1 <- apply_revisions(hypotheses_v0, p1_revisions)
 
   # ----------------------------------------------------------------
@@ -2098,7 +2154,11 @@ annotate_one_module_advanced <- function(module_obj,
       max_tokens  = max_tokens, temperature = temperature
     )
     raw_texts$p2 <- p2_res$raw_text
-    p2_revisions     <- parse_revision_output(p2_res$parsed, valid_hypothesis_ids = hids_r1)
+    p2_revisions     <- parse_revision_output(
+      p2_res$parsed,
+      valid_hypothesis_ids = hids_r1,
+      valid_metabolites = valid_top_metabolites
+    )
     hypotheses_final <- apply_revisions(hypotheses_after_r1, p2_revisions)
   }
 

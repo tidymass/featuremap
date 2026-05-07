@@ -396,24 +396,27 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
   )
 
   out <- lapply(chs_raw, function(c) {
-    challenge_type <- trimws(tolower(as.character(c$challenge_type %||% "")))
-    if (identical(challenge_type, "nno_challenge")) challenge_type <- "no_challenge"
     list(
       target_hypothesis_id = trimws(as.character(c$target_hypothesis_id %||% "")),
-      challenge_type       = challenge_type,
-      challenge            = trimws(as.character(c$challenge            %||% "")),
-      severity             = trimws(tolower(as.character(c$severity     %||% "minor")))
+      challenge_type       = trimws(tolower(as.character(c$challenge_type %||% ""))),
+      challenge            = trimws(as.character(c$challenge             %||% "")),
+      severity             = trimws(tolower(as.character(c$severity      %||% "minor")))
     )
   })
-  valid <- Filter(function(ch) {
+  # "no_challenge" is a valid severity alongside "major" and "minor".
+  # no_challenge entries are KEPT in the parsed list so debate history
+  # builders can show S1/S2 explicitly found no issue with a hypothesis.
+  valid_severities <- c("major", "minor", "no_challenge")
+  Filter(function(ch) {
     if (!ch$challenge_type %in% allowed_types) return(FALSE)
-    if (!ch$severity %in% c("major", "minor")) return(FALSE)
-    if (!nzchar(ch$target_hypothesis_id) || !nzchar(ch$challenge)) return(FALSE)
+    if (!ch$severity %in% valid_severities)    return(FALSE)
+    if (!nzchar(ch$target_hypothesis_id))      return(FALSE)
+    # Allow empty challenge text only for no_challenge entries
+    if (!nzchar(ch$challenge) && !identical(ch$severity, "no_challenge")) return(FALSE)
     if (is.null(valid_hypothesis_ids)) return(TRUE)
     parts <- strsplit(ch$target_hypothesis_id, "_", fixed = TRUE)[[1]]
     all(parts %in% valid_hypothesis_ids)
   }, out)
-  Filter(function(ch) !identical(ch$challenge_type, "no_challenge"), valid)
 }
 
 # Parse Proposer revision output into a clean list of revision objects.
@@ -498,10 +501,14 @@ should_run_round2 <- function(surviving, s1_challenges, p1_revisions) {
 
   # For each surviving hypothesis, find its max severity in S1.
   # Uses challenge_targets_hid() to handle compound "H1_H2" redundant targets.
+  # "no_challenge" severity is treated the same as "none" — does not trigger round 2.
   max_sev <- function(hid) {
     relevant <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
-    if (length(relevant) == 0) return("none")
-    if (any(sapply(relevant, function(c) identical(c$severity, "major")))) "major" else "minor"
+    relevant_real <- Filter(
+      function(c) !identical(c$severity, "no_challenge"), relevant
+    )
+    if (length(relevant_real) == 0) return("none")
+    if (any(sapply(relevant_real, function(c) identical(c$severity, "major")))) "major" else "minor"
   }
 
   actions      <- sapply(surviving, function(h) rev_map[[h$hypothesis_id]] %||% "keep")
@@ -522,8 +529,127 @@ should_run_round2 <- function(surviving, s1_challenges, p1_revisions) {
 
 
 # ============================================================
-# SECTION 5 – Debate history formatter
+# SECTION 5 – Debate history formatters
 # ============================================================
+
+# Build the Round 1 history block shown to S2.
+# S2 needs to see:
+#   - The original P0 hypothesis summary
+#   - All S1 challenges (full text, including no_challenge)
+#   - P1's decision and the revised summary (if MODIFY)
+# This prevents S2 from re-raising already-addressed issues and helps it
+# focus on whether P1's revisions introduced new problems.
+build_round1_history_for_s2 <- function(hypotheses_v0,
+                                          s1_challenges,
+                                          p1_revisions,
+                                          hypotheses_v1) {
+
+  rev_map <- setNames(p1_revisions, sapply(p1_revisions, `[[`, "hypothesis_id"))
+
+  blocks <- lapply(hypotheses_v0, function(h) {
+    hid   <- h$hypothesis_id
+    anc   <- paste(h$anchor_metabolites %||% character(0), collapse = ", ")
+    lines <- c(
+      sprintf('%s — "%s" (P0 original)', hid, h$title),
+      sprintf("  Original summary: %s", h$summary %||% ""),
+      sprintf("  Original anchors: %s", if (nzchar(anc)) anc else "none")
+    )
+
+    # S1 challenges for this hypothesis
+    chs <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
+    if (length(chs) > 0) {
+      lines <- c(lines, "  S1 challenges:")
+      for (c in chs)
+        lines <- c(lines, sprintf("    %s", format_challenge_line(c, hid)))
+    } else {
+      lines <- c(lines, "  S1: (no challenge objects returned for this hypothesis)")
+    }
+
+    # P1 decision
+    rev <- rev_map[[hid]]
+    if (!is.null(rev)) {
+      lines <- c(lines, sprintf("  P1 decision (%s): %s",
+                                toupper(rev$action), rev$justification))
+      if (identical(rev$action, "modify")) {
+        if (nzchar(rev$revised_title %||% ""))
+          lines <- c(lines, sprintf("    → Revised title: \"%s\"", rev$revised_title))
+        # Look up the revised summary from hypotheses_v1
+        h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
+        if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
+          lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+      }
+    } else {
+      lines <- c(lines, "  P1: (no revision decision recorded)")
+    }
+
+    paste(lines, collapse = "\n")
+  })
+
+  paste(
+    "--- Round 1 full record (for S2 reference) ---",
+    paste(blocks, collapse = "\n\n"),
+    sep = "\n"
+  )
+}
+
+
+# Build the comprehensive Round 1 context shown to P2.
+# P2 needs to see P0 originals + S1 challenges + P1 decisions so it does not
+# inadvertently revert to the P0 state when revising P1's work.
+build_round1_history_for_p2 <- function(hypotheses_v0,
+                                          s1_challenges,
+                                          p1_revisions,
+                                          hypotheses_v1) {
+
+  rev_map <- setNames(p1_revisions, sapply(p1_revisions, `[[`, "hypothesis_id"))
+
+  blocks <- lapply(hypotheses_v0, function(h) {
+    hid   <- h$hypothesis_id
+    anc   <- paste(h$anchor_metabolites %||% character(0), collapse = ", ")
+    ten   <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
+    lines <- c(
+      sprintf('%s — "%s" (P0 original)', hid, h$title),
+      sprintf("  Original summary: %s", h$summary %||% ""),
+      sprintf("  Original anchors: %s", if (nzchar(anc)) anc else "none"),
+      sprintf("  Original tensions: %s", if (nzchar(ten)) ten else "none")
+    )
+
+    chs <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
+    if (length(chs) > 0) {
+      lines <- c(lines, "  S1 challenges:")
+      for (c in chs)
+        lines <- c(lines, sprintf("    %s", format_challenge_line(c, hid)))
+    } else {
+      lines <- c(lines, "  S1: no challenges")
+    }
+
+    rev <- rev_map[[hid]]
+    if (!is.null(rev)) {
+      lines <- c(lines, sprintf("  P1 (%s): %s", toupper(rev$action), rev$justification))
+      if (identical(rev$action, "modify")) {
+        if (nzchar(rev$revised_title %||% ""))
+          lines <- c(lines, sprintf("    → Revised title: \"%s\"", rev$revised_title))
+        h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
+        if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
+          lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+        anc_v1 <- paste(h_v1[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
+        if (nzchar(anc_v1))
+          lines <- c(lines, sprintf("    → Revised anchors: %s", anc_v1))
+      } else if (identical(rev$action, "drop")) {
+        lines <- c(lines, "    → DROPPED in Round 1")
+      }
+    }
+
+    paste(lines, collapse = "\n")
+  })
+
+  paste(
+    "--- Round 1 full record (P0 originals + S1 challenges + P1 decisions) ---",
+    paste(blocks, collapse = "\n\n"),
+    sep = "\n"
+  )
+}
+
 
 build_debate_history_digest <- function(hypotheses_v0,
                                          s1_challenges,
@@ -551,7 +677,10 @@ build_debate_history_digest <- function(hypotheses_v0,
 
   blocks <- lapply(hypotheses_for_digest, function(h) {
     hid <- h$hypothesis_id
-    lines <- c(sprintf('%s — "%s"', hid, h$title))
+    lines <- c(
+      sprintf('%s — "%s" [P0 original]', hid, h$title),
+      sprintf("  P0 summary: %s", h$summary %||% "")
+    )
 
     # Round 1 challenges for this hypothesis (compound targets included)
     r1_ch <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
@@ -569,8 +698,14 @@ build_debate_history_digest <- function(hypotheses_v0,
       action_label <- toupper(r1_rev$action)
       lines <- c(lines, sprintf("  Round 1 — Proposer (%s): %s",
                                 action_label, r1_rev$justification))
-      if (r1_rev$action == "modify" && nzchar(r1_rev$revised_title))
-        lines <- c(lines, sprintf("    → Revised title: \"%s\"", r1_rev$revised_title))
+      if (r1_rev$action == "modify") {
+        if (nzchar(r1_rev$revised_title %||% ""))
+          lines <- c(lines, sprintf("    → Revised title: \"%s\"", r1_rev$revised_title))
+        # Retrieve P1-revised summary from hypotheses_v1 if available
+        h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
+        if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
+          lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+      }
     }
 
     if (!is.null(r1_rev) && identical(r1_rev$action, "drop")) {
@@ -594,8 +729,14 @@ build_debate_history_digest <- function(hypotheses_v0,
         action_label <- toupper(r2_rev$action)
         lines <- c(lines, sprintf("  Round 2 — Proposer (%s): %s",
                                   action_label, r2_rev$justification))
-        if (r2_rev$action == "modify" && nzchar(r2_rev$revised_title))
-          lines <- c(lines, sprintf("    → Revised title: \"%s\"", r2_rev$revised_title))
+        if (r2_rev$action == "modify") {
+          if (nzchar(r2_rev$revised_title %||% ""))
+            lines <- c(lines, sprintf("    → Revised title: \"%s\"", r2_rev$revised_title))
+          # Retrieve P2-revised summary from hypotheses_final if available
+          h_fin <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
+          if (length(h_fin) > 0 && nzchar(h_fin[[1]]$summary %||% ""))
+            lines <- c(lines, sprintf("    → Revised summary: %s", h_fin[[1]]$summary))
+        }
         if (identical(r2_rev$action, "drop")) {
           lines <- c(lines, "  STATUS: Dropped in Round 2")
           return(paste(lines, collapse = "\n"))
@@ -746,21 +887,24 @@ Challenge types (use exactly one per challenge):
 - inadequate_revision   : (round 2 only) a Round 1 revision failed to address the original challenge{round2_addon}
 
 Severity rules:
-- major : the challenge undermines the core claim; the hypothesis cannot stand without addressing this
-- minor : a notable gap or weakness that should be acknowledged, but does not invalidate the hypothesis
+- major        : the challenge undermines the core mechanism; the hypothesis cannot stand without addressing this
+- minor        : a notable gap or weakness that should be acknowledged, but does not invalidate the hypothesis
+- no_challenge : no material biochemical concern was identified for this hypothesis; use ONLY with
+                 challenge_type \"no_challenge\". This tells the next Proposer and the Arbiter that
+                 you explicitly reviewed this hypothesis and found no issue.
 
 FORBIDDEN:
 - Do not challenge based on phenotype relevance or disease association
 - Anchor each challenge to specific metabolites, pathway names, or biochemical mechanisms
 
-Return STRICT JSON only:
+Return STRICT JSON only. You MUST include one entry per hypothesis even if no challenge exists.
 {{
   \"challenges\": [
     {{
       \"target_hypothesis_id\": \"H1\",
       \"challenge_type\": \"weak_evidence | metabolite_mismatch | pathway_gap | origin_inconsistency | species_biospecimen | redundant | tension_unresolved | inadequate_revision | no_challenge\",
-      \"challenge\": \"2-3 sentences with specific evidence...\",
-      \"severity\": \"major | minor\"
+      \"challenge\": \"2-3 sentences with specific evidence, or 'No material biochemical concern identified.' for no_challenge\",
+      \"severity\": \"major | minor | no_challenge\"
     }}
   ]
 }}"
@@ -859,8 +1003,10 @@ build_proposer_revision_user_prompt <- function(hypotheses,
   ch_blocks <- lapply(hypotheses, function(h) {
     hid  <- h$hypothesis_id
     chs  <- Filter(function(c) challenge_targets_hid(c, hid), challenges)
-    if (length(chs) == 0) return(sprintf("  %s: no challenges", hid))
-    ch_lines <- sapply(chs, function(c) format_challenge_line(c, hid))
+    # Strip no_challenge entries — Proposer need not respond to "no issues found"
+    real_chs <- Filter(function(c) !identical(c$severity, "no_challenge"), chs)
+    if (length(real_chs) == 0) return(sprintf("  %s: no challenges requiring response", hid))
+    ch_lines <- sapply(real_chs, function(c) format_challenge_line(c, hid))
     paste(c(sprintf("  Challenges for %s:", hid), ch_lines), collapse = "\n")
   })
   ch_text <- paste(ch_blocks, collapse = "\n\n")
@@ -894,10 +1040,24 @@ and to assess phenotypic relevance and confidence for surviving hypotheses.
 
 You will receive:
 - Module evidence (top metabolites, class structure, pathway coverage) — raw biochemical grounding
-- Final surviving hypotheses (or all original hypotheses if all were dropped during debate)
-- A debate history digest showing how each hypothesis evolved through challenges and revisions
+- Final surviving hypotheses in full (or all original hypotheses if all were dropped)
+- A complete debate history digest that includes for each hypothesis:
+    • P0 original title and full biochemical summary
+    • All Skeptic challenges with severity and full challenge text (including no_challenge entries
+      which indicate the Skeptic explicitly found no issue)
+    • Proposer revision decisions with justifications, revised titles, and revised summaries
+    • Round 2 challenges and revisions (if the second round was triggered)
+    • Final survival status
 - Origin profile, species, biospecimen, and phenotype (full study context)
 - Pre-computed phenotype relationship summaries based on PubMed evidence
+
+Your role is to make a final verdict on the CURRENT (final) state of each hypothesis, informed
+by the complete debate record. Specifically:
+- Assess whether the Skeptic's challenges were biochemically valid
+- Assess whether the Proposer's revisions adequately addressed the challenges
+- Use the debate trajectory to calibrate confidence (well-contested and well-defended = higher confidence;
+  major challenges that were only superficially addressed = lower confidence or uncertain)
+
 Note: global_direction is intentionally excluded — module-level direction is too complex to use
 as a mechanistic constraint.
 
@@ -1372,7 +1532,7 @@ adv_gemini_schema_skeptic <- function() {
             challenge_type       = list(type = "STRING"),
             challenge            = list(type = "STRING"),
             severity             = list(type = "STRING",
-                                        enum = c("major", "minor"))
+                                        enum = c("major", "minor", "no_challenge"))
           ),
           required = c("target_hypothesis_id", "challenge_type",
                        "challenge", "severity")
@@ -1835,15 +1995,20 @@ annotate_one_module_advanced <- function(module_obj,
   if (do_r2) {
     hids_r1 <- vapply(hypotheses_after_r1, `[[`, character(1), "hypothesis_id")
 
-    # Build compact history for round 2 prompts
-    p1_revisions_for_r2 <- Filter(
-      function(r) r$hypothesis_id %in% hids_r1,
-      p1_revisions
+    # Build comprehensive Round 1 histories for S2 and P2.
+    # S2 sees: P0 originals + S1 full challenges + P1 decisions (including revised summaries).
+    # P2 sees: same as S2 plus all P0 anchor/tension details to prevent reverting.
+    r1_history_for_s2 <- build_round1_history_for_s2(
+      hypotheses_v0  = hypotheses_v0,
+      s1_challenges  = s1_challenges,
+      p1_revisions   = p1_revisions,
+      hypotheses_v1  = hypotheses_after_r1
     )
-    r1_history_text <- paste(
-      sapply(p1_revisions_for_r2, function(r)
-        sprintf("%s: %s — %s", r$hypothesis_id, toupper(r$action), r$justification)),
-      collapse = "\n"
+    r1_history_for_p2 <- build_round1_history_for_p2(
+      hypotheses_v0  = hypotheses_v0,
+      s1_challenges  = s1_challenges,
+      p1_revisions   = p1_revisions,
+      hypotheses_v1  = hypotheses_after_r1
     )
 
     # S2 – Skeptic round 2
@@ -1852,7 +2017,7 @@ annotate_one_module_advanced <- function(module_obj,
     s2_sys <- build_skeptic_system_prompt(round = 2L)
     s2_usr <- build_skeptic_user_prompt(
       skeptic_evidence, context_block,
-      hypotheses_after_r1, history_text = r1_history_text
+      hypotheses_after_r1, history_text = r1_history_for_s2
     )
 
     s2_res <- adv_request_json(
@@ -1875,7 +2040,7 @@ annotate_one_module_advanced <- function(module_obj,
       hypotheses_after_r1, s2_challenges,
       module_evidence = skeptic_evidence,
       context_block   = context_block,
-      history_text    = r1_history_text
+      history_text    = r1_history_for_p2
     )
 
     p2_res <- adv_request_json(

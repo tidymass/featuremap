@@ -33,6 +33,10 @@
 #'   Defaults to \code{llm_model}.
 #' @param synthesis_max_tokens Integer. Max response tokens for the synthesis
 #'   agent (default 4000).
+#' @param debate_html Logical. In advanced mode, whether to export one
+#'   chat-style HTML debate trace per annotated module (default \code{FALSE}).
+#' @param debate_html_dir Character. Directory where debate HTML files are
+#'   written when \code{debate_html = TRUE}. Defaults to \code{getwd()}.
 #' @param sleep_sec Numeric. Pause in seconds between modules (default 0).
 #' @param species Character. Species context for LLM confidence scoring.
 #' @param biospecimen Character. Biospecimen type (e.g. plasma, urine, tissue).
@@ -144,6 +148,8 @@ annotate_module <- function(res                  = NULL,
                              synthesize           = FALSE,
                              synthesis_model      = llm_model,
                              synthesis_max_tokens = 4000L,
+                             debate_html          = FALSE,
+                             debate_html_dir      = getwd(),
                              sleep_sec            = 0) {
 
   mode <- match.arg(mode)
@@ -505,7 +511,9 @@ annotate_module <- function(res                  = NULL,
       sleep_sec            = sleep_sec,
       pubmed               = pubmed,
       NCBI_api_key         = NCBI_api_key,
-      years                = years
+      years                = years,
+      debate_html          = debate_html,
+      debate_html_dir      = debate_html_dir
     )
   } else {
     annotate_all_modules(

@@ -118,7 +118,7 @@
 }
 
 #' Render one Arbiter verdict card
-.verdict_card <- function(v, hypotheses_final) {
+.verdict_card <- function(v, hypotheses_lookup) {
   hid    <- v$hypothesis_id    %||% ""
   status <- v$status           %||% "rejected"
   conf   <- v$confidence_label %||% ""
@@ -127,7 +127,7 @@
                    accepted  = "st-accepted",
                    uncertain = "st-uncertain",
                    "st-rejected")
-  h_fin  <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
+  h_fin  <- Filter(function(x) x$hypothesis_id == hid, hypotheses_lookup %||% list())
   final_summary <- if (length(h_fin) > 0) .trunc(h_fin[[1]]$summary %||% "", 240) else ""
   sprintf(
     '<div class="verdict-card %s">
@@ -147,6 +147,31 @@
       sprintf('<div class="verdict-summary">%s</div>', .he(final_summary))
     else "",
     .he(rat)
+  )
+}
+
+#' Count revision actions safely for empty revision lists
+.count_action <- function(revisions, action) {
+  if (is.null(revisions) || length(revisions) == 0) return(0L)
+  sum(vapply(revisions, function(r) identical(r$action, action), logical(1)))
+}
+
+#' Render PubMed phenotype relationship summaries
+.pubmed_item <- function(hid, rel) {
+  support <- rel$literature_support %||% "insufficient"
+  relationship <- .trunc(rel$phenotype_relationship %||% "", 360)
+  note <- .trunc(rel$evidence_note %||% "", 220)
+  sprintf(
+    '<div class="pubmed-item">
+      <div><strong>%s</strong> <span class="lit-badge lit-%s">%s</span></div>
+      <div class="pubmed-rel">%s</div>
+      %s
+    </div>',
+    .he(hid),
+    .he(support),
+    .he(toupper(support)),
+    .he(relationship),
+    if (nzchar(note)) sprintf('<div class="pubmed-note">%s</div>', .he(note)) else ""
   )
 }
 
@@ -251,6 +276,15 @@ p { font-size:.9rem; margin-bottom:10px; }
 .conf-low    { background:#f3e5f5; color:#6a1b9a; }
 .verdict-summary { font-size:.83rem; color:#444; margin-bottom:8px; font-style:italic; }
 .verdict-rat     { font-size:.82rem; color:#555; }
+.pubmed-item { background:#f1f8f4; border-left:3px solid #43a047;
+               border-radius:8px; padding:10px 12px; margin-top:8px; font-size:.85rem; }
+.pubmed-rel { color:#444; margin-top:6px; }
+.pubmed-note { color:#666; margin-top:6px; font-size:.8rem; font-style:italic; }
+.lit-badge { display:inline-block; font-size:.68rem; font-weight:700;
+             padding:2px 7px; border-radius:20px; margin-left:6px; }
+.lit-direct { background:#2e7d32; color:#fff; }
+.lit-indirect { background:#81c784; color:#1b5e20; }
+.lit-insufficient { background:#c8e6c9; color:#33691e; }
 .ambiguity-note  { margin-top:14px; background:#fffde7; border-left:3px solid #f9a825;
                    padding:10px 14px; border-radius:6px; font-size:.85rem; }
 .round-divider { text-align:center; font-size:.75rem; color:#aaa;
@@ -286,8 +320,10 @@ p { font-size:.9rem; margin-bottom:10px; }
 #' @param p2_revisions    P2 revision decisions, or NULL
 #' @param hypotheses_final Final hypotheses after all revisions
 #' @param arbiter_result  List with $verdicts and $residual_ambiguity
+#' @param phenotype_relationships Named list of PubMed phenotype summaries
 #' @param output_dir      Directory for the output file (default: getwd())
 #' @return Invisibly, the path of the written HTML file
+#' @export
 generate_debate_html <- function(module_id,
                                   module_obj,
                                   study_context,
@@ -300,6 +336,7 @@ generate_debate_html <- function(module_id,
                                   hypotheses_final = list(),
                                   arbiter_result   = list(verdicts = list(),
                                                           residual_ambiguity = NA),
+                                  phenotype_relationships = NULL,
                                   output_dir       = getwd()) {
 
   # ── Study context ────────────────────────────────────────────
@@ -361,8 +398,8 @@ generate_debate_html <- function(module_id,
   # ── 4. P1 Proposer revision ──────────────────────────────────
   p1_items    <- paste(sapply(p1_revisions, .rev_item, hypotheses_after = hypotheses_v1),
                        collapse = "\n")
-  dropped_r1  <- sum(sapply(p1_revisions, function(r) identical(r$action, "drop")))
-  modified_r1 <- sum(sapply(p1_revisions, function(r) identical(r$action, "modify")))
+  dropped_r1  <- .count_action(p1_revisions, "drop")
+  modified_r1 <- .count_action(p1_revisions, "modify")
   p1_content  <- sprintf(
     '<div class="msg-role">✏️ P1 Proposer — Round 1 Revision</div>
     <p>Addressing S1: <strong>%d modified</strong>, <strong>%d dropped</strong>, %d kept.</p>
@@ -396,8 +433,8 @@ generate_debate_html <- function(module_id,
   if (!is.null(p2_revisions) && length(p2_revisions) > 0) {
     p2_items    <- paste(sapply(p2_revisions, .rev_item, hypotheses_after = hypotheses_final),
                          collapse = "\n")
-    dropped_r2  <- sum(sapply(p2_revisions, function(r) identical(r$action, "drop")))
-    modified_r2 <- sum(sapply(p2_revisions, function(r) identical(r$action, "modify")))
+    dropped_r2  <- .count_action(p2_revisions, "drop")
+    modified_r2 <- .count_action(p2_revisions, "modify")
     p2_content  <- sprintf(
       '<div class="msg-role">✏️ P2 Proposer — Round 2 Revision</div>
       <p>Addressing S2: <strong>%d modified</strong>, <strong>%d dropped</strong>, %d kept.</p>
@@ -410,13 +447,39 @@ generate_debate_html <- function(module_id,
                       .bubble("right", "✏️", "P2 Proposer", p2_content))
   }
 
-  # ── 7. A0 Arbiter ────────────────────────────────────────────
+  # ── 7. PubMed relationship summaries ─────────────────────────
+  if (!is.null(phenotype_relationships) && length(phenotype_relationships) > 0) {
+    pm_items <- paste(
+      vapply(names(phenotype_relationships), function(hid) {
+        .pubmed_item(hid, phenotype_relationships[[hid]])
+      }, character(1)),
+      collapse = "\n"
+    )
+    pm_content <- sprintf(
+      '<div class="msg-role">📚 PubMed Relationship Summary</div>
+      <p>Phenotype relationship evidence summarized before final arbitration:</p>
+      %s',
+      pm_items
+    )
+    bubbles <- paste0(bubbles, "\n",
+                      .bubble("left", "📚", "PubMed Summary", pm_content))
+  }
+
+  # ── 8. A0 Arbiter ────────────────────────────────────────────
   verdicts     <- arbiter_result$verdicts %||% list()
   n_acc        <- sum(sapply(verdicts, function(v) identical(v$status, "accepted")))
   n_unc        <- sum(sapply(verdicts, function(v) identical(v$status, "uncertain")))
   n_rej        <- sum(sapply(verdicts, function(v) identical(v$status, "rejected")))
+  hypotheses_lookup <- c(
+    hypotheses_final %||% list(),
+    hypotheses_v0 %||% list()
+  )
+  if (length(hypotheses_lookup) > 0) {
+    hypothesis_ids <- vapply(hypotheses_lookup, function(h) h$hypothesis_id %||% "", character(1))
+    hypotheses_lookup <- hypotheses_lookup[!duplicated(hypothesis_ids)]
+  }
   verdict_cards <- paste(sapply(verdicts, .verdict_card,
-                                hypotheses_final = hypotheses_final),
+                                hypotheses_lookup = hypotheses_lookup),
                          collapse = "\n")
   amb      <- arbiter_result$residual_ambiguity %||% NA
   amb_html <- if (!is.na(amb) && nzchar(trimws(amb)))
@@ -463,6 +526,7 @@ generate_debate_html <- function(module_id,
   )
 
   # ── Write file ───────────────────────────────────────────────
+  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   fname    <- gsub("[^A-Za-z0-9._-]", "_", module_id)
   out_path <- file.path(output_dir, sprintf("debate_%s.html", fname))
   writeLines(html, out_path, useBytes = FALSE)

@@ -176,13 +176,13 @@
   sprintf(
     '<div class="rev-item">
       <div class="rev-header">
-        <span class="act-pill %s">%s</span>
         <span class="rev-hid">%s</span>
+        <span class="act-pill %s">%s</span>
       </div>
       <div class="rev-just">%s</div>
       %s
     </div>',
-    act_cls, action, .he(hid), .he(just), detail
+    .he(hid), act_cls, action, .he(just), detail
   )
 }
 
@@ -255,32 +255,17 @@
   note <- .s(rel$evidence_note, "")
 
   pmids <- as.character(evidence$pmids %||% character(0))
-  titles <- as.character(evidence$titles %||% character(0))
-  source_type <- as.character(evidence$source_type %||% rep("", length(pmids)))
-  source_term <- as.character(evidence$source_term %||% rep("", length(pmids)))
-  n <- min(length(pmids), length(titles))
-  get_i <- function(x, i) if (length(x) >= i) x[[i]] else ""
+  pmids <- unique(trimws(pmids))
+  pmids <- pmids[nzchar(pmids) & !is.na(pmids) & toupper(pmids) != "NA"]
 
-  paper_html <- ""
-  if (n > 0L) {
-    paper_html <- paste(vapply(seq_len(n), function(i) {
-      src_parts <- c(get_i(source_type, i), get_i(source_term, i))
-      src_parts <- src_parts[nzchar(trimws(src_parts))]
-      src <- paste(src_parts, collapse = ": ")
-      src <- .s(src, "")
-      sprintf(
-        '<div class="pm-paper">
-          <span class="pm-pmid">PMID:%s</span>
-          <span class="pm-title">%s</span>
-          %s
-        </div>',
-        .he(.s(pmids[[i]])),
-        .he(.s(titles[[i]])),
-        if (.is_nonempty(src)) sprintf('<span class="pm-source">%s</span>', .he(src)) else ""
-      )
-    }, character(1L)), collapse = "\n")
+  pmid_html <- ""
+  if (length(pmids) > 0L) {
+    pmid_html <- paste(
+      sprintf('<span class="pmid-chip">PMID:%s</span>', .he(pmids)),
+      collapse = ""
+    )
   } else {
-    paper_html <- '<div class="pm-empty">No PubMed records were retrieved for this hypothesis.</div>'
+    pmid_html <- '<span class="pm-empty">No PubMed records retrieved.</span>'
   }
 
   sprintf(
@@ -291,7 +276,7 @@
       </div>
       %s
       %s
-      <div class="pm-list">%s</div>
+      <div class="pmid-chips">%s</div>
     </div>',
     .he(.s(hid)),
     .he(support),
@@ -302,7 +287,7 @@
     if (.is_nonempty(note))
       sprintf('<div class="pm-note"><strong>Evidence note:</strong> %s</div>', .he(note))
     else "",
-    paper_html
+    pmid_html
   )
 }
 
@@ -516,12 +501,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .lit-indirect{background:#b7dfc0;color:#174d27}
 .lit-insufficient{background:#e5e7eb;color:#4b5563}
 .pm-relationship,.pm-note{font-size:.82rem;color:#4b5563;line-height:1.6;margin-top:5px}
-.pm-list{margin-top:9px;display:flex;flex-direction:column;gap:6px}
-.pm-paper{font-size:.78rem;color:#4b5563;background:#f8f9fb;
-          border:1px solid #e4e7ed;border-radius:6px;padding:7px 9px}
-.pm-pmid{font-weight:700;color:#1f5f31;margin-right:6px}
-.pm-title{color:#374151}
-.pm-source{display:block;margin-top:3px;color:#8b909e;font-size:.72rem}
+.pmid-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.pmid-chip{display:inline-block;font-size:.74rem;padding:2px 8px;
+           background:#e9f6ed;color:#1f5f31;border-radius:4px;
+           border:1px solid #b7dfc0}
 .pm-empty{font-size:.8rem;color:#8b909e;font-style:italic}
 
 /* round divider */

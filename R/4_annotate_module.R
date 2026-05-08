@@ -33,6 +33,12 @@
 #'   Defaults to \code{llm_model}.
 #' @param synthesis_max_tokens Integer. Max response tokens for the synthesis
 #'   agent (default 4000).
+#' @param synthesis_html Logical. In advanced mode with \code{synthesize = TRUE},
+#'   whether to export an interactive hypothesis-level synthesis network HTML.
+#' @param synthesis_html_dir Character. Directory where the synthesis network
+#'   HTML is written when \code{synthesis_html = TRUE}. Defaults to \code{getwd()}.
+#' @param synthesis_html_file Character. Output file name for the synthesis
+#'   network HTML.
 #' @param debate_html Logical. In advanced mode, whether to export one
 #'   chat-style HTML debate trace per annotated module (default \code{FALSE}).
 #' @param debate_html_dir Character. Directory where debate HTML files are
@@ -148,6 +154,9 @@ annotate_module <- function(res                  = NULL,
                              synthesize           = FALSE,
                              synthesis_model      = llm_model,
                              synthesis_max_tokens = 4000L,
+                             synthesis_html       = FALSE,
+                             synthesis_html_dir   = getwd(),
+                             synthesis_html_file  = "synthesis_network.html",
                              debate_html          = FALSE,
                              debate_html_dir      = getwd(),
                              sleep_sec            = 0) {
@@ -568,6 +577,17 @@ annotate_module <- function(res                  = NULL,
         res
       }
     )
+    if (isTRUE(synthesis_html) && !is.null(res$module_synthesis)) {
+      tryCatch(
+        export_synthesis_network_html(
+          res = res,
+          output_dir = synthesis_html_dir,
+          output_file = synthesis_html_file,
+          show_same_module = FALSE
+        ),
+        error = function(e) cli::cli_warn("Synthesis network HTML skipped: {e$message}")
+      )
+    }
   }
 
   elapsed_min <- round(as.numeric(difftime(Sys.time(), start_time, units = "mins")), 2)

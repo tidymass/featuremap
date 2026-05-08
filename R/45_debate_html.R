@@ -27,10 +27,11 @@
   trimws(x[1L])
 }
 
-#' Truncate long string, appending ellipsis
+#' Truncate long string(s), appending ellipsis.  Vectorised — safe for
+#' character vectors (e.g. when called from .met_chips() with multiple names).
 .trunc <- function(s, n) {
   s <- as.character(s %||% "")
-  if (nchar(s) > n) paste0(substr(s, 1, n - 1), "…") else s
+  ifelse(nchar(s) > n, paste0(substr(s, 1L, n - 1L), "…"), s)
 }
 
 #' Render metabolite chips — up to max_show visible, remainder as "+N more"
@@ -490,10 +491,11 @@ generate_debate_html <- function(module_id,
       "Compound_name" %in% colnames(module_obj$topN_metabolites))
     top_names <- unique(as.character(module_obj$topN_metabolites$Compound_name))
 
-  phenotype   <- study_context$phenotype   %||% "—"
-  species     <- study_context$species     %||% "—"
-  biospecimen <- study_context$biospecimen %||% "—"
-  n_total     <- if (!is.null(module_obj$topN_metabolites))
+  phenotype   <- .s(study_context$phenotype,   "—")
+  species     <- .s(study_context$species,     "—")
+  biospecimen <- .s(study_context$biospecimen, "—")
+  n_total     <- if (!is.null(module_obj$topN_metabolites) &&
+                      is.data.frame(module_obj$topN_metabolites))
                    nrow(module_obj$topN_metabolites) else length(top_names)
 
   # ── 1. Query bubble ─────────────────────────────────────────

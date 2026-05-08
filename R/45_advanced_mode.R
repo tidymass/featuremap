@@ -108,6 +108,13 @@ adv_validate_required_keys <- function(x, required_keys) {
   if (all(ok)) x else NULL
 }
 
+adv_scalar <- function(x, default = "") {
+  x <- x %||% default
+  x <- as.character(x)
+  if (length(x) == 0L) return(as.character(default)[1L])
+  trimws(x[1L])
+}
+
 # Single LLM call with 2-attempt retry.
 # Returns list(parsed = <named list or NULL>, raw_text = <character>)
 adv_request_json <- function(messages,
@@ -2276,12 +2283,12 @@ annotate_one_module_advanced <- function(module_obj,
     if (!is.null(parsed_verdicts) && length(parsed_verdicts) > 0) {
       arbiter_result$verdicts <- lapply(parsed_verdicts, function(v) {
         list(
-          hypothesis_id          = trimws(as.character(v$hypothesis_id %||% "")),
-          status                 = trimws(tolower(as.character(v$status %||% "rejected"))),
-          verdict_rationale      = trimws(as.character(v$verdict_rationale %||% "")),
+          hypothesis_id          = adv_scalar(v$hypothesis_id, ""),
+          status                 = tolower(adv_scalar(v$status, "rejected")),
+          verdict_rationale      = adv_scalar(v$verdict_rationale, ""),
           phenotype_relationship = NA_character_,
-          confidence_label       = trimws(tolower(as.character(v$confidence_label %||% ""))),
-          confidence_rationale   = trimws(as.character(v$confidence_rationale %||% ""))
+          confidence_label       = tolower(adv_scalar(v$confidence_label, "")),
+          confidence_rationale   = adv_scalar(v$confidence_rationale, "")
         )
       })
     }
@@ -2293,9 +2300,9 @@ annotate_one_module_advanced <- function(module_obj,
       function(v) v$hypothesis_id %in% arbiter_scope_ids,
       arbiter_result$verdicts
     )
-    rab <- a0_res$parsed$residual_ambiguity
-    if (!is.null(rab) && !is.na(rab) && nzchar(trimws(as.character(rab))))
-      arbiter_result$residual_ambiguity <- trimws(as.character(rab))
+    rab <- adv_scalar(a0_res$parsed$residual_ambiguity, "")
+    if (nzchar(rab) && !identical(toupper(rab), "NA"))
+      arbiter_result$residual_ambiguity <- rab
   }
 
   # If Arbiter failed or returned empty verdicts, build minimal rejected output

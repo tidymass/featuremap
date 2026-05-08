@@ -248,6 +248,64 @@
   )
 }
 
+#' Render one PubMed phenotype-evidence card
+.pubmed_card <- function(hid, rel = NULL, evidence = NULL) {
+  support <- .s(rel$literature_support, "insufficient")
+  relationship <- .s(rel$phenotype_relationship, "")
+  note <- .s(rel$evidence_note, "")
+
+  pmids <- as.character(evidence$pmids %||% character(0))
+  titles <- as.character(evidence$titles %||% character(0))
+  source_type <- as.character(evidence$source_type %||% rep("", length(pmids)))
+  source_term <- as.character(evidence$source_term %||% rep("", length(pmids)))
+  n <- min(length(pmids), length(titles))
+  get_i <- function(x, i) if (length(x) >= i) x[[i]] else ""
+
+  paper_html <- ""
+  if (n > 0L) {
+    paper_html <- paste(vapply(seq_len(n), function(i) {
+      src_parts <- c(get_i(source_type, i), get_i(source_term, i))
+      src_parts <- src_parts[nzchar(trimws(src_parts))]
+      src <- paste(src_parts, collapse = ": ")
+      src <- .s(src, "")
+      sprintf(
+        '<div class="pm-paper">
+          <span class="pm-pmid">PMID:%s</span>
+          <span class="pm-title">%s</span>
+          %s
+        </div>',
+        .he(.s(pmids[[i]])),
+        .he(.s(titles[[i]])),
+        if (.is_nonempty(src)) sprintf('<span class="pm-source">%s</span>', .he(src)) else ""
+      )
+    }, character(1L)), collapse = "\n")
+  } else {
+    paper_html <- '<div class="pm-empty">No PubMed records were retrieved for this hypothesis.</div>'
+  }
+
+  sprintf(
+    '<div class="pubmed-card">
+      <div class="pubmed-hdr">
+        <span class="pubmed-hid">%s</span>
+        <span class="lit-pill lit-%s">%s literature support</span>
+      </div>
+      %s
+      %s
+      <div class="pm-list">%s</div>
+    </div>',
+    .he(.s(hid)),
+    .he(support),
+    .he(support),
+    if (.is_nonempty(relationship))
+      sprintf('<div class="pm-relationship"><strong>Phenotype relationship:</strong> %s</div>', .he(relationship))
+    else "",
+    if (.is_nonempty(note))
+      sprintf('<div class="pm-note"><strong>Evidence note:</strong> %s</div>', .he(note))
+    else "",
+    paper_html
+  )
+}
+
 #' Count revision actions (safe for NULL/empty)
 .count_action <- function(revs, action) {
   if (is.null(revs) || length(revs) == 0L) return(0L)
@@ -444,6 +502,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
                 font-size:.82rem;color:#4b5563}
 .ambiguity-note strong{color:#1c1f26}
 
+/* PubMed evidence */
+.pubmed .bub{background:#f8fcf9;border-color:#cfe8d6;border-left:3px solid #2e7d32}
+.pubmed .role-label{color:#2e7d32}
+.pubmed-card{background:#fff;border:1px solid #dceee1;border-radius:8px;
+             padding:11px 13px;margin-top:9px}
+.pubmed-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.pubmed-hid{font-size:.78rem;font-weight:700;color:#285c37;
+            background:#e9f6ed;padding:2px 8px;border-radius:3px}
+.lit-pill{font-size:.65rem;font-weight:700;letter-spacing:.04em;
+          padding:2px 8px;border-radius:3px;text-transform:uppercase}
+.lit-direct{background:#1a7a35;color:#fff}
+.lit-indirect{background:#b7dfc0;color:#174d27}
+.lit-insufficient{background:#e5e7eb;color:#4b5563}
+.pm-relationship,.pm-note{font-size:.82rem;color:#4b5563;line-height:1.6;margin-top:5px}
+.pm-list{margin-top:9px;display:flex;flex-direction:column;gap:6px}
+.pm-paper{font-size:.78rem;color:#4b5563;background:#f8f9fb;
+          border:1px solid #e4e7ed;border-radius:6px;padding:7px 9px}
+.pm-pmid{font-weight:700;color:#1f5f31;margin-right:6px}
+.pm-title{color:#374151}
+.pm-source{display:block;margin-top:3px;color:#8b909e;font-size:.72rem}
+.pm-empty{font-size:.8rem;color:#8b909e;font-style:italic}
+
 /* round divider */
 .round-divider{display:flex;align-items:center;gap:10px;
                font-size:.65rem;font-weight:600;letter-spacing:.1em;
@@ -472,7 +552,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 #' @param p2_revisions    P2 revision decisions, or NULL
 #' @param hypotheses_final Final hypotheses after all revisions
 #' @param arbiter_result  List with $verdicts and $residual_ambiguity
-#' @param phenotype_relationships Named list of PubMed phenotype summaries (unused in HTML)
+#' @param phenotype_relationships Named list of PubMed phenotype summaries
+#' @param pubmed_per_hyp Named list of retrieved PubMed records per hypothesis
 #' @param output_dir      Directory for the output file (default: getwd())
 #' @return Invisibly, the path of the written HTML file
 generate_debate_html <- function(module_id,
@@ -488,6 +569,7 @@ generate_debate_html <- function(module_id,
                                   arbiter_result         = list(verdicts = list(),
                                                                 residual_ambiguity = NA),
                                   phenotype_relationships = NULL,
+                                  pubmed_per_hyp         = NULL,
                                   output_dir             = getwd()) {
 
   # ── Extract module metadata ─────────────────────────────────
@@ -628,7 +710,31 @@ generate_debate_html <- function(module_id,
                       .bubble("right", "✏️", "Proposer", p2_content, "proposer-r"))
   }
 
-  # ── 7. A0 Arbiter ───────────────────────────────────────────
+  # ── 7. PubMed phenotype evidence ────────────────────────────
+  pubmed_ids <- unique(c(names(phenotype_relationships %||% list()),
+                         names(pubmed_per_hyp %||% list())))
+  pubmed_ids <- pubmed_ids[nzchar(pubmed_ids)]
+  if (length(pubmed_ids) > 0L) {
+    pm_cards <- paste(vapply(pubmed_ids, function(hid) {
+      .pubmed_card(
+        hid = hid,
+        rel = (phenotype_relationships %||% list())[[hid]],
+        evidence = (pubmed_per_hyp %||% list())[[hid]]
+      )
+    }, character(1L)), collapse = "\n")
+    pm_content <- sprintf(
+      '<div class="role-label">📚 PubMed phenotype evidence</div>
+      <div class="summary-line">
+        Retrieved literature and phenotype relationship summaries used by the Arbiter:
+      </div>
+      %s',
+      pm_cards
+    )
+    bubbles <- paste0(bubbles, "\n",
+                      .bubble("left", "📚", "PubMed", pm_content, "pubmed"))
+  }
+
+  # ── 8. A0 Arbiter ───────────────────────────────────────────
   verdicts <- arbiter_result$verdicts %||% list()
   n_acc    <- sum(vapply(verdicts, function(v) identical(v$status, "accepted"),  logical(1L)))
   n_unc    <- sum(vapply(verdicts, function(v) identical(v$status, "uncertain"), logical(1L)))

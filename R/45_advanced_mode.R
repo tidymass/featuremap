@@ -2339,6 +2339,7 @@ annotate_one_module_advanced <- function(module_obj,
         hypotheses_final = hypotheses_final,
         arbiter_result   = arbiter_result,
         phenotype_relationships = phenotype_relationships,
+        pubmed_per_hyp   = pubmed_per_hyp,
         output_dir       = debate_html_dir
       ),
       error = function(e) message("[HTML] Skipped (", e$message, ")")

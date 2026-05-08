@@ -42,117 +42,167 @@
 '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
      background:#f4f5f7;color:#1c1f26;font-size:14px;line-height:1.55}
+
+/* header */
 .page-header{background:#1c1f26;color:#fff;padding:20px 30px 18px}
 .page-header h1{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
 .page-header .sub{font-size:.8rem;color:#a8adba;margin-top:4px}
-.layout{display:grid;grid-template-columns:minmax(520px,1fr) 360px;gap:16px;
+
+/* layout */
+.layout{display:grid;grid-template-columns:minmax(520px,1fr) 340px;gap:16px;
         max-width:1380px;margin:0 auto;padding:18px}
-.panel{background:#fff;border:1px solid #e4e7ed;border-radius:10px}
-.toolbar{padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.panel{background:#fff;border:1px solid #e4e7ed;border-radius:10px;overflow:hidden}
+
+/* toolbar */
+.toolbar{padding:11px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+         border-bottom:1px solid #eef0f4}
 .toolbar label{font-size:.78rem;color:#4b5563;display:flex;align-items:center;gap:5px}
-.toolbar input[type="text"]{border:1px solid #d8dde6;border-radius:6px;padding:6px 8px;
-                            min-width:190px;font-size:.82rem}
-.legend{padding:0 14px 12px;display:flex;gap:12px;flex-wrap:wrap;color:#6b7280;font-size:.75rem}
+.toolbar input[type="text"]{border:1px solid #d8dde6;border-radius:6px;padding:5px 9px;
+                            min-width:200px;font-size:.82rem;outline:none}
+.toolbar input[type="text"]:focus{border-color:#6741d9}
+
+/* legend */
+.legend{padding:9px 14px;display:flex;gap:14px;flex-wrap:wrap;color:#6b7280;font-size:.74rem;
+        border-bottom:1px solid #eef0f4;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:5px}
-.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-.network-wrap{height:650px;border-top:1px solid #e4e7ed;position:relative;overflow:hidden}
+.leg-circle{width:11px;height:11px;border-radius:50%;background:#667085;display:inline-block}
+.leg-square{width:11px;height:11px;border-radius:2px;background:#667085;display:inline-block}
+.leg-edge-d{width:20px;height:2px;background:#516f9f;display:inline-block}
+.leg-edge-i{width:20px;height:0;border-top:2px dashed #9a8064;display:inline-block}
+.leg-sep{width:1px;height:12px;background:#d1d5db;display:inline-block}
+#module-legend{display:flex;gap:10px;flex-wrap:wrap}
+#module-legend span{display:inline-flex;align-items:center;gap:4px}
+.mod-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+
+/* network */
+.network-wrap{height:640px;position:relative;overflow:hidden}
 svg{width:100%;height:100%;display:block;background:#fbfcfe}
-.edge{stroke-opacity:.75}
-.edge.direct{stroke:#516f9f;stroke-width:2.2}
-.edge.indirect{stroke:#9a8064;stroke-width:1.8;stroke-dasharray:5 5}
-.edge.same_module{stroke:#c4c9d2;stroke-width:1.2;stroke-dasharray:3 5}
-.node circle{cursor:pointer}
-.node text{font-size:11px;fill:#1f2937;paint-order:stroke;stroke:#fff;stroke-width:3px}
-.node.selected circle{stroke-width:4px}
-.side{padding:15px 16px;min-height:650px}
-.side h2{font-size:.95rem;margin-bottom:8px}
-.side .hint{color:#8b909e;font-size:.82rem;margin-bottom:12px}
+.edge{stroke-opacity:.7}
+.edge.direct{stroke:#516f9f;stroke-width:2}
+.edge.indirect{stroke:#9a8064;stroke-width:1.6;stroke-dasharray:5 4}
+.node{cursor:pointer}
+.node text{font-size:10.5px;fill:#1f2937;paint-order:stroke;stroke:#fbfcfe;
+           stroke-width:2.5px;user-select:none}
+
+/* tooltip */
+#tooltip{position:absolute;background:rgba(28,31,38,.88);color:#fff;
+         padding:8px 11px;border-radius:7px;font-size:.76rem;max-width:230px;
+         pointer-events:none;line-height:1.45;display:none;z-index:20;
+         backdrop-filter:blur(2px)}
+#tooltip strong{font-weight:600;display:block;margin-bottom:3px;font-size:.79rem}
+#tooltip .tt-sum{opacity:.88;font-size:.74rem}
+
+/* side panel */
+.side{padding:0;display:flex;flex-direction:column;max-height:720px}
+.side-top{padding:14px 16px 0;flex-shrink:0}
+.side h2{font-size:.93rem;font-weight:600;margin-bottom:5px}
+.side .hint{color:#8b909e;font-size:.8rem;margin-bottom:0}
+.detail-scroll{flex:1;overflow-y:auto;padding:0 16px 16px}
 .detail-section{border-top:1px solid #e4e7ed;padding-top:10px;margin-top:10px}
-.detail-label{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+.detail-section:first-child{border-top:none;padding-top:0;margin-top:8px}
+.detail-label{font-size:.65rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
               color:#8b909e;margin-bottom:4px}
-.detail-text{font-size:.83rem;color:#374151;white-space:pre-wrap}
-.pill-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-.pill{font-size:.72rem;padding:2px 7px;border-radius:4px;background:#f1f3f5;color:#4b5563}
-.summary{font-size:.83rem;color:#374151;background:#f8f9fb;border:1px solid #e4e7ed;
-         padding:10px 12px;border-radius:8px;margin-top:10px}
-.node-table{font-size:.76rem;margin-top:10px;color:#4b5563}
-.node-table div{padding:5px 0;border-bottom:1px solid #eef0f4}
-@media(max-width:980px){.layout{grid-template-columns:1fr}.side{min-height:auto}.network-wrap{height:560px}}'
+.detail-text{font-size:.82rem;color:#374151;white-space:pre-wrap;line-height:1.6}
+.pill-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;margin-bottom:2px}
+.pill{font-size:.72rem;padding:2px 8px;border-radius:4px;background:#f1f3f5;color:#4b5563;
+      border:1px solid #e4e7ed}
+.pill.accepted{background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
+.pill.uncertain{background:#fffbeb;color:#92400e;border-color:#fcd34d}
+
+/* integrated summary */
+.summary-panel{flex-shrink:0;margin:0 16px 16px;background:#f8f9fb;
+               border:1px solid #e4e7ed;border-radius:8px;padding:11px 13px}
+.summary-panel .detail-label{margin-bottom:6px}
+.summary-panel .detail-text{font-size:.81rem;color:#374151}
+
+@media(max-width:980px){.layout{grid-template-columns:1fr}
+  .side{max-height:none}.network-wrap{height:520px}}'
 }
 
 .syn_js <- function() {
 'const data = GRAPH_DATA;
-const svg = document.getElementById("network");
+const svg    = document.getElementById("network");
 const gEdges = document.getElementById("edges");
 const gNodes = document.getElementById("nodes");
-const detail = document.getElementById("detail");
-const search = document.getElementById("search");
+const detail  = document.getElementById("detail");
+const tooltip = document.getElementById("tooltip");
+const search  = document.getElementById("search");
 const controls = {
-  accepted: document.getElementById("fAccepted"),
-  uncertain: document.getElementById("fUncertain"),
-  direct: document.getElementById("fDirect"),
-  indirect: document.getElementById("fIndirect"),
-  same: document.getElementById("fSame")
+  direct:   document.getElementById("fDirect"),
+  indirect: document.getElementById("fIndirect")
 };
 
-const modulePalette = ["#395f9d","#8a5a9d","#2d7a55","#a7652a","#7a6a2d","#2f7280","#8a3f58","#5b6f91"];
-const moduleIds = [...new Set(data.nodes.map(d => d.module_id))];
-const moduleColor = Object.fromEntries(moduleIds.map((m,i) => [m, modulePalette[i % modulePalette.length]]));
-const fillByConfidence = {high:"#d1fae5", medium:"#fef9c3", low:"#fee2e2", "":"#eef2f7"};
+/* ── palette ── */
+const modulePalette = [
+  "#395f9d","#8a5a9d","#2d7a55","#b55a2a",
+  "#7a6a2d","#2f7280","#8a3f58","#5b6f91",
+  "#4a7c59","#7c4a6b","#6b4a7c","#4a6b7c"
+];
+const moduleIds    = [...new Set(data.nodes.map(d => d.module_id))].sort();
+const moduleColor  = Object.fromEntries(
+  moduleIds.map((m, i) => [m, modulePalette[i % modulePalette.length]])
+);
+const sizeByConf   = {high: 16, medium: 13, low: 10};
+const defaultSize  = 12;
 
-let nodes = data.nodes.map((d,i) => ({
+function nodeSize(n) { return sizeByConf[n.confidence_label] || defaultSize; }
+function nodeColor(n) { return moduleColor[n.module_id] || "#667085"; }
+
+/* ── build module legend ── */
+const modLeg = document.getElementById("module-legend");
+moduleIds.forEach(m => {
+  const sp = document.createElement("span");
+  sp.innerHTML = `<i class="mod-dot" style="background:${moduleColor[m]}"></i>${esc(m)}`;
+  modLeg.appendChild(sp);
+});
+
+/* ── physics state ── */
+let nodes = data.nodes.map((d, i) => ({
   ...d,
-  x: 160 + (i % 6) * 95 + Math.random() * 30,
-  y: 130 + Math.floor(i / 6) * 90 + Math.random() * 30,
+  x: 160 + (i % 7) * 85 + Math.random() * 40,
+  y: 110 + Math.floor(i / 7) * 85 + Math.random() * 40,
   vx: 0, vy: 0
 }));
 let nodeById = Object.fromEntries(nodes.map(d => [d.node_id, d]));
-let edges = data.edges.map(e => ({...e, source: nodeById[e.node_1], target: nodeById[e.node_2]}))
-                      .filter(e => e.source && e.target);
+let edges = data.edges
+  .map(e => ({...e, source: nodeById[e.node_1], target: nodeById[e.node_2]}))
+  .filter(e => e.source && e.target && e.relation_class !== "same_module");
 let selectedId = null;
 
-function filters(){
+/* ── filter helpers ── */
+function filters() {
   return {
-    accepted: controls.accepted.checked,
-    uncertain: controls.uncertain.checked,
-    direct: controls.direct.checked,
+    direct:   controls.direct.checked,
     indirect: controls.indirect.checked,
-    same: controls.same.checked,
     q: search.value.trim().toLowerCase()
   };
 }
 
-function nodeVisible(n, f){
-  if (n.verdict_status === "accepted" && !f.accepted) return false;
-  if (n.verdict_status === "uncertain" && !f.uncertain) return false;
+function nodeVisible(n, f) {
   if (f.q) {
-    const hay = [n.node_id,n.module_id,n.hypothesis_id,n.title,n.functional_summary,n.phenotype_relationship].join(" ").toLowerCase();
+    const hay = [n.node_id, n.module_id, n.hypothesis_id,
+                 n.title, n.functional_summary, n.phenotype_relationship]
+                .join(" ").toLowerCase();
     if (!hay.includes(f.q)) return false;
   }
   return true;
 }
 
-function edgeVisible(e, visibleIds, f){
+function edgeVisible(e, visibleIds, f) {
   if (!visibleIds.has(e.node_1) || !visibleIds.has(e.node_2)) return false;
-  if (e.same_module === "TRUE" || e.same_module === true || e.relation_class === "same_module") return f.same;
-  if (e.relation_class === "direct") return f.direct;
+  if (e.relation_class === "direct")   return f.direct;
   if (e.relation_class === "indirect") return f.indirect;
   return false;
 }
 
-function wrapText(txt, max=68){
-  txt = txt || "";
-  if (txt.length <= max) return txt;
-  return txt.slice(0, max - 1) + "…";
-}
-
-function showNode(n){
+/* ── detail panel ── */
+function showNode(n) {
   selectedId = n.node_id;
+  const statusCls = n.verdict_status === "accepted" ? "accepted" : "uncertain";
   detail.innerHTML = `
-    <h2>${esc(n.node_id)}</h2>
     <div class="pill-row">
-      <span class="pill">${esc(n.verdict_status)}</span>
-      <span class="pill">${esc(n.confidence_label || "confidence NA")}</span>
+      <span class="pill ${statusCls}">${esc(n.verdict_status)}</span>
+      <span class="pill">${esc(n.confidence_label || "confidence N/A")}</span>
       <span class="pill">${esc(n.module_id)}</span>
     </div>
     ${section("Title", n.title)}
@@ -162,110 +212,177 @@ function showNode(n){
     ${section("Core drivers", n.core_drivers)}
     ${section("Top KEGG pathways", n.top_kegg_pathways)}
     ${section("Top HMDB pathways", n.top_hmdb_pathways)}
-    ${section("Phenotype literature support", [n.phenotype_literature_support, n.phenotype_evidence_note].filter(Boolean).join("\\n"))}
+    ${section("Phenotype literature support",
+      [n.phenotype_literature_support, n.phenotype_evidence_note].filter(Boolean).join("\\n"))}
   `;
   render();
 }
 
-function showEdge(e){
+function showEdge(e) {
   selectedId = null;
   detail.innerHTML = `
-    <h2>${esc(e.node_1)} → ${esc(e.node_2)}</h2>
     <div class="pill-row">
       <span class="pill">${esc(e.relation_class)}</span>
       <span class="pill">${esc(e.subtype)}</span>
     </div>
-    ${section("Rationale", e.rationale || "Same source module, not inferred biological relationship.")}
+    ${section("From → To", e.node_1 + " → " + e.node_2)}
+    ${section("Rationale", e.rationale)}
   `;
   render();
 }
 
-function section(label, text){
+function section(label, text) {
   if (!text) return "";
-  return `<div class="detail-section"><div class="detail-label">${esc(label)}</div><div class="detail-text">${esc(text)}</div></div>`;
+  return `<div class="detail-section">
+    <div class="detail-label">${esc(label)}</div>
+    <div class="detail-text">${esc(text)}</div>
+  </div>`;
 }
-function esc(s){return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}
 
-function tick(){
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;"}[c]));
+}
+
+/* ── tooltip ── */
+const wrap = document.querySelector(".network-wrap");
+
+function showTooltip(ev, n) {
+  const title   = n.title || n.node_id;
+  const summary = n.functional_summary || "";
+  tooltip.innerHTML =
+    `<strong>${esc(title)}</strong>` +
+    (summary ? `<div class="tt-sum">${esc(summary.length > 110 ? summary.slice(0,110)+"…" : summary)}</div>` : "");
+  tooltip.style.display = "block";
+  moveTooltip(ev);
+}
+
+function moveTooltip(ev) {
+  const r  = wrap.getBoundingClientRect();
+  let tx = ev.clientX - r.left + 14;
+  let ty = ev.clientY - r.top  + 14;
+  if (tx + 240 > wrap.offsetWidth)  tx = ev.clientX - r.left - 244;
+  if (ty + 90  > wrap.offsetHeight) ty = ev.clientY - r.top  - 94;
+  tooltip.style.left = tx + "px";
+  tooltip.style.top  = ty + "px";
+}
+
+/* ── physics ── */
+function tick() {
   const rect = svg.getBoundingClientRect();
-  const w = rect.width || 900, h = rect.height || 650;
+  const w = rect.width || 900, h = rect.height || 640;
   const f = filters();
   const visible = nodes.filter(n => nodeVisible(n, f));
   const visibleIds = new Set(visible.map(n => n.node_id));
   const visibleEdges = edges.filter(e => edgeVisible(e, visibleIds, f));
 
   for (const n of visible) {
-    n.vx *= .86; n.vy *= .86;
-    n.vx += (w/2 - n.x) * .0009;
-    n.vy += (h/2 - n.y) * .0009;
+    n.vx *= .85; n.vy *= .85;
+    n.vx += (w / 2 - n.x) * .0008;
+    n.vy += (h / 2 - n.y) * .0008;
   }
-  for (let i=0;i<visible.length;i++){
-    for (let j=i+1;j<visible.length;j++){
-      const a=visible[i], b=visible[j];
-      let dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy+0.01;
-      const force = 950 / d2;
-      const d=Math.sqrt(d2); dx/=d; dy/=d;
-      a.vx += dx*force; a.vy += dy*force;
-      b.vx -= dx*force; b.vy -= dy*force;
+  for (let i = 0; i < visible.length; i++) {
+    for (let j = i + 1; j < visible.length; j++) {
+      const a = visible[i], b = visible[j];
+      let dx = a.x - b.x, dy = a.y - b.y, d2 = dx*dx + dy*dy + 0.01;
+      const rsum = nodeSize(a) + nodeSize(b) + 28;
+      const force = Math.max(0, rsum*rsum*1.1 - d2) / (d2 + 0.01) * .8;
+      const d = Math.sqrt(d2); dx /= d; dy /= d;
+      a.vx += dx * force; a.vy += dy * force;
+      b.vx -= dx * force; b.vy -= dy * force;
     }
   }
   for (const e of visibleEdges) {
-    const a=e.source, b=e.target;
-    let dx=b.x-a.x, dy=b.y-a.y, d=Math.sqrt(dx*dx+dy*dy)+0.01;
-    const target = (e.relation_class === "same_module") ? 110 : (e.relation_class === "direct" ? 150 : 190);
-    const k = (e.relation_class === "same_module") ? .002 : .006;
-    const force=(d-target)*k; dx/=d; dy/=d;
-    a.vx += dx*force; a.vy += dy*force;
-    b.vx -= dx*force; b.vy -= dy*force;
+    const a = e.source, b = e.target;
+    let dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx*dx + dy*dy) + 0.01;
+    const target = e.relation_class === "direct" ? 160 : 210;
+    const k = .005;
+    const force = (d - target) * k; dx /= d; dy /= d;
+    a.vx += dx * force; a.vy += dy * force;
+    b.vx -= dx * force; b.vy -= dy * force;
   }
   for (const n of visible) {
-    n.x = Math.max(30, Math.min(w-30, n.x+n.vx));
-    n.y = Math.max(30, Math.min(h-30, n.y+n.vy));
+    const pad = nodeSize(n) + 8;
+    n.x = Math.max(pad, Math.min(w - pad, n.x + n.vx));
+    n.y = Math.max(pad, Math.min(h - pad, n.y + n.vy));
   }
   render();
   requestAnimationFrame(tick);
 }
 
-function render(){
+/* ── render ── */
+function render() {
   const f = filters();
   const visible = nodes.filter(n => nodeVisible(n, f));
   const visibleIds = new Set(visible.map(n => n.node_id));
   const visibleEdges = edges.filter(e => edgeVisible(e, visibleIds, f));
 
+  /* edges */
   gEdges.innerHTML = "";
   for (const e of visibleEdges) {
     const line = document.createElementNS("http://www.w3.org/2000/svg","line");
     line.setAttribute("x1", e.source.x); line.setAttribute("y1", e.source.y);
     line.setAttribute("x2", e.target.x); line.setAttribute("y2", e.target.y);
     line.setAttribute("class", `edge ${e.relation_class}`);
+    line.style.cursor = "pointer";
     line.addEventListener("click", () => showEdge(e));
     gEdges.appendChild(line);
   }
 
+  /* nodes */
   gNodes.innerHTML = "";
   for (const n of visible) {
     const grp = document.createElementNS("http://www.w3.org/2000/svg","g");
     grp.setAttribute("class", `node ${selectedId === n.node_id ? "selected" : ""}`);
     grp.setAttribute("transform", `translate(${n.x},${n.y})`);
-    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
-    c.setAttribute("r", n.verdict_status === "accepted" ? 13 : 11);
-    c.setAttribute("fill", fillByConfidence[n.confidence_label] || fillByConfidence[""]);
-    c.setAttribute("stroke", moduleColor[n.module_id] || "#667085");
-    c.setAttribute("stroke-width", n.verdict_status === "accepted" ? 3 : 2);
-    if (n.verdict_status === "uncertain") c.setAttribute("stroke-dasharray","4 3");
-    c.addEventListener("click", () => showNode(n));
+
+    const sz    = nodeSize(n);
+    const fill  = nodeColor(n);
+    const isAcc = n.verdict_status === "accepted";
+
+    /* shape: circle = accepted, rect = uncertain */
+    let shape;
+    if (isAcc) {
+      shape = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      shape.setAttribute("r", sz);
+    } else {
+      shape = document.createElementNS("http://www.w3.org/2000/svg","rect");
+      shape.setAttribute("x", -sz); shape.setAttribute("y", -sz);
+      shape.setAttribute("width", sz * 2); shape.setAttribute("height", sz * 2);
+      shape.setAttribute("rx", "3"); shape.setAttribute("ry", "3");
+    }
+    shape.setAttribute("fill", fill);
+    shape.setAttribute("fill-opacity", isAcc ? "0.88" : "0.6");
+    shape.setAttribute("stroke", selectedId === n.node_id ? "#1c1f26" : "#fff");
+    shape.setAttribute("stroke-width", selectedId === n.node_id ? "3" : "2");
+
+    /* label */
     const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-    t.setAttribute("x", 17); t.setAttribute("y", 4);
+    t.setAttribute("x", sz + 4); t.setAttribute("y", 4);
     t.textContent = n.node_id;
-    grp.appendChild(c); grp.appendChild(t);
+
+    grp.appendChild(shape); grp.appendChild(t);
+
+    /* events */
+    grp.addEventListener("click",      ev => { ev.stopPropagation(); showNode(n); });
+    grp.addEventListener("mouseenter", ev => showTooltip(ev, n));
+    grp.addEventListener("mousemove",  ev => moveTooltip(ev));
+    grp.addEventListener("mouseleave", ()  => { tooltip.style.display = "none"; });
+
     gNodes.appendChild(grp);
   }
 }
 
+/* ── init ── */
 for (const el of Object.values(controls)) el.addEventListener("change", render);
 search.addEventListener("input", render);
-document.getElementById("nodeList").innerHTML = nodes.map(n => `<div><strong>${esc(n.node_id)}</strong><br>${esc(wrapText(n.title, 82))}</div>`).join("");
-if (data.summary) document.getElementById("summary").innerHTML = esc(data.summary);
+svg.addEventListener("click", () => { selectedId = null; render(); });
+
+if (data.summary) {
+  document.getElementById("summary-text").textContent = data.summary;
+} else {
+  document.getElementById("summary-panel").style.display = "none";
+}
 tick();'
 }
 
@@ -275,8 +392,7 @@ tick();'
 #'   object containing \code{module_synthesis}.
 #' @param output_dir Directory for the output HTML.
 #' @param output_file File name for the output HTML.
-#' @param show_same_module Logical; whether same-module links are shown by
-#'   default. They can also be toggled in the HTML.
+#' @param show_same_module Logical; ignored (same-module links not shown).
 #' @return Invisibly, the written HTML path.
 #' @export
 generate_synthesis_network_html <- function(synthesis,
@@ -296,26 +412,26 @@ generate_synthesis_network_html <- function(synthesis,
   if (is.null(relationships) || !is.data.frame(relationships)) {
     relationships <- data.frame(
       node_1 = character(), node_2 = character(), relation_class = character(),
-      subtype = character(), rationale = character(), same_module = logical(),
+      subtype = character(), rationale = character(),
       stringsAsFactors = FALSE
     )
   }
 
   nodes <- nodes[nodes$verdict_status %in% c("accepted", "uncertain"), , drop = FALSE]
   valid_nodes <- nodes$node_id
+  # exclude same_module edges entirely
   relationships <- relationships[
     relationships$node_1 %in% valid_nodes &
       relationships$node_2 %in% valid_nodes &
-      relationships$relation_class %in% c("direct", "indirect", "same_module"),
+      relationships$relation_class %in% c("direct", "indirect"),
     ,
     drop = FALSE
   ]
 
   graph <- list(
-    nodes = .syn_json_records(nodes),
-    edges = .syn_json_records(relationships),
-    summary = .syn_scalar(synthesis$summary, ""),
-    show_same_module = isTRUE(show_same_module)
+    nodes   = .syn_json_records(nodes),
+    edges   = .syn_json_records(relationships),
+    summary = .syn_scalar(synthesis$summary, "")
   )
   graph_json <- jsonlite::toJSON(graph, auto_unbox = TRUE, dataframe = "rows", na = "null")
   js <- sub("GRAPH_DATA", graph_json, .syn_js(), fixed = TRUE)
@@ -331,58 +447,60 @@ generate_synthesis_network_html <- function(synthesis,
 </head>
 <body>
 <div class="page-header">
-  <h1>Hypothesis-level synthesis network</h1>
-  <div class="sub">Accepted and uncertain hypotheses; direct and indirect biological relationships.</div>
+  <h1>&#x1F9EC; Hypothesis-level Synthesis Network</h1>
+  <div class="sub">Accepted and uncertain hypotheses &middot; direct and indirect biological relationships</div>
 </div>
 <div class="layout">
+
+  <!-- network panel -->
   <div class="panel">
     <div class="toolbar">
-      <label><input type="checkbox" id="fAccepted" checked> accepted</label>
-      <label><input type="checkbox" id="fUncertain" checked> uncertain</label>
-      <label><input type="checkbox" id="fDirect" checked> direct</label>
-      <label><input type="checkbox" id="fIndirect" checked> indirect</label>
-      <label><input type="checkbox" id="fSame" %s> same-module links</label>
-      <input type="text" id="search" placeholder="Search module, hypothesis, title...">
+      <label><input type="checkbox" id="fDirect" checked> Direct edges</label>
+      <label><input type="checkbox" id="fIndirect" checked> Indirect edges</label>
+      <input type="text" id="search" placeholder="Search module, hypothesis, title&hellip;">
     </div>
     <div class="legend">
-      <span><i class="dot" style="background:#d1fae5"></i>high confidence</span>
-      <span><i class="dot" style="background:#fef9c3"></i>medium</span>
-      <span><i class="dot" style="background:#fee2e2"></i>low</span>
-      <span>solid edge: direct</span>
-      <span>dashed edge: indirect</span>
-      <span>node outline: source module</span>
+      <span><i class="leg-circle"></i> Accepted</span>
+      <span><i class="leg-square"></i> Uncertain</span>
+      <span style="opacity:.4"><i class="leg-sep"></i></span>
+      <span>Size &rarr; confidence (large = high)</span>
+      <span style="opacity:.4"><i class="leg-sep"></i></span>
+      <span><i class="leg-edge-d"></i> Direct</span>
+      <span><i class="leg-edge-i"></i> Indirect</span>
+      <span style="opacity:.4"><i class="leg-sep"></i></span>
+      <span>Color &rarr; module:</span>
+      <div id="module-legend"></div>
     </div>
     <div class="network-wrap">
       <svg id="network"><g id="edges"></g><g id="nodes"></g></svg>
+      <div id="tooltip"></div>
     </div>
   </div>
+
+  <!-- detail panel -->
   <div class="panel side">
-    <h2>Details</h2>
-    <div class="hint">Click a node or edge to inspect the synthesis evidence.</div>
-    <div id="detail">
-      <div class="detail-section">
-        <div class="detail-label">Integrated summary</div>
-        <div id="summary" class="summary"></div>
-      </div>
-      <div class="detail-section">
-        <div class="detail-label">Nodes</div>
-        <div id="nodeList" class="node-table"></div>
-      </div>
+    <div class="side-top">
+      <h2>Details</h2>
+      <p class="hint">Click a node or edge to inspect.</p>
+    </div>
+    <div class="detail-scroll" id="detail"></div>
+    <div class="summary-panel" id="summary-panel">
+      <div class="detail-label">Integrated summary</div>
+      <div class="detail-text" id="summary-text"></div>
     </div>
   </div>
+
 </div>
 <script>%s</script>
 </body>
 </html>',
-    .syn_css(),
-    if (isTRUE(show_same_module)) "checked" else "",
-    js
+    .syn_css(), js
   )
 
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   out_path <- file.path(output_dir, output_file)
   writeLines(html, out_path, useBytes = FALSE)
-  message(sprintf("[HTML] Synthesis network → %s", out_path))
+  message(sprintf("[HTML] Synthesis network -> %s", out_path))
   invisible(out_path)
 }
 

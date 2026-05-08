@@ -655,9 +655,9 @@ generate_debate_html <- function(module_id,
   # ── 5. S2 Skeptic (conditional) ─────────────────────────────
   if (!is.null(s2_challenges) && length(s2_challenges) > 0L) {
     real_s2 <- Filter(function(c) !identical(c$severity, "no_challenge"), s2_challenges)
+    bubbles <- paste0(bubbles,
+                      '\n<div class="round-divider">Round 2</div>')
     if (length(real_s2) > 0L) {
-      bubbles <- paste0(bubbles,
-                        '\n<div class="round-divider">Round 2</div>')
       s2_items   <- paste(vapply(real_s2, .ch_item, character(1L)), collapse = "\n")
       s2_content <- sprintf(
         '<div class="role-label">\U0001f9d0 Skeptic &mdash; Round 2</div>
@@ -666,6 +666,14 @@ generate_debate_html <- function(module_id,
         length(real_s2),
         if (length(real_s2) != 1L) "s" else "",
         s2_items
+      )
+      bubbles <- paste0(bubbles, "\n",
+                        .bubble("left", "\U0001f9d0", "Skeptic", s2_content, "skeptic"))
+    } else {
+      s2_content <- sprintf(
+        '<div class="role-label">\U0001f9d0 Skeptic &mdash; Round 2</div>
+        <div class="no-challenge-note">%s</div>',
+        "No substantive challenges after reviewing the revision."
       )
       bubbles <- paste0(bubbles, "\n",
                         .bubble("left", "\U0001f9d0", "Skeptic", s2_content, "skeptic"))

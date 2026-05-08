@@ -18,6 +18,15 @@
   s
 }
 
+#' Coerce any list/vector field to a single character scalar (prevents
+#' "condition has length > 1" when JSON parsing returns unexpected vectors)
+.s <- function(x, default = "") {
+  x <- x %||% default
+  x <- as.character(x)
+  if (length(x) == 0L) return(as.character(default)[1L])
+  trimws(x[1L])
+}
+
 #' Truncate long string, appending ellipsis
 .trunc <- function(s, n) {
   s <- as.character(s %||% "")
@@ -87,8 +96,8 @@
 
 #' Render one hypothesis card
 .hyp_card <- function(h) {
-  anc <- paste(h$anchor_metabolites  %||% character(0), collapse = ", ")
-  ten <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
+  anc <- paste(as.character(h$anchor_metabolites  %||% character(0)), collapse = ", ")
+  ten <- paste(as.character(h$tension_metabolites %||% character(0)), collapse = ", ")
   sprintf(
     '<div class="hyp-card">
       <div class="hyp-header">
@@ -98,9 +107,9 @@
       <div class="hyp-summary">%s</div>
       %s%s
     </div>',
-    .he(h$hypothesis_id %||% ""),
-    .he(h$title         %||% ""),
-    .he(h$summary       %||% ""),
+    .he(.s(h$hypothesis_id)),
+    .he(.s(h$title)),
+    .he(.s(h$summary)),
     .met_tags(anc, "anc"),
     .met_tags(ten, "ten")
   )
@@ -108,8 +117,8 @@
 
 #' Render one Skeptic challenge
 .ch_item <- function(ch) {
-  sev   <- ch$severity       %||% "minor"
-  ctype <- ch$challenge_type %||% ""
+  sev   <- .s(ch$severity,       "minor")
+  ctype <- .s(ch$challenge_type, "")
   if (identical(sev, "no_challenge")) return("")
   sev_cls <- if (identical(sev, "major")) "sev-major" else "sev-minor"
   sprintf(
@@ -123,16 +132,16 @@
     </div>',
     sev, sev_cls, .he(toupper(sev)),
     .he(ctype),
-    .he(ch$target_hypothesis_id %||% ""),
-    .he(ch$challenge %||% "")
+    .he(.s(ch$target_hypothesis_id)),
+    .he(.s(ch$challenge))
   )
 }
 
 #' Render one Proposer revision
 .rev_item <- function(rev, hypotheses_after) {
-  hid    <- rev$hypothesis_id %||% ""
-  action <- toupper(rev$action %||% "keep")
-  just   <- rev$justification %||% ""
+  hid    <- .s(rev$hypothesis_id)
+  action <- toupper(.s(rev$action, "keep"))
+  just   <- .s(rev$justification)
   h_new  <- Filter(function(x) x$hypothesis_id == hid, hypotheses_after)
 
   act_cls <- switch(action, MODIFY = "act-modify", DROP = "act-drop", "act-keep")
@@ -140,16 +149,16 @@
   detail <- ""
   if (identical(action, "MODIFY") && length(h_new) > 0L) {
     h   <- h_new[[1L]]
-    anc <- paste(h$anchor_metabolites  %||% character(0), collapse = ", ")
-    ten <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
+    anc <- paste(as.character(h$anchor_metabolites  %||% character(0)), collapse = ", ")
+    ten <- paste(as.character(h$tension_metabolites %||% character(0)), collapse = ", ")
     detail <- sprintf(
       '<div class="rev-detail">
         <div class="rev-new-title">%s</div>
         <div class="rev-new-summary">%s</div>
         %s%s
       </div>',
-      .he(h$title   %||% ""),
-      .he(h$summary %||% ""),
+      .he(.s(h$title)),
+      .he(.s(h$summary)),
       .met_tags(anc, "anc"),
       .met_tags(ten, "ten")
     )
@@ -169,18 +178,18 @@
 
 #' Render one Arbiter verdict card
 .verdict_card <- function(v, hypotheses_final) {
-  hid      <- v$hypothesis_id        %||% ""
-  status   <- v$status               %||% "rejected"
-  conf     <- v$confidence_label     %||% ""
-  vrat     <- v$verdict_rationale    %||% ""
-  crat     <- v$confidence_rationale %||% ""
-  st_cls   <- switch(status,
-                     accepted  = "st-accepted",
-                     uncertain = "st-uncertain",
-                     "st-rejected")
-  h_fin    <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
-  fin_title   <- if (length(h_fin) > 0L) h_fin[[1L]]$title   %||% "" else ""
-  fin_summary <- if (length(h_fin) > 0L) h_fin[[1L]]$summary %||% "" else ""
+  hid    <- .s(v$hypothesis_id)
+  status <- .s(v$status,               "rejected")
+  conf   <- .s(v$confidence_label,     "")
+  vrat   <- .s(v$verdict_rationale,    "")
+  crat   <- .s(v$confidence_rationale, "")
+  st_cls <- switch(status,
+                   accepted  = "st-accepted",
+                   uncertain = "st-uncertain",
+                   "st-rejected")
+  h_fin       <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
+  fin_title   <- if (length(h_fin) > 0L) .s(h_fin[[1L]]$title)   else ""
+  fin_summary <- if (length(h_fin) > 0L) .s(h_fin[[1L]]$summary) else ""
 
   status_pill <- sprintf(
     '<span class="status-pill %s">%s</span>', st_cls, .he(toupper(status)))
@@ -200,7 +209,7 @@
       <div class="rat-text">%s</div>
     </div>', .he(vrat)) else ""
 
-  # Confidence rationale block — always a new block, with divider if verdict exists
+  # Confidence rationale block — with divider when verdict block also present
   crat_html <- if (nzchar(crat)) sprintf(
     '%s<div class="rat-block">
       <div class="rat-label">Confidence rationale
@@ -628,8 +637,8 @@ generate_debate_html <- function(module_id,
                          character(1L), hypotheses_final = hypotheses_final),
                   collapse = "\n")
 
-  amb     <- arbiter_result$residual_ambiguity %||% NA_character_
-  amb_html <- if (!is.na(amb) && nzchar(trimws(amb)))
+  amb      <- .s(arbiter_result$residual_ambiguity %||% "")
+  amb_html <- if (nzchar(amb))
     sprintf('<div class="ambiguity-note"><strong>Residual ambiguity:</strong> %s</div>',
             .he(amb))
   else ""

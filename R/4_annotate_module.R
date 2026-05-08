@@ -354,7 +354,7 @@ annotate_module <- function(res                  = NULL,
     class_input %>%
       dplyr::group_by(class) %>%
       dplyr::summarise(
-        n_metabolites  = round(n() / nrow(class_input), 2),
+        n_metabolites  = n() / nrow(class_input),
         metabolites    = paste(unique(Compound_name), collapse = "{}"),
         Compound_IDs   = paste(unique(Compound_ID),   collapse = "{}"),
         mean_priority  = mean(0.7 * Importance + 0.3 * Robustness, na.rm = TRUE),

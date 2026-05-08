@@ -79,7 +79,7 @@ build_module_prompt <- function(module_obj) {
     if (is.null(x) || length(x) == 0) return(na)
     x <- as.character(x[1])
     x <- trimws(x)
-    if (!nzchar(x) || is.na(x)) na else x
+    if (!nzchar(x) || is.na(x) || toupper(x) %in% c("NA", "NULL", "UNKNOWN")) na else x
   }
 
   # ---- Module ID ----
@@ -105,7 +105,7 @@ build_module_prompt <- function(module_obj) {
         "Metabolite (top):
 - Top_rank: {scalar_text(row$top_rank)}
 - Name: {scalar_text(row$Compound_name)}
-- Class: {scalar_text(row$class)}
+- Class: {scalar_text(row$class, na = 'not annotated')}
 - Priority_level: {scalar_text(row$priority_level)}",
         .na = "NA"
       )

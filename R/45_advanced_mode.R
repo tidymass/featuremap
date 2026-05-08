@@ -178,7 +178,7 @@ build_skeptic_module_evidence <- function(module_obj) {
   scalar <- function(x, na = "NA") {
     if (is.null(x) || length(x) == 0) return(na)
     x <- trimws(as.character(x[1]))
-    if (!nzchar(x) || is.na(x)) na else x
+    if (!nzchar(x) || is.na(x) || toupper(x) %in% c("NA", "NULL", "UNKNOWN")) na else x
   }
 
   # Top metabolites (all annotation-selected top metabolites).
@@ -186,10 +186,10 @@ build_skeptic_module_evidence <- function(module_obj) {
   if (!is.null(top_df) && nrow(top_df) > 0) {
     top_lines <- apply(top_df, 1, function(r) {
       sprintf("  %s. %s [%s; class: %s]",
-              r[["top_rank"]],
-              r[["Compound_name"]],
-              r[["priority_level"]],
-              r[["class"]])
+              scalar(r[["top_rank"]]),
+              scalar(r[["Compound_name"]]),
+              scalar(r[["priority_level"]]),
+              scalar(r[["class"]], na = "not annotated"))
     })
     top_text <- paste(top_lines, collapse = "\n")
   } else {

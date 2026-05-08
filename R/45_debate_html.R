@@ -24,7 +24,16 @@
   x <- x %||% default
   x <- as.character(x)
   if (length(x) == 0L) return(as.character(default)[1L])
-  trimws(x[1L])
+  x <- trimws(x[1L])
+  if (is.na(x) || !nzchar(x) || toupper(x) %in% c("NA", "NULL")) {
+    return(as.character(default)[1L])
+  }
+  x
+}
+
+.is_nonempty <- function(x) {
+  x <- .s(x, "")
+  nzchar(x)
 }
 
 #' Truncate long string(s), appending ellipsis.  Vectorised — safe for
@@ -34,41 +43,41 @@
   ifelse(nchar(s) > n, paste0(substr(s, 1L, n - 1L), "…"), s)
 }
 
-#' Render metabolite chips — up to max_show visible, remainder as "+N more"
-.met_chips <- function(names, max_show = 6L) {
-  names <- names[nzchar(trimws(names))]
+#' Render all metabolite chips
+.met_chips <- function(names) {
+  names <- unique(trimws(as.character(names %||% character(0))))
+  names <- names[nzchar(names) & !is.na(names) & toupper(names) != "NA"]
   if (length(names) == 0L) return('<span class="muted">—</span>')
-  show  <- head(names, max_show)
-  extra <- length(names) - length(show)
   chips <- paste(
     sprintf('<span class="met-chip" title="%s">%s</span>',
-            .he(show), .he(.trunc(show, 30L))),
+            .he(names), .he(names)),
     collapse = "")
-  more  <- if (extra > 0L)
-    sprintf('<span class="met-more">+%d more</span>', extra) else ""
-  paste0(chips, more)
+  chips
 }
 
-#' Render chemical class profile as mini horizontal bars
-#' Tries columns: Chemical_class, chemical_class, class, Class, Superclass
-.class_bars <- function(module_obj, n = 4L) {
-  df <- module_obj$topN_metabolites
-  if (is.null(df) || !is.data.frame(df)) return("")
+#' Render top class profile from precomputed Class-level structure
+.class_bars <- function(module_obj, n = 3L) {
+  df <- module_obj$other_metabolites
+  if (is.null(df) || !is.data.frame(df) || nrow(df) == 0L ||
+      !"class" %in% colnames(df) || !"n_metabolites" %in% colnames(df)) {
+    return('<span class="muted">—</span>')
+  }
 
-  # Find the first column whose name contains "class" (case-insensitive)
-  cls_col <- grep("class", colnames(df), ignore.case = TRUE, value = TRUE)[1L]
-  if (is.na(cls_col)) return("")
+  cls <- trimws(as.character(df$class))
+  keep <- !is.na(cls) & nzchar(cls) & !toupper(cls) %in% c("NA", "NULL", "UNKNOWN")
+  df <- df[keep, , drop = FALSE]
+  cls <- cls[keep]
+  if (nrow(df) == 0L) return('<span class="muted">—</span>')
+  df$class <- cls
+  df$n_metabolites <- suppressWarnings(as.numeric(df$n_metabolites))
+  df <- df[is.finite(df$n_metabolites) & df$n_metabolites > 0, , drop = FALSE]
+  if (nrow(df) == 0L) return('<span class="muted">—</span>')
 
-  raw <- trimws(as.character(df[[cls_col]]))
-  raw[is.na(raw) | toupper(raw) == "NA" | raw == ""] <- "Unknown"
-  tbl <- sort(table(raw), decreasing = TRUE)
-  total <- sum(tbl)
-  if (total == 0L) return("")
-
-  rows <- head(names(tbl), n)
-  bars <- paste(sapply(rows, function(nm) {
-    pct <- round(tbl[[nm]] / total * 100)
-    lbl <- .trunc(nm, 36L)
+  df <- df[order(-df$n_metabolites), , drop = FALSE]
+  rows <- head(df, n)
+  bars <- paste(vapply(seq_len(nrow(rows)), function(i) {
+    pct <- round(rows$n_metabolites[[i]] * 100)
+    lbl <- .trunc(rows$class[[i]], 36L)
     sprintf(
       '<div class="cls-row">
         <div class="cls-name">%s</div>
@@ -76,7 +85,7 @@
         <div class="cls-pct">%d%%</div>
       </div>',
       .he(lbl), pct, pct)
-  }), collapse = "\n")
+  }, character(1L)), collapse = "\n")
 
   sprintf('<div class="cls-block">%s</div>', bars)
 }
@@ -324,11 +333,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .met-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
 .met-chip{display:inline-block;font-size:.76rem;padding:2px 8px;
           background:#edf2ff;color:#2c5282;border-radius:4px;
-          border:1px solid #c7d9f8;max-width:220px;
-          overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.met-more{display:inline-block;font-size:.76rem;padding:2px 8px;
-          background:#f1f3f5;color:#6b7280;border-radius:4px;
-          border:1px solid #dde1e7}
+          border:1px solid #c7d9f8;white-space:normal}
 .muted{color:#9ca3af;font-size:.82rem}
 
 /* class bars */
@@ -494,10 +499,6 @@ generate_debate_html <- function(module_id,
   phenotype   <- .s(study_context$phenotype,   "—")
   species     <- .s(study_context$species,     "—")
   biospecimen <- .s(study_context$biospecimen, "—")
-  n_total     <- if (!is.null(module_obj$topN_metabolites) &&
-                      is.data.frame(module_obj$topN_metabolites))
-                   nrow(module_obj$topN_metabolites) else length(top_names)
-
   # ── 1. Query bubble ─────────────────────────────────────────
   ctx_pills <- paste(
     sprintf('<span class="ctx-pill">%s</span>',
@@ -507,26 +508,24 @@ generate_debate_html <- function(module_id,
   user_content <- sprintf(
     '<div class="role-label">\U0001f50d Query</div>
     <div class="summary-line">
-      Module <strong>%s</strong> comprises %d co-occurring metabolites.
+      <strong>%s</strong> is a detected dysregulated functional module.
       Please interpret its biological significance.
     </div>
-    <div class="query-grid">
-      <div class="query-section">
-        <div class="section-label">Core metabolites</div>
-        <div class="met-chips">%s</div>
-      </div>
-      <div class="query-section">
-        <div class="section-label">Dominant chemical classes</div>
-        %s
-      </div>
+    <div class="query-section">
+      <div class="section-label">Core metabolites</div>
+      <div class="met-chips">%s</div>
+    </div>
+    <div class="query-section" style="margin-top:8px">
+      <div class="section-label">Dominant chemical classes</div>
+      %s
     </div>
     <div class="query-section" style="margin-top:8px">
       <div class="section-label">Study context</div>
       <div class="context-pills">%s</div>
     </div>',
-    .he(module_id), n_total,
-    .met_chips(top_names, 6L),
-    .class_bars(module_obj, 4L),
+    .he(module_id),
+    .met_chips(top_names),
+    .class_bars(module_obj, 3L),
     ctx_pills
   )
   bubbles <- .bubble("left", "\U0001f50d", "Query", user_content)
@@ -639,14 +638,14 @@ generate_debate_html <- function(module_id,
                          character(1L), hypotheses_final = hypotheses_final),
                   collapse = "\n")
 
-  amb      <- .s(arbiter_result$residual_ambiguity %||% "")
-  amb_html <- if (nzchar(amb))
+  amb      <- .s(arbiter_result$residual_ambiguity, "")
+  amb_html <- if (.is_nonempty(amb))
     sprintf('<div class="ambiguity-note"><strong>Residual ambiguity:</strong> %s</div>',
             .he(amb))
   else ""
 
   arbiter_content <- sprintf(
-    '<div class="role-label">&#9878;&#65039; Arbiter &mdash; Final Verdict</div>
+    '<div class="role-label">⚖ Arbiter &mdash; Final Verdict</div>
     <div class="summary-line">
       Reviewing the full debate:
       <strong>%d accepted</strong> &middot;
@@ -657,7 +656,7 @@ generate_debate_html <- function(module_id,
     n_acc, n_unc, n_rej, vcards, amb_html
   )
   bubbles <- paste0(bubbles, "\n",
-                    .bubble("center", "&#9878;&#65039;", "Arbiter",
+                    .bubble("center", "⚖", "Arbiter",
                             arbiter_content, "arbiter"))
 
   # ── Assemble page ────────────────────────────────────────────

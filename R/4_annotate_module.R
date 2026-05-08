@@ -20,14 +20,14 @@
 #'   with pathway coverage, origin profiling, and directed confidence scoring.
 #'   \code{"advanced"} runs the multi-agent debate pipeline: Proposer generates
 #'   1-3 candidate biochemical hypotheses, Skeptic challenges them (up to 2 rounds), and an
-#'   Arbiter delivers final \code{accepted / uncertain / rejected} verdicts with
+#'   Arbiter delivers final \code{accepted / rejected} verdicts with
 #'   confidence scores.
 #' @param proposer_temperature Numeric. Sampling temperature for the Proposer's
 #'   initial hypothesis generation in advanced mode (default 0.3). Skeptic,
 #'   Proposer revision, and Arbiter always run at temperature 0.
 #' @param synthesize Logical. In advanced mode, whether to run the final
 #'   cross-module synthesis agent after module annotation. When \code{TRUE},
-#'   accepted and uncertain hypotheses are integrated into
+#'   accepted hypotheses are integrated into
 #'   \code{res$module_synthesis}. Ignored in fast mode.
 #' @param synthesis_model Character. LLM model used by the synthesis agent.
 #'   Defaults to \code{llm_model}.
@@ -62,8 +62,8 @@
 #' @return The input \code{res} object updated with:
 #' \itemize{
 #'   \item \code{module_function}: data frame with one row per annotated module
-#'         and columns covering all seven annotation dimensions (title,
-#'         functional_summary, phenotype_relationship, confidence_label,
+#'         and columns covering all seven annotation dimensions (hypothesis_type,
+#'         title, functional_summary, phenotype_relationship, confidence_label,
 #'         rationale, global_direction, core_drivers, origin fractions,
 #'         top pathway names, and PubMed evidence columns
 #'         \code{pubmed_pmids} and \code{pubmed_evidence_json}. Advanced mode
@@ -90,7 +90,7 @@
 #'   \item Annotate significant module metabolites via database lookup.
 #'   \item Compute per-module: Signal_concentration (HHI), pathway coverage
 #'         (KEGG + HMDB), global directionality, and origin profile.
-#'   \item LLM Call 1 — title + functional_summary (no study context).
+#'   \item LLM Call 1 — hypothesis_type + title + functional_summary (no study context).
 #'   \item Optional PubMed search using module title, all top metabolites,
 #'         phenotype, and PMID deduplication.
 #'   \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
@@ -110,11 +110,11 @@
 #'         search, results held for Arbiter only.
 #'   \item Optional PubMed: phenotype relationships are summarized per
 #'         hypothesis before Arbiter.
-#'   \item A0 Arbiter: final accepted / uncertain / rejected verdicts using
+#'   \item A0 Arbiter: final accepted / rejected verdicts using
 #'         the surviving hypotheses, debate digest, study context, and
 #'         pre-computed phenotype relationship summaries.
-#'   \item Optional synthesis agent: if \code{synthesize = TRUE}, accepted and
-#'         uncertain hypotheses across modules are integrated into thematic
+#'   \item Optional synthesis agent: if \code{synthesize = TRUE}, accepted
+#'         hypotheses across modules are integrated into thematic
 #'         clusters, a completed relationship table, and an overall summary.
 #' }
 #'

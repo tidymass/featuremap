@@ -108,17 +108,22 @@
 .hyp_card <- function(h) {
   anc <- paste(as.character(h$anchor_metabolites  %||% character(0)), collapse = ", ")
   ten <- paste(as.character(h$tension_metabolites %||% character(0)), collapse = ", ")
+  typ <- .s(h$type, "")
+  type_html <- if (nzchar(typ))
+    sprintf('<span class="type-pill">%s</span>', .he(typ)) else ""
   sprintf(
     '<div class="hyp-card">
       <div class="hyp-header">
         <span class="hyp-id">%s</span>
         <span class="hyp-title">%s</span>
+        %s
       </div>
       <div class="hyp-summary">%s</div>
       %s%s
     </div>',
     .he(.s(h$hypothesis_id)),
     .he(.s(h$title)),
+    type_html,
     .he(.s(h$summary)),
     .met_tags(anc, "anc"),
     .met_tags(ten, "ten")
@@ -161,12 +166,17 @@
     h   <- h_new[[1L]]
     anc <- paste(as.character(h$anchor_metabolites  %||% character(0)), collapse = ", ")
     ten <- paste(as.character(h$tension_metabolites %||% character(0)), collapse = ", ")
+    typ <- .s(h$type, "")
+    type_html <- if (nzchar(typ))
+      sprintf('<div class="rev-new-type">%s</div>', .he(typ)) else ""
     detail <- sprintf(
       '<div class="rev-detail">
+        %s
         <div class="rev-new-title">%s</div>
         <div class="rev-new-summary">%s</div>
         %s%s
       </div>',
+      type_html,
       .he(.s(h$title)),
       .he(.s(h$summary)),
       .met_tags(anc, "anc"),
@@ -195,11 +205,11 @@
   crat   <- .s(v$confidence_rationale, "")
   st_cls <- switch(status,
                    accepted  = "st-accepted",
-                   uncertain = "st-uncertain",
                    "st-rejected")
   h_fin       <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
   fin_title   <- if (length(h_fin) > 0L) .s(h_fin[[1L]]$title)   else ""
   fin_summary <- if (length(h_fin) > 0L) .s(h_fin[[1L]]$summary) else ""
+  fin_type    <- if (length(h_fin) > 0L) .s(h_fin[[1L]]$type)    else ""
 
   status_pill <- sprintf(
     '<span class="status-pill %s">%s</span>', st_cls, .he(toupper(status)))
@@ -209,6 +219,8 @@
 
   title_html <- if (nzchar(fin_title))
     sprintf('<div class="verdict-title">%s</div>', .he(fin_title)) else ""
+  type_html <- if (nzchar(fin_type))
+    sprintf('<div class="verdict-type">%s</div>', .he(fin_type)) else ""
   summary_html <- if (nzchar(fin_summary))
     sprintf('<div class="verdict-fin-summary">%s</div>', .he(fin_summary)) else ""
 
@@ -238,12 +250,12 @@
         <span class="verdict-hid">%s</span>
         %s
       </div>
-      %s%s
+      %s%s%s
       %s%s
     </div>',
     st_cls,
     .he(hid), status_pill,
-    title_html, summary_html,
+    type_html, title_html, summary_html,
     vrat_html, crat_html
   )
 }
@@ -400,6 +412,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .hyp-id   {font-size:.68rem;font-weight:700;color:#6741d9;
            background:#ede9fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
 .hyp-title{font-weight:600;font-size:.88rem;color:#1c1f26}
+.type-pill{font-size:.68rem;color:#445064;background:#eef5f2;border:1px solid #d9e8df;
+           padding:2px 6px;border-radius:999px;white-space:nowrap}
 .hyp-summary{font-size:.82rem;color:#4b5563;line-height:1.6;margin-top:2px}
 
 /* metabolite tags inside hypothesis cards */
@@ -442,6 +456,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .rev-just  {font-size:.82rem;color:#4b5563;line-height:1.6}
 .rev-detail{margin-top:9px;padding:9px 11px;background:#fff;
             border:1px solid #e4e7ed;border-radius:6px}
+.rev-new-type   {display:inline-block;font-size:.68rem;color:#445064;background:#eef5f2;
+                 border:1px solid #d9e8df;padding:2px 6px;border-radius:999px;margin-bottom:5px}
 .rev-new-title  {font-size:.85rem;font-weight:600;color:#1c1f26;margin-bottom:4px}
 .rev-new-summary{font-size:.8rem;color:#4b5563;line-height:1.55}
 
@@ -449,7 +465,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .verdict-card{border-radius:8px;padding:14px 15px;margin-top:10px;
               border:1px solid #e4e7ed;background:#fff}
 .st-accepted {background:#f4faf5;border-color:#b7dfc0}
-.st-uncertain{background:#fffbf0;border-color:#f0d88a}
 .st-rejected {background:#fdf3f3;border-color:#f0b8b8}
 
 .verdict-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
@@ -458,9 +473,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .status-pill{font-size:.65rem;font-weight:700;letter-spacing:.05em;
              padding:2px 8px;border-radius:3px}
 .st-accepted  .status-pill{background:#1a7a35;color:#fff}
-.st-uncertain .status-pill{background:#b45309;color:#fff}
 .st-rejected  .status-pill{background:#a12020;color:#fff}
 
+.verdict-type       {display:inline-block;font-size:.68rem;color:#445064;background:#eef5f2;
+                    border:1px solid #d9e8df;padding:2px 6px;border-radius:999px;margin-bottom:5px}
 .verdict-title      {font-size:.9rem;font-weight:600;color:#1c1f26;margin-bottom:5px}
 .verdict-fin-summary{font-size:.82rem;color:#4b5563;line-height:1.6;
                      font-style:italic;margin-bottom:10px;
@@ -728,7 +744,6 @@ generate_debate_html <- function(module_id,
   # ── 8. A0 Arbiter ───────────────────────────────────────────
   verdicts <- arbiter_result$verdicts %||% list()
   n_acc    <- sum(vapply(verdicts, function(v) identical(v$status, "accepted"),  logical(1L)))
-  n_unc    <- sum(vapply(verdicts, function(v) identical(v$status, "uncertain"), logical(1L)))
   n_rej    <- sum(vapply(verdicts, function(v) identical(v$status, "rejected"),  logical(1L)))
 
   vcards <- paste(vapply(verdicts, .verdict_card,
@@ -746,11 +761,10 @@ generate_debate_html <- function(module_id,
     <div class="summary-line">
       Reviewing the full debate:
       <strong>%d accepted</strong> &middot;
-      <strong>%d uncertain</strong> &middot;
       <strong>%d rejected</strong>.
     </div>
     %s%s',
-    n_acc, n_unc, n_rej, vcards, amb_html
+    n_acc, n_rej, vcards, amb_html
   )
   bubbles <- paste0(bubbles, "\n",
                     .bubble("center", "⚖", "Arbiter",

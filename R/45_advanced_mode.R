@@ -9,39 +9,26 @@
 #   P1  Proposer revision 1   – keep / modify / drop
 #   S2  Skeptic round 2       – (conditional) re-challenges revised set
 #   P2  Proposer revision 2   – (conditional) final keep / modify / drop
-#   A0  Arbiter               – accepted / uncertain / rejected + confidence
+#   A0  Arbiter               – accepted / rejected + confidence
 #
 # Information visible per agent:
 #   P0  : full module data (metabolites, class, pathway, Signal_concentration)
-#          → outputs: hypothesis_id, title, summary, anchor_metabolites, tension_metabolites
+#          → outputs: hypothesis_id, type, title, summary, anchor_metabolites, tension_metabolites
 #          → NO claim field (removed; full summary serves as the mechanistic statement)
 #
 #   S1/S2: module evidence (top metabolites, class, pathway coverage)
 #          + biological context: origin_profile, species, biospecimen (NO phenotype)
-#          + current hypotheses: title, FULL biochemical summary, anchor, tension metabolites
+#          + current hypotheses: type, title, FULL biochemical summary, anchor, tension metabolites
 #
 #   P1/P2: module evidence + biological context (same as S1/S2, no phenotype)
 #          + current full hypothesis text + Skeptic challenges
 #          → provides biochemical grounding for rebuttal decisions
-#          → if a "redundant" challenge is raised, either explicitly rebut it
-#            or, if agreeing, drop one of the flagged hypotheses
 #
 #   A0  : raw module evidence (top metabolites, class, pathway coverage)
 #         + surviving hypotheses (full) + debate history digest
 #         + origin_profile + species + biospecimen + phenotype
 #         + per-hypothesis PubMed phenotype summaries
 #         → does NOT receive global_direction (too complex to use as mechanistic constraint)
-#
-# Redundancy rule (for Skeptic and Proposer):
-#   Use "redundant" ONLY IF:
-#     (1) two hypotheses rely on largely the same anchor metabolites AND
-#     (2) they describe essentially the same biochemical mechanism AND
-#     (3) keeping both provides no additional explanatory value.
-#   Do NOT mark as redundant merely because hypotheses share a super-pathway,
-#   are upstream/downstream of each other, share intermediates, or one is a
-#   sub-pathway of another.
-#   Proposer may disagree with a redundancy challenge, but must explicitly
-#   justify the distinct anchors/mechanisms/value if keeping both.
 #
 # PubMed: two-layer search (shared metabolites + per-hypothesis title, each with phenotype),
 #   merged per hypothesis → each hypothesis has its own independent PMID evidence set.
@@ -304,8 +291,11 @@ format_hypotheses_full <- function(hypotheses) {
       paste(h$anchor_metabolites, collapse = ", ") else "none listed"
     ten <- if (length(h$tension_metabolites) > 0)
       paste(h$tension_metabolites, collapse = ", ") else "none listed"
+    typ <- h$type %||% "not specified"
+    if (is.na(typ) || !nzchar(typ)) typ <- "not specified"
     glue::glue(
       '{h$hypothesis_id} — "{h$title}"
+  Type: {typ}
   Biochemical summary: {h$summary}
   Anchor metabolites: {anc}
   Tension metabolites: {ten}'
@@ -334,6 +324,8 @@ apply_revisions <- function(hypotheses, revisions) {
 
     if (action == "modify") {
       # Apply field-by-field updates
+      if (!is.null(rev$revised_type) && !is.na(rev$revised_type) && nzchar(rev$revised_type))
+        h$type <- rev$revised_type
       if (!is.null(rev$revised_title) && nzchar(rev$revised_title))
         h$title   <- rev$revised_title
       if (!is.null(rev$revised_summary) && nzchar(rev$revised_summary))
@@ -372,6 +364,36 @@ restrict_to_top_metabolites <- function(x, valid_metabolites = NULL) {
   unique(unname(matched[!is.na(matched)]))
 }
 
+normalize_hypothesis_type <- function(x) {
+  allowed <- c(
+    "Host-Endogenous",
+    "Microbiome-Derived",
+    "Diet-Derived",
+    "Xenobiotic / Exogenous",
+    "Host–Microbiome"
+  )
+  if (is.null(x) || length(x) == 0) return(NA_character_)
+  raw <- trimws(as.character(x[1]))
+  if (!nzchar(raw) || is.na(raw)) return(NA_character_)
+
+  key <- tolower(gsub("[[:space:]]+", " ", raw))
+  key <- gsub("\u2013|\u2014", "-", key)
+  key <- gsub("/", " / ", key)
+  key <- gsub("[[:space:]]+", " ", key)
+
+  if (key %in% tolower(allowed)) {
+    return(allowed[match(key, tolower(allowed))])
+  }
+  if (grepl("host", key) && grepl("microbiome|microbial", key)) return("Host–Microbiome")
+  if (grepl("microbiome|microbial", key)) return("Microbiome-Derived")
+  if (grepl("diet|food|nutr", key)) return("Diet-Derived")
+  if (grepl("xenobiotic|exogenous|drug|pharma|environment|exposure", key)) {
+    return("Xenobiotic / Exogenous")
+  }
+  if (grepl("host|endogenous", key)) return("Host-Endogenous")
+  NA_character_
+}
+
 parse_proposer_output <- function(parsed, valid_metabolites = NULL) {
   if (is.null(parsed)) return(NULL)
   hyps_raw <- parsed$hypotheses
@@ -386,6 +408,7 @@ parse_proposer_output <- function(parsed, valid_metabolites = NULL) {
   out <- lapply(hyps_raw, function(h) {
     list(
       hypothesis_id        = trimws(as.character(h$hypothesis_id %||% "H?")),
+      type                 = normalize_hypothesis_type(h$type %||% NA_character_),
       title                = trimws(as.character(h$title         %||% "")),
       summary              = trimws(as.character(h$summary       %||% "")),
       anchor_metabolites   = restrict_to_top_metabolites(
@@ -423,9 +446,8 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
   if (is.null(chs_raw) || length(chs_raw) == 0) return(list())
 
   allowed_types <- c(
-    "weak_evidence", "metabolite_mismatch", "pathway_gap",
-    "origin_inconsistency", "species_biospecimen", "redundant",
-    "tension_unresolved", "inadequate_revision", "no_challenge"
+    "weak_evidence", "tension_unresolved", "origin_inconsistency",
+    "species_biospecimen", "inadequate_revision", "no_challenge"
   )
 
   out <- lapply(chs_raw, function(c) {
@@ -475,10 +497,13 @@ parse_revision_output <- function(parsed,
   }
 
   out <- lapply(revs_raw, function(r) {
+    revised_type <- normalize_hypothesis_type(r$revised_type %||% NA_character_)
+    if (is.na(revised_type)) revised_type <- ""
     list(
       hypothesis_id               = trimws(as.character(r$hypothesis_id %||% "")),
       action                      = trimws(tolower(as.character(r$action %||% "keep"))),
       justification               = trimws(as.character(r$justification %||% "")),
+      revised_type                = revised_type,
       revised_title               = trimws(as.character(r$revised_title %||% "")),
       revised_summary             = trimws(as.character(r$revised_summary %||% "")),
       revised_anchor_metabolites  = restrict_to_top_metabolites(
@@ -502,8 +527,7 @@ parse_revision_output <- function(parsed,
 # ============================================================
 
 # Check whether a challenge object targets a given hypothesis_id.
-# Handles both exact targets ("H1") and compound targets ("H1_H2") produced
-# by the "redundant" challenge type, where Skeptic flags two hypotheses at once.
+# Handles both exact targets ("H1") and compound targets ("H1_H2") defensively.
 #
 # Returns TRUE if hid is the sole target OR one of the joined targets.
 challenge_targets_hid <- function(ch, hid) {
@@ -547,7 +571,7 @@ should_run_round2 <- function(surviving, s1_challenges, p1_revisions) {
   )
 
   # For each surviving hypothesis, find its max severity in S1.
-  # Uses challenge_targets_hid() to handle compound "H1_H2" redundant targets.
+  # Uses challenge_targets_hid() defensively for older compound targets.
   # "no_challenge" severity is treated the same as "none" — does not trigger round 2.
   max_sev <- function(hid) {
     relevant <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
@@ -603,6 +627,7 @@ build_round1_history_for_s2 <- function(hypotheses_v0,
     hid <- h$hypothesis_id
     lines <- c(
       sprintf('%s — "%s" (P0 original)', hid, h$title),
+      sprintf("  Original type:     %s", h$type %||% "not specified"),
       sprintf("  Original summary:  %s", h$summary %||% ""),
       sprintf("  Original anchors:  %s", fmt_vec(h$anchor_metabolites)),
       sprintf("  Original tensions: %s", fmt_vec(h$tension_metabolites))
@@ -624,6 +649,8 @@ build_round1_history_for_s2 <- function(hypotheses_v0,
       lines <- c(lines, sprintf("  P1 decision (%s): %s",
                                 toupper(rev$action), rev$justification))
       if (identical(rev$action, "modify")) {
+        if (nzchar(rev$revised_type %||% ""))
+          lines <- c(lines, sprintf("    → Revised type:     %s", rev$revised_type))
         if (nzchar(rev$revised_title %||% ""))
           lines <- c(lines, sprintf("    → Revised title:    \"%s\"", rev$revised_title))
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
@@ -670,6 +697,7 @@ build_round1_history_for_p2 <- function(hypotheses_v0,
     ten   <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
     lines <- c(
       sprintf('%s — "%s" (P0 original)', hid, h$title),
+      sprintf("  Original type: %s", h$type %||% "not specified"),
       sprintf("  Original summary: %s", h$summary %||% ""),
       sprintf("  Original anchors: %s", if (nzchar(anc)) anc else "none"),
       sprintf("  Original tensions: %s", if (nzchar(ten)) ten else "none")
@@ -688,6 +716,8 @@ build_round1_history_for_p2 <- function(hypotheses_v0,
     if (!is.null(rev)) {
       lines <- c(lines, sprintf("  P1 (%s): %s", toupper(rev$action), rev$justification))
       if (identical(rev$action, "modify")) {
+        if (nzchar(rev$revised_type %||% ""))
+          lines <- c(lines, sprintf("    → Revised type: %s", rev$revised_type))
         if (nzchar(rev$revised_title %||% ""))
           lines <- c(lines, sprintf("    → Revised title: \"%s\"", rev$revised_title))
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
@@ -743,6 +773,7 @@ build_debate_history_digest <- function(hypotheses_v0,
     hid <- h$hypothesis_id
     lines <- c(
       sprintf('%s — "%s" [P0 original]', hid, h$title),
+      sprintf("  P0 type: %s", h$type %||% "not specified"),
       sprintf("  P0 summary: %s", h$summary %||% "")
     )
 
@@ -763,6 +794,8 @@ build_debate_history_digest <- function(hypotheses_v0,
       lines <- c(lines, sprintf("  Round 1 — Proposer (%s): %s",
                                 action_label, r1_rev$justification))
       if (r1_rev$action == "modify") {
+        if (nzchar(r1_rev$revised_type %||% ""))
+          lines <- c(lines, sprintf("    → Revised type: %s", r1_rev$revised_type))
         if (nzchar(r1_rev$revised_title %||% ""))
           lines <- c(lines, sprintf("    → Revised title: \"%s\"", r1_rev$revised_title))
         # Retrieve P1-revised summary/anchors/tensions from hypotheses_v1 if available
@@ -802,6 +835,8 @@ build_debate_history_digest <- function(hypotheses_v0,
         lines <- c(lines, sprintf("  Round 2 — Proposer (%s): %s",
                                   action_label, r2_rev$justification))
         if (r2_rev$action == "modify") {
+          if (nzchar(r2_rev$revised_type %||% ""))
+            lines <- c(lines, sprintf("    → Revised type: %s", r2_rev$revised_type))
           if (nzchar(r2_rev$revised_title %||% ""))
             lines <- c(lines, sprintf("    → Revised title: \"%s\"", r2_rev$revised_title))
           # Retrieve P2-revised summary/anchors/tensions from hypotheses_final if available
@@ -861,11 +896,20 @@ Number-of-hypotheses guidance:
 
 For each hypothesis provide:
 1. hypothesis_id : \"H1\", \"H2\", or \"H3\"
-2. title         : KEGG-style pathway/process name (see title rules below)
-3. summary       : 4-6 sentences describing the biochemical mechanism (see summary rules below)
-4. anchor_metabolites  : metabolite names that STRONGLY support this hypothesis
-5. tension_metabolites : optional metabolite names that materially conflict with, or remain
+2. type          : one of the five origin/scope types below
+3. title         : KEGG-style pathway/process name (see title rules below)
+4. summary       : 4-6 sentences describing the biochemical mechanism (see summary rules below)
+5. anchor_metabolites  : metabolite names that STRONGLY support this hypothesis
+6. tension_metabolites : optional metabolite names that materially conflict with, or remain
                          difficult to explain under, this hypothesis
+
+Type rules:
+   - Choose exactly one:
+     Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
+   - Type is an interpretation scope for the hypothesis, not a confidence score.
+   - Use metabolite identity, chemical class, pathway evidence, and general biochemical knowledge
+     to assign the best-supported type.
+   - Do not mention study phenotype or disease when assigning type.
 
 Title rules
    - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.
@@ -883,7 +927,8 @@ Summary rules:
    - Write 4-6 sentences as a factual biochemical annotation of the module.
    - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions — as if writing an entry in a biochemical database.
    - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and pathway evidence only to support or qualify.
-   - STRICTLY FORBIDDEN: do NOT state or imply whether metabolites are endogenous or exogenous.
+   - Keep origin/scope interpretation in the type field; in the summary, mention source or host/microbial
+     processing only when it is necessary to explain the biochemical mechanism.
    - Do NOT comment on the study phenotype or disease relevance.
    - Do NOT reference module-level statistics (Signal_concentration).
    - Mention secondary signals only briefly at the end if needed.
@@ -898,7 +943,7 @@ Rules:
 - tension_metabolites should be empty unless a metabolite creates a real biochemical conflict
   with the proposed mechanism. Do NOT list peripheral or merely non-central metabolites as
   tensions simply because they are not part of the main pathway.
-- Do NOT reference study phenotype, disease, or origin (endogenous/exogenous)
+- Do NOT reference study phenotype or disease
 - Do NOT invent metabolites not present in the module data
 - Do NOT invent unsupported pathways or mechanisms
 
@@ -908,6 +953,7 @@ Return STRICT JSON only:
   \"hypotheses\": [
     {{
       \"hypothesis_id\": \"H1\",
+      \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
       \"title\": \"...\",
       \"summary\": \"...\",
       \"anchor_metabolites\": [\"...\"],
@@ -930,7 +976,7 @@ You have access to Round 1 challenges and Proposer revision decisions.
 - Do NOT repeat a challenge that was adequately addressed by a modification in Round 1
 - If a Round 1 modification introduced new content, examine that new content for issues
 - Use challenge_type \"inadequate_revision\" if a Round 1 major challenge was NOT adequately resolved
-- Focus on genuinely new issues, not previously settled ones"
+- Focus on genuinely new or unresolved issues, not previously settled ones"
   ) else ""
 
   glue::glue(
@@ -939,14 +985,15 @@ Your task is to critically evaluate candidate biochemical hypotheses for a metab
 
 You will receive:
 - Module evidence (top metabolites, class structure, pathway coverage)
-- Basic biological context: origin profile, species, biospecimen (no phenotype)
-- 1-3 hypotheses, each shown as: title, full biochemical summary, anchor metabolites, tension metabolites
+- Basic biological context: origin profile, species, biospecimen
+- 1-3 hypotheses, each shown as: type, title, full biochemical summary, anchor metabolites, tension metabolites
 
 Use your general biochemical and metabolomics knowledge to evaluate pathway plausibility,
 metabolite-to-pathway fit, mechanism specificity, and whether the proposed anchors really
 support the claim. You are explicitly allowed to use general external biochemical knowledge
 about pathways, metabolites, enzyme logic, pathway crosstalk, biospecimen detectability, and
-species plausibility. The only forbidden context is the study phenotype/disease context.
+species plausibility.
+{round2_addon}
 
 For each hypothesis generate 0-3 specific biochemical challenges.
 Only raise a challenge when it materially affects interpretation. If a hypothesis is
@@ -957,22 +1004,12 @@ Challenge types (use exactly one per challenge):
 - no_challenge          : no material biochemical concern was identified; use only when no
                           weakness needs Proposer response. This is not a criticism.
 - weak_evidence         : anchor metabolites do not strongly support the claimed pathway
-- metabolite_mismatch   : high-priority metabolites are better explained by a different mechanism
-- pathway_gap           : KEGG/HMDB coverage is absent or very low for the claimed pathway
-- origin_inconsistency  : the mechanism (endo/exo) conflicts with the origin profile proportions
+- tension_unresolved    : the hypothesis lists tension metabolites but the summary does not
+                           explain why they are difficult to reconcile with the mechanism
+- origin_inconsistency  : the current origin profile does not support the hypothesis and its type
 - species_biospecimen   : the claimed pathway is implausible for the stated species or biospecimen
-- redundant             : use ONLY when ALL THREE conditions hold simultaneously:
-                           (1) the two hypotheses rely on largely the same anchor metabolites,
-                           (2) they describe essentially the same biochemical mechanism, AND
-                           (3) keeping both provides no additional explanatory value.
-                         Do NOT mark as redundant merely because they share a super-pathway,
-                         one is upstream/downstream of another, they share intermediates,
-                         or one is a sub-pathway of another. Distinct physiological emphasis,
-                         distinct anchors, or distinct unresolved tensions justify separate hypotheses.
-                         Use target_hypothesis_id \"H1_H2\" (compound format) when raising this challenge.
-- tension_unresolved    : the hypothesis lists high-priority metabolites as tensions but its
-                           biochemical mechanism ignores them entirely
-- inadequate_revision   : (round 2 only) a Round 1 revision failed to address the original challenge{round2_addon}
+- inadequate_revision   : round 2 only; a Round 1 revision failed to adequately address a
+                           major Skeptic challenge
 
 Severity rules:
 - major        : the challenge undermines the core mechanism; the hypothesis cannot stand without addressing this
@@ -981,9 +1018,8 @@ Severity rules:
                  challenge_type \"no_challenge\". This tells the next Proposer and the Arbiter that
                  you explicitly reviewed this hypothesis and found no issue.
 
-FORBIDDEN:
-- Do not challenge based on phenotype relevance or disease association
-- Anchor each challenge to specific metabolites, pathway names, or biochemical mechanisms
+Anchor each challenge to specific metabolites, pathway names, origin/type evidence, species,
+biospecimen, or biochemical mechanisms.
 
 Return STRICT JSON only. Do NOT force one challenge per hypothesis. If no substantive
 challenge exists for a hypothesis, either omit it from the challenges array or return one
@@ -992,7 +1028,7 @@ no_challenge entry for that hypothesis.
   \"challenges\": [
     {{
       \"target_hypothesis_id\": \"H1\",
-      \"challenge_type\": \"weak_evidence | metabolite_mismatch | pathway_gap | origin_inconsistency | species_biospecimen | redundant | tension_unresolved | inadequate_revision | no_challenge\",
+      \"challenge_type\": \"weak_evidence | tension_unresolved | origin_inconsistency | species_biospecimen | inadequate_revision | no_challenge\",
       \"challenge\": \"2-3 sentences with specific evidence, or 'No material biochemical concern identified.' for no_challenge\",
       \"severity\": \"major | minor | no_challenge\"
     }}
@@ -1031,7 +1067,7 @@ Your task is to respond to critical challenges against proposed biological hypot
 You will receive:
 - Module evidence (top metabolites, class structure, pathway coverage) — biochemical grounding
 - Biological context: origin profile, species, biospecimen (no phenotype)
-- Current hypotheses with their full biochemical summaries and anchor/tension metabolites
+- Current hypotheses with their type, full biochemical summaries, and anchor/tension metabolites
 - Skeptic challenges (with severity: major or minor)
 
 For each hypothesis, decide: keep | modify | drop
@@ -1041,9 +1077,12 @@ Rules:
            You may cite the module evidence, general biochemical knowledge
            (pathway logic, metabolite roles, species or biospecimen biology), or point
            to specific weaknesses in the Skeptic's evidence.
-- modify : revise to address the challenges; provide updated title, summary,
-           anchor_metabolites, tension_metabolites; a modification must change either
-           the title OR the mechanism text — renaming alone is not valid.
+- modify : revise P0-generated content to address reasonable Skeptic challenges; provide
+           updated type, title, summary, anchor_metabolites, and tension_metabolites.
+           A modification must change
+           either the type, title, OR the mechanism text — renaming alone is not valid.
+           revised_type must be exactly one of:
+           Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome.
            Revised anchor_metabolites and revised_tension_metabolites MUST be selected only
            from the current hypotheses' top-metabolite-derived anchors/tensions or from the
            module's Top metabolites list. Do NOT promote class-level or other non-top
@@ -1057,17 +1096,6 @@ Silence on a major challenge is not acceptable.
 You may drop all hypotheses if you judge them all to be fundamentally unsupported —
 the Arbiter will handle the all-dropped case.
 
-Redundancy rule: If a \"redundant\" challenge is raised against two hypotheses (e.g., H1_H2),
-first decide whether you agree with the redundancy claim.
-- If you AGREE they are genuinely redundant, drop exactly one of them. Keep the one whose
-  anchor metabolites more specifically support its mechanism and whose biochemical scope is
-  less overlapping with the other.
-- If you DISAGREE, you may keep or modify both, but the justification for each retained
-  hypothesis MUST explicitly rebut the redundancy challenge and explain the distinct anchors,
-  biochemical mechanism, or interpretive value that warrants keeping both.
-Do NOT drop a hypothesis solely because redundancy was raised; drop only when you agree
-the redundancy challenge is valid.
-
 Return STRICT JSON only:
 {{
   \"revisions\": [
@@ -1075,6 +1103,7 @@ Return STRICT JSON only:
       \"hypothesis_id\": \"H1\",
       \"action\": \"keep | modify | drop\",
       \"justification\": \"...\",
+      \"revised_type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
       \"revised_title\": \"...\",
       \"revised_summary\": \"...\",
       \"revised_anchor_metabolites\": [\"...\"],
@@ -1138,10 +1167,10 @@ You will receive:
 - Module evidence (top metabolites, class structure, pathway coverage) — raw biochemical grounding
 - Final surviving hypotheses in full (or all original hypotheses if all were dropped)
 - A complete debate history digest that includes for each hypothesis:
-    • P0 original title and full biochemical summary
+    • P0 original type, title, and full biochemical summary
     • All Skeptic challenges with severity and full challenge text (including no_challenge entries
       which indicate the Skeptic explicitly found no issue)
-    • Proposer revision decisions with justifications, revised titles, and revised summaries
+    • Proposer revision decisions with justifications, revised types, titles, and summaries
     • Round 2 challenges and revisions (if the second round was triggered)
     • Final survival status
 - Origin profile, species, biospecimen, and phenotype (full study context)
@@ -1152,27 +1181,41 @@ by the complete debate record. Specifically:
 - Assess whether the Skeptic's challenges were biochemically valid
 - Assess whether the Proposer's revisions adequately addressed the challenges
 - Use the debate trajectory to calibrate confidence (well-contested and well-defended = higher confidence;
-  major challenges that were only superficially addressed = lower confidence or uncertain)
+  major challenges that were only superficially addressed = lower confidence or rejection)
 
 Note: global_direction is intentionally excluded — module-level direction is too complex to use
 as a mechanistic constraint.
 
 Verdict options:
-- accepted  : biochemically sound, survived debate, plausible phenotype relevance
-- uncertain : has merit but carries unresolved issues, weak literature support,
-              or ambiguous evidence (including hypotheses recovered after all-drop)
+- accepted  : biologically plausible and useful as the final module annotation, with
+              evidence strength captured by confidence_label
 - rejected  : biochemically implausible or contradicted by data within the hypotheses
-              currently under your review
+              currently under your review, or too unsupported to be useful
 
-For accepted and uncertain hypotheses, also provide:
+For accepted hypotheses, also provide:
 - confidence_label       : \"high\" | \"medium\" | \"low\"
-- confidence_rationale   : 2-3 sentences explicitly addressing species validity, biospecimen
-  appropriateness, phenotype relevance, and how the origin profile influenced the decision.
+- confidence_rationale   : 2-3 sentences explaining the strength of evidence supporting
+  the accepted annotation.
 
-Confidence rules — evaluate across three dimensions:
-  (a) Species validity     : Is this an established pathway in the study species?
-  (b) Biospecimen fit      : Is this pathway known to be active/detectable in the study biospecimen?
-  (c) Phenotype relevance  : Is the pathway plausibly perturbed in the study phenotype?
+Confidence reflects evidence strength for the accepted annotation. It is secondary to
+status and should not be used as an independent verdict.
+
+Confidence rules:
+- high   : Strong module evidence. Top metabolites, hypothesis type, class/pathway evidence,
+           species, biospecimen, and debate record are coherent.
+- medium : Reasonable module interpretation, but with partial evidence, indirect pathway support,
+           incomplete explanation, limited literature support, or minor unresolved limitations.
+- low    : Weak but still useful interpretation. Evidence is sparse, indirect, or partly
+           unresolved, but the hypothesis remains more informative than rejecting the module
+           annotation entirely.
+
+Origin rule:
+- Origin profile is an interpretation-scope check, not an automatic penalty.
+- High exogenous fraction does NOT automatically lower confidence if the hypothesis type
+  is Diet-Derived, Xenobiotic / Exogenous, Microbiome-Derived, or otherwise consistent with
+  the origin profile.
+- Lower confidence or reject only when the hypothesis type or summary conflicts with the
+  origin profile.
 
 Phenotype evidence rule:
 - If phenotype is provided but PubMed phenotype summaries state insufficient evidence,
@@ -1181,18 +1224,10 @@ Phenotype evidence rule:
   direct literature support.
 - If phenotype is not provided, do NOT infer a phenotype relationship.
 
-Scoring:
-- high   : ALL three dimensions hold AND early-ranked anchor metabolites are recognized endogenous
-           substrates/products in that species. If exogenous_frac > 0.5, confidence CANNOT be high.
-- medium : pathway exists in the species and fits the biospecimen, but at least one dimension is
-           indirect or speculative, OR exogenous metabolites dominate the module.
-- low    : pathway fails species validity OR the module is overwhelmingly exogenous/synthetic.
-
-Origin profile is a primary signal: high exogenous fraction shifts confidence toward medium or low
-regardless of pathway plausibility.
-
 Recovery rule (when all hypotheses were dropped in debate):
-- You MAY recover at most ONE hypothesis to \"uncertain\" status if the Proposer was overly aggressive
+- You MAY recover at most ONE hypothesis to \"accepted\" status with low confidence if the
+  Proposer was overly aggressive and the hypothesis remains a useful, biologically plausible
+  annotation
 - If you agree all drops were justified, return all as \"rejected\"
 
 Return STRICT JSON only:
@@ -1200,7 +1235,7 @@ Return STRICT JSON only:
   \"verdicts\": [
     {{
       \"hypothesis_id\": \"H1\",
-      \"status\": \"accepted | uncertain | rejected\",
+      \"status\": \"accepted | rejected\",
       \"verdict_rationale\": \"...\",
       \"confidence_label\": \"high | medium | low\",
       \"confidence_rationale\": \"...\"
@@ -1437,6 +1472,7 @@ Phenotype: {scalar(study_context$phenotype)}
 
 --- Hypothesis ---
 ID: {hypothesis$hypothesis_id}
+Type: {hypothesis$type %||% 'not specified'}
 Title: {hypothesis$title}
 Biochemical summary: {hypothesis$summary}
 
@@ -1601,12 +1637,17 @@ adv_gemini_schema_proposer <- function() {
           type = "OBJECT",
           properties = list(
             hypothesis_id       = list(type = "STRING"),
+            type                = list(
+              type = "STRING",
+              enum = c("Host-Endogenous", "Microbiome-Derived", "Diet-Derived",
+                       "Xenobiotic / Exogenous", "Host–Microbiome")
+            ),
             title               = list(type = "STRING"),
             summary             = list(type = "STRING"),
             anchor_metabolites  = list(type = "ARRAY", items = list(type = "STRING")),
             tension_metabolites = list(type = "ARRAY", items = list(type = "STRING"))
           ),
-          required = c("hypothesis_id", "title", "summary",
+          required = c("hypothesis_id", "type", "title", "summary",
                        "anchor_metabolites", "tension_metabolites")
         )
       )
@@ -1652,6 +1693,11 @@ adv_gemini_schema_revision <- function() {
             action                      = list(type = "STRING",
                                                enum = c("keep", "modify", "drop")),
             justification               = list(type = "STRING"),
+            revised_type                = list(
+              type = "STRING",
+              enum = c("Host-Endogenous", "Microbiome-Derived", "Diet-Derived",
+                       "Xenobiotic / Exogenous", "Host–Microbiome")
+            ),
             revised_title               = list(type = "STRING"),
             revised_summary             = list(type = "STRING"),
             revised_anchor_metabolites  = list(type = "ARRAY",
@@ -1678,7 +1724,7 @@ adv_gemini_schema_arbiter <- function() {
           properties = list(
             hypothesis_id        = list(type = "STRING"),
             status               = list(type = "STRING",
-                                        enum = c("accepted", "uncertain", "rejected")),
+                                        enum = c("accepted", "rejected")),
             verdict_rationale    = list(type = "STRING"),
             confidence_label     = list(type = "STRING",
                                         enum = c("high", "medium", "low")),
@@ -1728,7 +1774,6 @@ assemble_advanced_output_row <- function(module_obj,
   # Status counts
   statuses   <- if (length(verdicts) > 0) sapply(verdicts, `[[`, "status") else character(0)
   n_accepted <- sum(statuses == "accepted",  na.rm = TRUE)
-  n_uncertain<- sum(statuses == "uncertain", na.rm = TRUE)
   n_rejected <- sum(statuses == "rejected",  na.rm = TRUE)
 
   # ---- Module-level fields (same across all output rows) ----
@@ -1814,6 +1859,7 @@ assemble_advanced_output_row <- function(module_obj,
     data.frame(
       module_id                  = mid,
       hypothesis_id              = hid,
+      hypothesis_type            = hobj$type %||% NA_character_,
       verdict_status             = v$status %||% NA_character_,
       title                      = hobj$title   %||% NA_character_,
       functional_summary         = hobj$summary %||% NA_character_,
@@ -1848,7 +1894,6 @@ assemble_advanced_output_row <- function(module_obj,
       n_proposed                 = length(hypotheses_v0),
       n_survived_debate          = length(hypotheses_final),
       n_accepted                 = n_accepted,
-      n_uncertain                = n_uncertain,
       n_rejected                 = n_rejected,
       residual_ambiguity         = residual_amb,
       all_hypotheses_json        = all_hyp_json,
@@ -1856,11 +1901,11 @@ assemble_advanced_output_row <- function(module_obj,
     )
   }
 
-  # ---- One row per accepted/uncertain hypothesis ----
-  non_rejected <- Filter(function(v) v$status %in% c("accepted", "uncertain"), verdicts)
+  # ---- One row per accepted hypothesis ----
+  accepted <- Filter(function(v) identical(v$status, "accepted"), verdicts)
 
-  if (length(non_rejected) > 0) {
-    do.call(rbind, lapply(non_rejected, make_row))
+  if (length(accepted) > 0) {
+    do.call(rbind, lapply(accepted, make_row))
   } else {
     # All hypotheses rejected → one summary row (no per-hypothesis PubMed)
     module_rel <- list(
@@ -1889,13 +1934,14 @@ assemble_advanced_output_row <- function(module_obj,
     data.frame(
       module_id                  = mid,
       hypothesis_id              = NA_character_,
+      hypothesis_type            = NA_character_,
       verdict_status             = "rejected",
       title                      = NA_character_,
       functional_summary         = NA_character_,
       phenotype_relationship     = module_rel$phenotype_relationship %||% NA_character_,
       phenotype_literature_support = module_rel$literature_support %||% NA_character_,
       phenotype_evidence_note    = module_rel$evidence_note %||% NA_character_,
-      confidence_label           = "rejected",
+      confidence_label           = NA_character_,
       rationale                  = NA_character_,
       global_direction           = global_direction,
       core_drivers               = core_drivers,
@@ -1920,7 +1966,6 @@ assemble_advanced_output_row <- function(module_obj,
       n_proposed                 = length(hypotheses_v0),
       n_survived_debate          = length(hypotheses_final),
       n_accepted                 = 0L,
-      n_uncertain                = 0L,
       n_rejected                 = n_rejected,
       residual_ambiguity         = residual_amb,
       all_hypotheses_json        = all_hyp_json,
@@ -1948,7 +1993,7 @@ assemble_advanced_output_row <- function(module_obj,
 #' @param debate_html Logical. Whether to export a per-module HTML debate trace.
 #' @param debate_html_dir Directory for debate HTML files.
 #' @return Data frame compatible with fast mode output plus advanced columns.
-#'   Accepted and uncertain hypotheses are returned as separate rows; rejected
+#'   Accepted hypotheses are returned as separate rows; rejected
 #'   modules return one rejected summary row. PubMed evidence is exported in
 #'   \code{pubmed_pmids} and \code{pubmed_evidence_json}. Debate trace is
 #'   exported in \code{raw_response_p0}, \code{raw_response_s1},
@@ -2028,11 +2073,11 @@ annotate_one_module_advanced <- function(module_obj,
     )
     fast_row$annotation_mode       <- "fast_fallback"
     fast_row$hypothesis_id         <- NA_character_
+    fast_row$hypothesis_type       <- NA_character_
     fast_row$verdict_status        <- NA_character_
     fast_row$n_proposed            <- 0L
     fast_row$n_survived_debate     <- NA_integer_
     fast_row$n_accepted            <- NA_integer_
-    fast_row$n_uncertain           <- NA_integer_
     fast_row$n_rejected            <- NA_integer_
     fast_row$residual_ambiguity    <- NA_character_
     fast_row$all_hypotheses_json   <- NA_character_
@@ -2293,7 +2338,7 @@ annotate_one_module_advanced <- function(module_obj,
       })
     }
     arbiter_result$verdicts <- Filter(function(v) {
-      v$status %in% c("accepted", "uncertain", "rejected") &&
+      v$status %in% c("accepted", "rejected") &&
         (v$status == "rejected" || v$confidence_label %in% c("high", "medium", "low"))
     }, arbiter_result$verdicts)
     arbiter_result$verdicts <- Filter(

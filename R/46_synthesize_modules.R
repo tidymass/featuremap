@@ -5,7 +5,7 @@
 # Fast mode does not produce hypothesis-level debate verdicts and
 # therefore cannot be synthesized at this level of granularity.
 #
-# Takes all accepted/uncertain hypotheses from annotate_module() output
+# Takes all accepted hypotheses from annotate_module() output
 # and produces:
 #   1. Thematic clusters  — grouping of hypotheses by shared biology
 #   2. Sparse relationship table — only direct / indirect pairs;
@@ -35,7 +35,7 @@
 
 #' Prepare node list from module_function data frame
 #'
-#' Filters to accepted/uncertain rows and assigns stable node_ids.
+#' Filters to accepted rows and assigns stable node_ids.
 #' Fast-mode rows (no hypothesis_id column, or hypothesis_id NA) use
 #' module_id as node_id.  Advanced-mode rows with a real hypothesis_id
 #' get a compound node_id "module_id::hypothesis_id".
@@ -64,11 +64,11 @@ prepare_synthesis_nodes <- function(module_df) {
       stop("No advanced-mode rows found (all modules were fast_fallback).")
   }
 
-  # Keep accepted and uncertain rows only
-  df <- module_df[module_df$verdict_status %in% c("accepted", "uncertain"), , drop = FALSE]
+  # Keep accepted rows only
+  df <- module_df[module_df$verdict_status == "accepted", , drop = FALSE]
 
   if (nrow(df) == 0)
-    stop("No accepted or uncertain hypotheses found. Nothing to synthesize.")
+    stop("No accepted hypotheses found. Nothing to synthesize.")
 
   # node_id = "module_id::hypothesis_id" (hypothesis_id is always present in advanced mode)
   df$node_id <- paste(df$module_id, df$hypothesis_id, sep = "::")
@@ -77,7 +77,7 @@ prepare_synthesis_nodes <- function(module_df) {
   df <- df[!duplicated(df$node_id), , drop = FALSE]
 
   optional_cols <- c(
-    "confidence_label", "rationale", "core_drivers",
+    "hypothesis_type", "confidence_label", "rationale", "core_drivers",
     "top_kegg_pathways", "top_hmdb_pathways",
     "phenotype_literature_support", "phenotype_evidence_note"
   )
@@ -104,7 +104,7 @@ into an integrated biological picture.
 
 You will receive:
 - A list of hypothesis nodes, each with: node_id, module_id, verdict_status,
-  title, functional_summary, phenotype_relationship, confidence/rationale,
+  hypothesis type, title, functional_summary, phenotype_relationship, confidence/rationale,
   core driver metabolites, pathway evidence, and phenotype literature support
 - Study context: species, biospecimen, phenotype
 
@@ -155,7 +155,7 @@ RULES:
 - Do NOT invent metabolites, pathways, or literature not present in the inputs
 - Use core drivers and pathway evidence when deciding shared pathways, containment, or cross-talk
 - Use phenotype relationship and literature support when deciding phenotype_convergent relationships
-- Do NOT comment on accepted vs uncertain status in the summary (treat all nodes equally)
+- Do NOT rank accepted nodes by verdict status in the summary (treat all accepted nodes equally)
 
 Return STRICT JSON only:
 {{
@@ -222,6 +222,7 @@ build_synthesis_user_prompt <- function(nodes_df, study_context = NULL) {
       glue::glue(
         "Node: {r$node_id}
   Module: {r$module_id}  |  Status: {scalar(r$verdict_status)}
+  Type: {scalar(r$hypothesis_type)}
   Title: {scalar(r$title)}
   Confidence: {scalar(r$confidence_label)}
   Confidence rationale: {rat}
@@ -600,7 +601,7 @@ synthesize_modules <- function(res,
 
   if (n_modules <= 1) {
     cli::cli_alert_info(
-      "Only one module has accepted/uncertain hypotheses; skipping cross-module synthesis."
+      "Only one module has accepted hypotheses; skipping cross-module synthesis."
     )
     res$module_synthesis <- list(
       nodes                = nodes_df,

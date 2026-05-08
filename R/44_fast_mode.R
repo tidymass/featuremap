@@ -3,7 +3,7 @@
 # LLM Prompt Builders  (Fast Mode)
 #
 # Call 1:  build_system_prompt()  +  build_module_prompt()
-#          → {title, functional_summary}
+#          → {type, title, functional_summary}
 #          Inputs: Signal_concentration, top metabolites, class structure,
 #                  pathway coverage (KEGG + HMDB)
 #          No study context; no confidence assessment
@@ -11,7 +11,7 @@
 # Call 2:  build_phenotype_confidence_system_prompt()
 #          + build_phenotype_confidence_prompt()
 #          → {phenotype_relationship, confidence_label, rationale}
-#          Inputs: module title, origin profile, study context,
+#          Inputs: module type/title/summary, origin profile, study context,
 #                  PubMed abstracts (optional)
 # ============================================================
 
@@ -35,9 +35,17 @@ Definitions:
 - Signal_concentration: whether phenotype-associated Importance is concentrated in a few metabolites (high) or distributed across many metabolites (low).
 - Priority_level: interpretation priority within the module; early-ranked high-priority metabolites should anchor the main interpretation.
 
-Using only the provided information, return two fields:
+Using only the provided information, return three fields:
 
-1) TITLE
+1) TYPE
+   - Choose exactly one:
+     Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
+   - Type is an interpretation scope for the module annotation, not a confidence score.
+   - Use metabolite identity, chemical class, pathway evidence, and general biochemical knowledge
+     to assign the best-supported type.
+   - Do not mention study phenotype or disease when assigning type.
+
+2) TITLE
    - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.
    - Follow KEGG naming conventions:
      - Use \"X metabolism\" when the module spans multiple steps of a compound class (e.g., \"Tyrosine metabolism\", \"Sphingolipid metabolism\").
@@ -49,22 +57,24 @@ Using only the provided information, return two fields:
    - Use pathway evidence (KEGG/HMDB) to support or refine the title when it aligns with the metabolite evidence.
    - If no canonical pathway fits, use the most specific neutral description of the dominant chemical transformation.
 
-2) FUNCTIONAL_SUMMARY
+3) FUNCTIONAL_SUMMARY
    - Write 4-6 sentences as a factual biochemical annotation of the module.
    - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions — as if writing an entry in a biochemical database.
    - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and pathway evidence only to support or qualify.
-   - STRICTLY FORBIDDEN: do NOT state or imply whether metabolites are endogenous or exogenous.
+   - Keep origin/scope interpretation in the type field; in the summary, mention source or host/microbial
+     processing only when it is necessary to explain the biochemical mechanism.
    - Do NOT comment on the study phenotype or disease relevance.
    - Do NOT reference module-level statistics (Signal_concentration).
    - Mention secondary signals only briefly at the end if needed.
 
 Return STRICT JSON only:
 {{
+  \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
   \"title\": \"...\",
   \"functional_summary\": \"...\"
 }}
 
-Do not invent unsupported pathways or mechanisms."
+Do not invent metabolites, unsupported pathways, or unsupported mechanisms."
   )
 }
 
@@ -204,10 +214,11 @@ build_pathway_text <- function(pathway_coverage) {
 build_phenotype_confidence_system_prompt <- function() {
   glue::glue(
     "You are an expert in metabolomics and biochemical pathway interpretation.
-Your task is to assess the phenotypic relevance and confidence of a previously named metabolic module.
+Your task is to assess phenotype relationship and evidence strength for a previously
+generated fast-mode module annotation.
 
 You will receive:
-- Module title (from prior biochemical analysis)
+- Module type, title, and functional summary from prior biochemical analysis
 - Origin profile: proportions of endogenous, exogenous, and unknown-origin metabolites
 - Study context: species, biospecimen, phenotype
 - Literature evidence: PubMed abstracts retrieved by searching the module title,
@@ -223,29 +234,36 @@ Return three fields:
 
 1) PHENOTYPE_RELATIONSHIP
    - Write 2-4 sentences summarizing how the module's metabolites relate to the study phenotype,
-     based on the provided PubMed evidence.
-   - If no PubMed evidence is available, write exactly:
+     based on the provided PubMed evidence when available.
+   - If phenotype is provided but PubMed evidence is absent or insufficient, you MAY infer a
+     cautious phenotype relationship from general biochemical knowledge. When doing so,
+     explicitly state that the relationship is inferred and lacks sufficient direct literature support.
+   - If phenotype is not provided, write exactly:
      \"Insufficient literature evidence to establish phenotype relationship.\"
 
 2) CONFIDENCE
-   Evaluate across three dimensions using the study context AND origin profile:
-   (a) Species validity: Is this an established pathway in the study species?
-   (b) Biospecimen appropriateness: Is this pathway known to be active/detectable in the study
-       biospecimen?
-   (c) Phenotype relevance: Is the pathway plausibly perturbed in the study phenotype?
-   (d) Origin profile: high exogenous fraction shifts confidence toward medium
-   or low regardless of pathway plausibility.
+   Confidence reflects the strength of evidence supporting the fast-mode annotation. It is
+   not an accepted/rejected verdict.
 
    Scoring rules:
-   - High: ALL four dimensions hold AND early-ranked metabolites are recognized endogenous
-     substrates/products in that species.
-   - Medium: pathway exists in the species and fits the biospecimen, but at least one dimension
-     is indirect/speculative, OR exogenous metabolites dominate.
-   - Low: pathway fails species/biospecimen/phenotype validity OR the module is overwhelmingly exogenous/synthetic.
+   - High: Strong module evidence. Top metabolites, annotation type, class/pathway evidence,
+     species, biospecimen, and available phenotype/literature evidence are coherent.
+   - Medium: Reasonable module interpretation, but with partial evidence, indirect pathway
+     support, incomplete explanation, limited literature support, or minor limitations.
+   - Low: Weak but still useful interpretation. Evidence is sparse, indirect, partly unresolved,
+     or the annotation type/summary has notable but non-fatal limitations.
+
+   Origin rule:
+   - Origin profile is an interpretation-scope check, not an automatic penalty.
+   - High exogenous fraction does NOT automatically lower confidence if the annotation type is
+     Diet-Derived, Xenobiotic / Exogenous, Microbiome-Derived, or otherwise consistent with
+     the origin profile.
+   - Lower confidence only when the annotation type or summary conflicts with the origin profile.
 
 3) RATIONALE
-   - 2-3 sentences explicitly addressing species validity, biospecimen appropriateness,
-     phenotype relevance, and how the origin profile influenced the confidence decision.
+   - 2-3 sentences explaining why the annotation received this evidence-strength label,
+     including species, biospecimen, phenotype/literature support, and origin/type consistency
+     when relevant.
 
 Return STRICT JSON only:
 {{
@@ -254,7 +272,7 @@ Return STRICT JSON only:
   \"rationale\": \"2-3 sentences.\"
 }}
 
-Do not invent information not present in the provided evidence."
+Do not invent PubMed support or claim direct literature evidence when it is not provided."
   )
 }
 
@@ -265,6 +283,8 @@ Do not invent information not present in the provided evidence."
 
 build_phenotype_confidence_prompt <- function(module_obj,
                                                title,
+                                               hypothesis_type = NULL,
+                                               functional_summary = NULL,
                                                study_context  = NULL,
                                                pubmed_context = NULL) {
 
@@ -276,6 +296,8 @@ build_phenotype_confidence_prompt <- function(module_obj,
   }
 
   title_str <- scalar_text(title, na = "Unknown module")
+  type_str  <- scalar_text(hypothesis_type, na = "not specified")
+  summary_str <- scalar_text(functional_summary, na = "Not available.")
 
   # ---- Origin profile ----
   op <- module_obj$origin_profile
@@ -359,6 +381,8 @@ build_phenotype_confidence_prompt <- function(module_obj,
   # ---- Assemble prompt ----
   as.character(glue::glue("
 Module title: {title_str}
+Module type: {type_str}
+Functional summary: {summary_str}
 
 {origin_text}
 
@@ -375,8 +399,9 @@ Module title: {title_str}
 #'
 #' \enumerate{
 #'   \item \strong{Call 1} — Biochemical annotation (no study context):
-#'         generates \code{title} and \code{functional_summary} from metabolite
-#'         structure, class composition, and pathway coverage.
+#'         generates \code{hypothesis_type}, \code{title}, and
+#'         \code{functional_summary} from metabolite structure, class
+#'         composition, and pathway coverage.
 #'   \item \strong{PubMed search} (optional) — retrieves phenotype-relevant
 #'         abstracts using the module title and study phenotype.
 #'   \item \strong{Call 2} — Phenotype and confidence assessment:
@@ -403,7 +428,7 @@ Module title: {title_str}
 #' @param years Numeric. PubMed look-back years (default: 5).
 #'
 #' @return A one-row data frame with columns:
-#'   \code{module_id}, \code{title}, \code{functional_summary},
+#'   \code{module_id}, \code{hypothesis_type}, \code{title}, \code{functional_summary},
 #'   \code{phenotype_relationship}, \code{confidence_label}, \code{rationale},
 #'   \code{global_direction}, \code{core_drivers},
 #'   \code{origin_endogenous_frac}, \code{origin_exogenous_frac},
@@ -422,6 +447,36 @@ annotate_one_module <- function(module_obj,
                                 years        = 5) {
   
   mid <- module_obj$module_id %||% NA_character_
+
+  normalize_fast_hypothesis_type <- function(x) {
+    allowed <- c(
+      "Host-Endogenous",
+      "Microbiome-Derived",
+      "Diet-Derived",
+      "Xenobiotic / Exogenous",
+      "Host–Microbiome"
+    )
+    if (is.null(x) || length(x) == 0) return(NA_character_)
+    raw <- trimws(as.character(x[1]))
+    if (!nzchar(raw) || is.na(raw)) return(NA_character_)
+
+    key <- tolower(gsub("[[:space:]]+", " ", raw))
+    key <- gsub("\u2013|\u2014", "-", key)
+    key <- gsub("/", " / ", key)
+    key <- gsub("[[:space:]]+", " ", key)
+
+    if (key %in% tolower(allowed)) {
+      return(allowed[match(key, tolower(allowed))])
+    }
+    if (grepl("host", key) && grepl("microbiome|microbial", key)) return("Host–Microbiome")
+    if (grepl("microbiome|microbial", key)) return("Microbiome-Derived")
+    if (grepl("diet|food|nutr", key)) return("Diet-Derived")
+    if (grepl("xenobiotic|exogenous|drug|pharma|environment|exposure", key)) {
+      return("Xenobiotic / Exogenous")
+    }
+    if (grepl("host|endogenous", key)) return("Host-Endogenous")
+    NA_character_
+  }
   
   # ------------------------------------------------------------------
   # Internal: normalise a parsed LLM response to a named list
@@ -606,10 +661,15 @@ annotate_one_module <- function(module_obj,
     schema_call1 <- list(
       type = "OBJECT",
       properties = list(
+        type               = list(
+          type = "STRING",
+          enum = c("Host-Endogenous", "Microbiome-Derived", "Diet-Derived",
+                   "Xenobiotic / Exogenous", "Host–Microbiome")
+        ),
         title              = list(type = "STRING"),
         functional_summary = list(type = "STRING")
       ),
-      required = c("title", "functional_summary")
+      required = c("type", "title", "functional_summary")
     )
     schema_call2 <- list(
       type = "OBJECT",
@@ -624,7 +684,7 @@ annotate_one_module <- function(module_obj,
   }
   
   # ==================================================================
-  # CALL 1 – Biochemical annotation (title + functional_summary)
+  # CALL 1 – Biochemical annotation (type + title + functional_summary)
   # No study context, no confidence judgment
   # ==================================================================
   sys1  <- build_system_prompt()
@@ -636,17 +696,19 @@ annotate_one_module <- function(module_obj,
       list(role = "user",   content = usr1)
     ),
     schema           = schema_call1,
-    required_keys    = c("title", "functional_summary"),
+    required_keys    = c("type", "title", "functional_summary"),
     retry_instruction = paste(
-      "Return ONLY a valid JSON object with exactly two keys:",
-      "\"title\" and \"functional_summary\"."
+      "Return ONLY a valid JSON object with exactly three keys:",
+      "\"type\", \"title\", and \"functional_summary\"."
     ),
-    stage_label = "call1 (title+summary)"
+    stage_label = "call1 (type+title+summary)"
   )
   
+  hypothesis_type    <- NA_character_
   title              <- NA_character_
   functional_summary <- NA_character_
   if (!is.null(res1$parsed)) {
+    hypothesis_type    <- normalize_fast_hypothesis_type(res1$parsed[["type"]] %||% NA_character_)
     title              <- as.character(res1$parsed[["title"]]              %||% NA_character_)
     functional_summary <- as.character(res1$parsed[["functional_summary"]] %||% NA_character_)
   } else {
@@ -696,6 +758,8 @@ annotate_one_module <- function(module_obj,
   usr2 <- build_phenotype_confidence_prompt(
     module_obj     = module_obj,
     title          = title,
+    hypothesis_type = hypothesis_type,
+    functional_summary = functional_summary,
     study_context  = study_context,
     pubmed_context = pubmed_context
   )
@@ -777,6 +841,7 @@ annotate_one_module <- function(module_obj,
   # ==================================================================
   data.frame(
     module_id              = mid,
+    hypothesis_type        = hypothesis_type,
     title                  = title,
     functional_summary     = functional_summary,
     phenotype_relationship = phenotype_relationship,

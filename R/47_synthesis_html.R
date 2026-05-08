@@ -92,7 +92,7 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 #pinned{position:absolute;display:none;z-index:40;
         background:#fff;border:1px solid #d1d5db;border-radius:10px;
         box-shadow:0 6px 24px rgba(0,0,0,.16);
-        width:290px;max-height:420px;flex-direction:column;overflow:hidden}
+        width:270px;max-height:280px;flex-direction:column;overflow:hidden}
 
 /* study-context pills in page header */
 .ctx-pill{display:inline-flex;align-items:center;
@@ -107,7 +107,6 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 #pinned .pin-pill{font-size:.67rem;padding:1px 6px;border-radius:3px;
                   background:#f1f3f5;color:#4b5563;border:1px solid #e4e7ed}
 #pinned .pin-pill.accepted {background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
-#pinned .pin-pill.uncertain{background:#fffbeb;color:#92400e;border-color:#fcd34d}
 #pinned .pin-close{margin-left:auto;flex-shrink:0;cursor:pointer;
                    font-size:1rem;color:#9ca3af;line-height:1;
                    padding:0 2px;user-select:none}
@@ -148,6 +147,16 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .tbl-acc{background:#ecfdf5;color:#065f46}
 .tbl-unc{background:#fffbeb;color:#92400e}
 .tbl-conf{color:#6b7280;font-size:.74rem}
+
+/* hypothesis type pills — pinned card + table */
+.type-endo {background:#e8f5e9;color:#2e7d32;border:1px solid #c8e6c9}
+.type-micro {background:#fff3e0;color:#e65100;border:1px solid #ffe0b2}
+.type-diet  {background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb}
+.type-xeno  {background:#fce4ec;color:#880e4f;border:1px solid #f8bbd0}
+.type-mixed {background:#f3e5f5;color:#6a1b9a;border:1px solid #e1bee7}
+.tbl-type{display:inline-block;font-size:.66rem;padding:1px 7px;border-radius:3px;
+          font-weight:500;white-space:nowrap;border:1px solid #e4e7ed;
+          background:#f1f3f5;color:#4b5563}
 
 @media(max-width:960px){.layout{grid-template-columns:1fr}
   .network-wrap{height:480px}}'
@@ -208,6 +217,17 @@ function esc(s){
     .replace(/"/g,"&quot;");
 }
 
+function typeCls(t){
+  if (!t) return "";
+  const tl = t.toLowerCase();
+  if (tl.includes("host") && tl.includes("microbiome")) return "type-mixed";
+  if (tl.includes("microbiome") || tl.includes("microbial"))  return "type-micro";
+  if (tl.includes("diet") || tl.includes("food"))             return "type-diet";
+  if (tl.includes("xenobiotic") || tl.includes("exogenous"))  return "type-xeno";
+  if (tl.includes("endogenous") || tl.includes("host"))       return "type-endo";
+  return "";
+}
+
 function filters(){
   return {
     direct:   controls.direct.checked,
@@ -218,7 +238,7 @@ function filters(){
 
 function nodeVisible(n, f){
   if (f.q){
-    const hay = [n.node_id,n.module_id,n.hypothesis_id,
+    const hay = [n.node_id,n.module_id,n.hypothesis_id,n.hypothesis_type,
                  n.title,n.functional_summary,n.phenotype_relationship]
                 .join(" ").toLowerCase();
     if (!hay.includes(f.q)) return false;
@@ -270,7 +290,7 @@ function pinSection(label, text){
 
 function showPin(ev, n){
   pinnedNode = n.node_id;
-  const statusCls = n.verdict_status === "accepted" ? "accepted" : "uncertain";
+  const statusCls = n.verdict_status === "accepted" ? "accepted" : "";
   const confLabel = n.confidence_label ? n.confidence_label + " confidence" : "";
   pinned.innerHTML =
     `<div class="pin-hdr">
@@ -279,27 +299,20 @@ function showPin(ev, n){
          <div class="pin-pills">
            <span class="pin-pill ${statusCls}">${esc(n.verdict_status)}</span>
            ${confLabel ? `<span class="pin-pill">${esc(confLabel)}</span>` : ""}
-           <span class="pin-pill">${esc(n.module_id)}</span>
+           ${n.hypothesis_type ? `<span class="pin-pill ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type)}</span>` : ""}
          </div>
        </div>
        <span class="pin-close" id="pin-close-btn">&#x2715;</span>
      </div>
      <div class="pin-body">
        ${n.title ? `<div class="pin-title">${esc(n.title)}</div>` : ""}
-       ${pinSection("Functional summary",           n.functional_summary)}
-       ${pinSection("Phenotype relationship",       n.phenotype_relationship)}
-       ${pinSection("Confidence rationale",         n.rationale)}
-       ${pinSection("Core drivers",                 n.core_drivers)}
-       ${pinSection("Top KEGG pathways",            n.top_kegg_pathways)}
-       ${pinSection("Top HMDB pathways",            n.top_hmdb_pathways)}
-       ${pinSection("Phenotype literature support",
-           [n.phenotype_literature_support, n.phenotype_evidence_note].filter(Boolean).join("\n"))}
+       ${pinSection("Functional summary", n.functional_summary)}
      </div>`;
 
   /* position near node */
   const wrap = document.querySelector(".network-wrap");
   const wW = wrap.offsetWidth, wH = wrap.offsetHeight;
-  const cardW = 290, cardH = Math.min(420, wH - 20);
+  const cardW = 270, cardH = Math.min(280, wH - 20);
   let px = n.x + nodeSize(n) + 10;
   let py = n.y - 60;
   if (px + cardW > wW - 8) px = n.x - nodeSize(n) - cardW - 10;
@@ -464,18 +477,10 @@ function render(){
 
     const sz   = nodeSize(n);
     const fill = nodeColor(n);
-    const isAcc = n.verdict_status === "accepted";
     let shape;
 
-    if (isAcc){
-      shape = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      shape.setAttribute("r", sz);
-    } else {
-      shape = document.createElementNS("http://www.w3.org/2000/svg","rect");
-      shape.setAttribute("x", -sz); shape.setAttribute("y", -sz);
-      shape.setAttribute("width", sz*2); shape.setAttribute("height", sz*2);
-      shape.setAttribute("rx", "3");
-    }
+    shape = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    shape.setAttribute("r", sz);
     const isPinned = n.node_id === pinnedNode;
     shape.setAttribute("fill", fill);
     shape.setAttribute("stroke", isPinned ? "#1c1f26" : "#fff");
@@ -495,12 +500,13 @@ function render(){
 /* ── bottom table ── */
 const tbody = document.getElementById("tbl-body");
 nodes.forEach(n => {
-  const isAcc = n.verdict_status === "accepted";
   const tr = document.createElement("tr");
+  const isAcc = n.verdict_status === "accepted";
   tr.innerHTML =
     `<td class="tbl-id">${esc(n.node_id)}</td>` +
     `<td class="tbl-mod">${esc(n.module_id)}</td>` +
     `<td><span class="tbl-pill ${isAcc ? "tbl-acc" : "tbl-unc"}">${esc(n.verdict_status)}</span></td>` +
+    `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "—")}</span></td>` +
     `<td class="tbl-conf">${esc(n.confidence_label || "—")}</td>` +
     `<td>${esc(n.title || "—")}</td>`;
   tbody.appendChild(tr);
@@ -556,7 +562,7 @@ generate_synthesis_network_html <- function(synthesis,
     )
   }
 
-  nodes <- nodes[nodes$verdict_status %in% c("accepted","uncertain"), , drop = FALSE]
+  nodes <- nodes[nodes$verdict_status == "accepted", , drop = FALSE]
   vn    <- nodes$node_id
   relationships <- relationships[
     relationships$node_1 %in% vn &
@@ -647,6 +653,7 @@ generate_synthesis_network_html <- function(synthesis,
         <th>Hypothesis</th>
         <th>Module</th>
         <th>Status</th>
+        <th>Type</th>
         <th>Confidence</th>
         <th>Title</th>
       </tr>

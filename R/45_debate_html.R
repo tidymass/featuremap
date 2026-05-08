@@ -1,19 +1,14 @@
 # ============================================================
 # 45_debate_html.R
-# Debate HTML visualizer for the advanced multi-agent pipeline
+# Debate HTML visualizer — academic chat-style layout
 #
 # Sourced automatically by 45_advanced_mode.R.
-# Exports one public function:
-#   generate_debate_html(module_id, module_obj, study_context,
-#                        hypotheses_v0, s1_challenges, p1_revisions,
-#                        hypotheses_v1, s2_challenges, p2_revisions,
-#                        hypotheses_final, arbiter_result, output_dir)
+# Public export: generate_debate_html()
 # ============================================================
 
 
-# ── Internal helpers (not exported) ──────────────────────────
+# ── Internal helpers ──────────────────────────────────────────
 
-#' Escape special HTML characters
 .he <- function(s) {
   s <- as.character(s %||% "")
   s <- gsub("&",  "&amp;",  s, fixed = TRUE)
@@ -23,112 +18,148 @@
   s
 }
 
-#' Render metabolite tag spans from a comma-separated string
-.tag_row <- function(csv, cls, label) {
-  if (!nzchar(trimws(csv))) return("")
-  tags <- paste(
-    sprintf('<span class="tag %s">%s</span>', cls,
-            .he(trimws(strsplit(csv, ",")[[1]]))),
+#' Truncate long string, appending ellipsis
+.trunc <- function(s, n) {
+  s <- as.character(s %||% "")
+  if (nchar(s) > n) paste0(substr(s, 1, n - 1), "…") else s
+}
+
+#' Render metabolite chips — up to max_show visible, remainder as "+N more"
+.met_chips <- function(names, max_show = 6L) {
+  names <- names[nzchar(trimws(names))]
+  if (length(names) == 0L) return('<span class="muted">—</span>')
+  show  <- head(names, max_show)
+  extra <- length(names) - length(show)
+  chips <- paste(
+    sprintf('<span class="met-chip" title="%s">%s</span>',
+            .he(show), .he(.trunc(show, 30L))),
     collapse = "")
-  sprintf('<div class="tag-row"><span class="tag-label">%s</span> %s</div>',
+  more  <- if (extra > 0L)
+    sprintf('<span class="met-more">+%d more</span>', extra) else ""
+  paste0(chips, more)
+}
+
+#' Render chemical class profile as mini horizontal bars
+#' Tries columns: Chemical_class, chemical_class, class, Class, Superclass
+.class_bars <- function(module_obj, n = 4L) {
+  df <- module_obj$topN_metabolites
+  if (is.null(df) || !is.data.frame(df)) return("")
+
+  # Find the first column whose name contains "class" (case-insensitive)
+  cls_col <- grep("class", colnames(df), ignore.case = TRUE, value = TRUE)[1L]
+  if (is.na(cls_col)) return("")
+
+  raw <- trimws(as.character(df[[cls_col]]))
+  raw[is.na(raw) | toupper(raw) == "NA" | raw == ""] <- "Unknown"
+  tbl <- sort(table(raw), decreasing = TRUE)
+  total <- sum(tbl)
+  if (total == 0L) return("")
+
+  rows <- head(names(tbl), n)
+  bars <- paste(sapply(rows, function(nm) {
+    pct <- round(tbl[[nm]] / total * 100)
+    lbl <- .trunc(nm, 36L)
+    sprintf(
+      '<div class="cls-row">
+        <div class="cls-name">%s</div>
+        <div class="cls-track"><div class="cls-fill" style="width:%d%%"></div></div>
+        <div class="cls-pct">%d%%</div>
+      </div>',
+      .he(lbl), pct, pct)
+  }), collapse = "\n")
+
+  sprintf('<div class="cls-block">%s</div>', bars)
+}
+
+#' Render anchor / tension metabolite tags (subtle, dot-prefixed)
+.met_tags <- function(csv, variant) {
+  # variant: "anc" | "ten"
+  vals <- trimws(strsplit(as.character(csv %||% ""), ",")[[1L]])
+  vals <- vals[nzchar(vals)]
+  if (length(vals) == 0L) return("")
+  label <- if (identical(variant, "anc")) "Core anchors" else "Tension metabolites"
+  tags  <- paste(
+    sprintf('<span class="mtag mtag-%s">%s</span>', variant, .he(vals)),
+    collapse = "")
+  sprintf('<div class="mtag-row"><span class="mtag-label">%s</span>%s</div>',
           label, tags)
 }
 
-#' Format the top chemical classes for the query bubble
-.top_class_text <- function(module_obj, n = 3L) {
-  class_df <- module_obj$other_metabolites
-  if (is.null(class_df) || !is.data.frame(class_df) || nrow(class_df) == 0 ||
-      !"class" %in% colnames(class_df)) {
-    return("—")
-  }
-
-  if ("n_metabolites" %in% colnames(class_df)) {
-    class_df <- class_df[order(-as.numeric(class_df$n_metabolites)), , drop = FALSE]
-  }
-  rows <- head(class_df, n)
-  vals <- vapply(seq_len(nrow(rows)), function(i) {
-    cls <- as.character(rows$class[[i]] %||% "unknown")
-    prop <- if ("n_metabolites" %in% colnames(rows)) {
-      x <- suppressWarnings(as.numeric(rows$n_metabolites[[i]]))
-      if (!is.na(x)) sprintf(" %.0f%%", x * 100) else ""
-    } else {
-      ""
-    }
-    paste0(cls, prop)
-  }, character(1))
-  paste(vals, collapse = "; ")
-}
-
-#' Render one hypothesis card (P0 / P1 / P2 bubbles)
-.hyp_card <- function(h, badge = NULL) {
+#' Render one hypothesis card
+.hyp_card <- function(h) {
   anc <- paste(h$anchor_metabolites  %||% character(0), collapse = ", ")
   ten <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
-  badge_html <- if (!is.null(badge))
-    sprintf('<span class="badge badge-%s">%s</span>', .he(badge), .he(toupper(badge)))
-  else ""
   sprintf(
     '<div class="hyp-card">
-      <div class="hyp-id">%s %s</div>
-      <div class="hyp-title">%s</div>
+      <div class="hyp-header">
+        <span class="hyp-id">%s</span>
+        <span class="hyp-title">%s</span>
+      </div>
       <div class="hyp-summary">%s</div>
       %s%s
     </div>',
-    .he(h$hypothesis_id), badge_html,
-    .he(h$title   %||% ""),
-    .he(h$summary %||% ""),
-    .tag_row(anc, "anc", "Anchors:"),
-    .tag_row(ten, "ten", "Unexplained/conflicting:")
+    .he(h$hypothesis_id %||% ""),
+    .he(h$title         %||% ""),
+    .he(h$summary       %||% ""),
+    .met_tags(anc, "anc"),
+    .met_tags(ten, "ten")
   )
 }
 
-#' Render one Skeptic challenge item
+#' Render one Skeptic challenge
 .ch_item <- function(ch) {
   sev   <- ch$severity       %||% "minor"
   ctype <- ch$challenge_type %||% ""
-  if (identical(sev, "no_challenge")) {
-    return("")
-  }
+  if (identical(sev, "no_challenge")) return("")
   sev_cls <- if (identical(sev, "major")) "sev-major" else "sev-minor"
   sprintf(
-    '<div class="ch-item">
-      <span class="sev-badge %s">%s</span>
-      <span class="ch-type">%s</span> → <strong>%s</strong>
+    '<div class="ch-item ch-%s">
+      <div class="ch-meta">
+        <span class="sev-pill %s">%s</span>
+        <span class="ch-type">%s</span>
+        <span class="ch-target">%s</span>
+      </div>
       <div class="ch-text">%s</div>
     </div>',
-    sev_cls, .he(toupper(sev)),
-    .he(ctype), .he(ch$target_hypothesis_id),
+    sev, sev_cls, .he(toupper(sev)),
+    .he(ctype),
+    .he(ch$target_hypothesis_id %||% ""),
     .he(ch$challenge %||% "")
   )
 }
 
-#' Render one Proposer revision item
+#' Render one Proposer revision
 .rev_item <- function(rev, hypotheses_after) {
-  hid     <- rev$hypothesis_id %||% ""
-  action  <- toupper(rev$action %||% "keep")
-  just    <- rev$justification %||% ""
+  hid    <- rev$hypothesis_id %||% ""
+  action <- toupper(rev$action %||% "keep")
+  just   <- rev$justification %||% ""
+  h_new  <- Filter(function(x) x$hypothesis_id == hid, hypotheses_after)
+
   act_cls <- switch(action, MODIFY = "act-modify", DROP = "act-drop", "act-keep")
-  h_new   <- Filter(function(x) x$hypothesis_id == hid, hypotheses_after)
 
   detail <- ""
-  if (action == "MODIFY" && length(h_new) > 0) {
-    h   <- h_new[[1]]
+  if (identical(action, "MODIFY") && length(h_new) > 0L) {
+    h   <- h_new[[1L]]
     anc <- paste(h$anchor_metabolites  %||% character(0), collapse = ", ")
     ten <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
     detail <- sprintf(
       '<div class="rev-detail">
-        <div><em>Revised title:</em> %s</div>
-        <div class="rev-summary"><em>Revised summary:</em> %s</div>
+        <div class="rev-new-title">%s</div>
+        <div class="rev-new-summary">%s</div>
         %s%s
       </div>',
-      .he(h$title %||% ""),
+      .he(h$title   %||% ""),
       .he(h$summary %||% ""),
-      .tag_row(anc, "anc", "Anchors:"),
-      .tag_row(ten, "ten", "Unexplained/conflicting:")
+      .met_tags(anc, "anc"),
+      .met_tags(ten, "ten")
     )
   }
   sprintf(
     '<div class="rev-item">
-      <span class="act-badge %s">%s</span> <strong>%s</strong>
+      <div class="rev-header">
+        <span class="act-pill %s">%s</span>
+        <span class="rev-hid">%s</span>
+      </div>
       <div class="rev-just">%s</div>
       %s
     </div>',
@@ -137,201 +168,274 @@
 }
 
 #' Render one Arbiter verdict card
-.verdict_card <- function(v, hypotheses_lookup) {
-  hid    <- v$hypothesis_id    %||% ""
-  status <- v$status           %||% "rejected"
-  conf   <- v$confidence_label %||% ""
-  rat    <- v$verdict_rationale %||% ""
-  conf_rat <- v$confidence_rationale %||% ""
-  st_cls <- switch(status,
-                   accepted  = "st-accepted",
-                   uncertain = "st-uncertain",
-                   "st-rejected")
-  h_fin  <- Filter(function(x) x$hypothesis_id == hid, hypotheses_lookup %||% list())
-  final_title <- if (length(h_fin) > 0) h_fin[[1]]$title %||% "" else ""
-  final_summary <- if (length(h_fin) > 0) h_fin[[1]]$summary %||% "" else ""
-  sprintf(
-    '<div class="verdict-card %s">
-      <div class="verdict-header">
-        <span class="verdict-id">%s</span>
-        <span class="verdict-status %s">%s</span>
+.verdict_card <- function(v, hypotheses_final) {
+  hid      <- v$hypothesis_id        %||% ""
+  status   <- v$status               %||% "rejected"
+  conf     <- v$confidence_label     %||% ""
+  vrat     <- v$verdict_rationale    %||% ""
+  crat     <- v$confidence_rationale %||% ""
+  st_cls   <- switch(status,
+                     accepted  = "st-accepted",
+                     uncertain = "st-uncertain",
+                     "st-rejected")
+  h_fin    <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
+  fin_title   <- if (length(h_fin) > 0L) h_fin[[1L]]$title   %||% "" else ""
+  fin_summary <- if (length(h_fin) > 0L) h_fin[[1L]]$summary %||% "" else ""
+
+  status_pill <- sprintf(
+    '<span class="status-pill %s">%s</span>', st_cls, .he(toupper(status)))
+  conf_pill <- if (nzchar(conf))
+    sprintf('<span class="conf-pill conf-%s">%s confidence</span>', .he(conf), .he(conf))
+  else ""
+
+  title_html <- if (nzchar(fin_title))
+    sprintf('<div class="verdict-title">%s</div>', .he(fin_title)) else ""
+  summary_html <- if (nzchar(fin_summary))
+    sprintf('<div class="verdict-fin-summary">%s</div>', .he(fin_summary)) else ""
+
+  # Verdict rationale block
+  vrat_html <- if (nzchar(vrat)) sprintf(
+    '<div class="rat-block">
+      <div class="rat-label">Verdict rationale</div>
+      <div class="rat-text">%s</div>
+    </div>', .he(vrat)) else ""
+
+  # Confidence rationale block — always a new block, with divider if verdict exists
+  crat_html <- if (nzchar(crat)) sprintf(
+    '%s<div class="rat-block">
+      <div class="rat-label">Confidence rationale
         %s
       </div>
-      %s
-      %s
-      %s
-      %s
+      <div class="rat-text">%s</div>
     </div>',
-    st_cls, .he(hid), st_cls, .he(toupper(status)),
-    if (nzchar(conf))
-      sprintf('<span class="conf-badge conf-%s">%s confidence</span>', .he(conf), .he(conf))
-    else "",
-    if (nzchar(final_title))
-      sprintf('<div class="verdict-title">%s</div>', .he(final_title))
-    else "",
-    if (nzchar(final_summary))
-      sprintf('<div class="verdict-summary">%s</div>', .he(final_summary))
-    else "",
-    if (nzchar(rat))
-      sprintf('<div class="verdict-rat"><strong>Arbiter rationale:</strong> %s</div>', .he(rat))
-    else "",
-    if (nzchar(conf_rat))
-      sprintf('<div class="verdict-rat"><strong>Confidence rationale:</strong> %s</div>', .he(conf_rat))
-    else ""
-  )
-}
+    if (nzchar(vrat)) '<div class="rat-divider"></div>' else "",
+    conf_pill,
+    .he(crat)
+  ) else ""
 
-#' Count revision actions safely for empty revision lists
-.count_action <- function(revisions, action) {
-  if (is.null(revisions) || length(revisions) == 0) return(0L)
-  sum(vapply(revisions, function(r) identical(r$action, action), logical(1)))
-}
-
-#' Render PubMed phenotype relationship summaries
-.pubmed_item <- function(hid, rel) {
-  support <- rel$literature_support %||% "insufficient"
-  relationship <- rel$phenotype_relationship %||% ""
-  note <- rel$evidence_note %||% ""
   sprintf(
-    '<div class="pubmed-item">
-      <div><strong>%s</strong> <span class="lit-badge lit-%s">Literature support: %s</span></div>
-      <div class="pubmed-rel"><strong>Phenotype relationship:</strong> %s</div>
-      %s
+    '<div class="verdict-card %s">
+      <div class="verdict-hdr">
+        <span class="verdict-hid">%s</span>
+        %s
+      </div>
+      %s%s
+      %s%s
     </div>',
-    .he(hid),
-    .he(support),
-    .he(toupper(support)),
-    .he(relationship),
-    if (nzchar(note)) sprintf('<div class="pubmed-note"><strong>Evidence note:</strong> %s</div>', .he(note)) else ""
+    st_cls,
+    .he(hid), status_pill,
+    title_html, summary_html,
+    vrat_html, crat_html
   )
 }
 
-#' Wrap content in a chat message bubble
-.bubble <- function(role, avatar, avatar_label, content_html, extra_class = "") {
+#' Count revision actions (safe for NULL/empty)
+.count_action <- function(revs, action) {
+  if (is.null(revs) || length(revs) == 0L) return(0L)
+  sum(vapply(revs, function(r) identical(r$action, action), logical(1L)))
+}
+
+#' Wrap HTML in a chat bubble
+.bubble <- function(role, avatar, label, content, extra_cls = "") {
   sprintf(
     '<div class="msg msg-%s %s">
-      <div class="avatar avatar-%s" title="%s">%s</div>
-      <div class="bubble bubble-%s">%s</div>
+      <div class="av av-%s" title="%s">%s</div>
+      <div class="bub bub-%s">%s</div>
     </div>',
-    role, extra_class,
-    role, .he(avatar_label), .he(avatar),
-    role, content_html
+    role, extra_cls,
+    role, .he(label), .he(avatar),
+    role, content
   )
 }
 
-#' Inline CSS for the debate HTML page
+#' Full inline CSS
 .debate_css <- function() {
-'*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-       background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
-.chat-header { background: linear-gradient(135deg,#1a1a2e,#16213e);
-               color:#fff; padding:24px 32px; }
-.chat-header h1 { font-size:1.4rem; font-weight:700; }
-.chat-header p  { font-size:.85rem; color:#8892b0; margin-top:4px; }
-.chat-body { max-width:860px; margin:0 auto; padding:28px 20px;
-             display:flex; flex-direction:column; gap:20px; }
-.msg { display:flex; gap:14px; align-items:flex-start; }
-.msg-left   { flex-direction:row; }
-.msg-right  { flex-direction:row-reverse; }
-.msg-center { flex-direction:column; align-items:stretch; }
-.avatar { width:44px; height:44px; border-radius:50%; display:flex;
-          align-items:center; justify-content:center; font-size:1.25rem;
-          flex-shrink:0; box-shadow:0 2px 6px rgba(0,0,0,.15); }
-.avatar-left   { background:#e8eaf6; }
-.avatar-right  { background:#e3f2fd; }
-.avatar-center { width:44px; height:44px; border-radius:50%; display:flex;
-                 align-items:center; justify-content:center; font-size:1.25rem;
-                 flex-shrink:0; background:#f3e5f5; margin:0 auto 8px; }
-.bubble { background:#fff; border-radius:16px; padding:16px 18px;
-          box-shadow:0 2px 8px rgba(0,0,0,.08); max-width:82%; line-height:1.55; }
-.bubble-left  { border-top-left-radius:4px; }
-.bubble-right { border-top-right-radius:4px; }
-.bubble-center { max-width:100%; border-radius:16px; }
-.msg-center .bubble { max-width:100%; }
-.skeptic .bubble { background:#fff8f5; border-left:3px solid #ff7043; }
-.arbiter .bubble { background:#fdf6ff; border:2px solid #ab47bc; }
-.msg-role { font-size:.78rem; font-weight:700; letter-spacing:.05em;
-            text-transform:uppercase; color:#5c6bc0; margin-bottom:8px; }
-.skeptic .msg-role { color:#e64a19; }
-.arbiter .msg-role { color:#8e24aa; }
-p { font-size:.9rem; margin-bottom:10px; }
-.meta-row { font-size:.8rem; color:#666; display:flex; flex-wrap:wrap;
-            gap:8px; margin-top:6px; }
-.meta-row span { background:#eee; padding:2px 8px; border-radius:20px; }
-.no-issue { color:#2e7d32; font-style:italic; }
-.hyp-card { background:#f8faff; border:1px solid #dde3f0;
-            border-radius:10px; padding:12px 14px; margin-top:10px; }
-.hyp-id      { font-size:.72rem; font-weight:700; color:#5c6bc0; margin-bottom:4px; }
-.hyp-title   { font-weight:600; font-size:.9rem; margin-bottom:6px; }
-.hyp-summary { font-size:.83rem; color:#444; line-height:1.5; white-space:pre-wrap; }
-.tag-row  { margin-top:7px; display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
-.tag-label{ font-size:.72rem; color:#888; }
-.tag      { font-size:.72rem; padding:2px 8px; border-radius:20px; }
-.tag.anc  { background:#e3f2fd; color:#1565c0; }
-.tag.ten  { background:#fff3e0; color:#e65100; }
-.ch-item { background:#fff5f2; border-radius:8px; padding:10px 12px;
-           margin-top:8px; font-size:.85rem; }
-.ch-item.no-challenge { background:#f1f8e9; }
-.ch-text { margin-top:6px; color:#555; }
-.ch-type { font-size:.78rem; color:#888; }
-.sev-badge { display:inline-block; font-size:.68rem; font-weight:700;
-             padding:2px 7px; border-radius:20px; margin-right:6px; }
-.sev-major { background:#ff5252; color:#fff; }
-.sev-minor { background:#ffd740; color:#333; }
-.sev-none  { background:#aed581; color:#33691e; }
-.rev-item { border-left:3px solid #90caf9; padding:8px 12px;
-            margin-top:10px; font-size:.85rem; }
-.act-badge  { display:inline-block; font-size:.7rem; font-weight:700;
-              padding:2px 8px; border-radius:4px; margin-right:6px; }
-.act-modify { background:#42a5f5; color:#fff; }
-.act-drop   { background:#ef5350; color:#fff; }
-.act-keep   { background:#66bb6a; color:#fff; }
-.rev-just   { color:#555; margin-top:4px; font-size:.82rem; }
-.rev-detail { margin-top:8px; font-size:.82rem; background:#f0f7ff;
-              padding:8px 10px; border-radius:6px; }
-.rev-summary { margin-top:6px; line-height:1.5; white-space:pre-wrap; }
-.verdict-card { border-radius:10px; padding:14px 16px; margin-top:10px; font-size:.85rem; }
-.st-accepted  { background:#e8f5e9; border:1px solid #81c784; }
-.st-uncertain { background:#fff8e1; border:1px solid #ffd54f; }
-.st-rejected  { background:#ffebee; border:1px solid #ef9a9a; }
-.verdict-header { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-                  margin-bottom:8px; }
-.verdict-id     { font-weight:700; color:#333; }
-.verdict-status { font-size:.72rem; font-weight:700; padding:2px 9px; border-radius:20px; }
-.st-accepted  .verdict-status { background:#2e7d32; color:#fff; }
-.st-uncertain .verdict-status { background:#f9a825; color:#fff; }
-.st-rejected  .verdict-status { background:#c62828; color:#fff; }
-.conf-badge  { font-size:.7rem; padding:2px 8px; border-radius:20px;
-               background:#ede7f6; color:#6a1b9a; }
-.conf-high   { background:#ce93d8; color:#4a148c; }
-.conf-medium { background:#e1bee7; color:#6a1b9a; }
-.conf-low    { background:#f3e5f5; color:#6a1b9a; }
-.verdict-title   { font-weight:600; font-size:.9rem; margin-bottom:6px; }
-.verdict-summary { font-size:.83rem; color:#444; margin-bottom:8px; line-height:1.5; white-space:pre-wrap; }
-.verdict-rat     { font-size:.82rem; color:#555; }
-.pubmed-item { background:#f1f8f4; border-left:3px solid #43a047;
-               border-radius:8px; padding:10px 12px; margin-top:8px; font-size:.85rem; }
-.pubmed-rel { color:#444; margin-top:6px; }
-.pubmed-note { color:#666; margin-top:6px; font-size:.8rem; font-style:italic; }
-.lit-badge { display:inline-block; font-size:.68rem; font-weight:700;
-             padding:2px 7px; border-radius:20px; margin-left:6px; }
-.lit-direct { background:#2e7d32; color:#fff; }
-.lit-indirect { background:#81c784; color:#1b5e20; }
-.lit-insufficient { background:#c8e6c9; color:#33691e; }
-.ambiguity-note  { margin-top:14px; background:#fffde7; border-left:3px solid #f9a825;
-                   padding:10px 14px; border-radius:6px; font-size:.85rem; }
-.round-divider { text-align:center; font-size:.75rem; color:#aaa;
-                 letter-spacing:.1em; text-transform:uppercase; margin:4px 0; }
-.round-divider::before, .round-divider::after {
-  content:""; display:inline-block; width:30%; height:1px;
-  background:#ddd; vertical-align:middle; margin:0 10px; }
-.badge          { font-size:.65rem; padding:1px 6px; border-radius:20px;
-                  margin-left:5px; vertical-align:middle; }
-.badge-major    { background:#ff5252; color:#fff; }
-.badge-minor    { background:#ffd740; color:#333; }
-.badge-accepted { background:#2e7d32; color:#fff; }
-.badge-uncertain{ background:#f9a825; color:#fff; }
-.badge-rejected { background:#c62828; color:#fff; }'
+'/* reset */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* page */
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+     background:#f4f5f7;color:#1c1f26;font-size:14px;line-height:1.65}
+
+/* header */
+.page-header{background:#1c1f26;color:#fff;padding:20px 32px 18px}
+.page-header h1{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
+.page-header .sub{font-size:.78rem;color:#8b909e;margin-top:3px;display:flex;gap:14px;flex-wrap:wrap}
+.page-header .sub span{display:flex;align-items:center;gap:4px}
+
+/* layout */
+.chat-body{max-width:900px;margin:0 auto;padding:28px 20px;
+           display:flex;flex-direction:column;gap:18px}
+
+/* bubbles */
+.msg{display:flex;gap:12px;align-items:flex-start}
+.msg-left {flex-direction:row}
+.msg-right{flex-direction:row-reverse}
+.msg-center{flex-direction:column;align-items:stretch}
+
+.av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:15px;flex-shrink:0;
+    border:1px solid rgba(0,0,0,.08)}
+.av-left  {background:#eef0f8}
+.av-right {background:#eaf4fe}
+.av-center{background:#f3effe;width:36px;height:36px;border-radius:50%;
+           display:flex;align-items:center;justify-content:center;
+           font-size:15px;flex-shrink:0;margin:0 auto 10px;
+           border:1px solid rgba(0,0,0,.08)}
+
+.bub{background:#fff;border-radius:12px;padding:14px 16px;
+     max-width:84%;border:1px solid #e4e7ed}
+.bub-left {border-top-left-radius:3px}
+.bub-right{border-top-right-radius:3px}
+.bub-center{max-width:100%;border-radius:12px}
+.msg-center .bub{max-width:100%}
+
+.skeptic .bub{background:#fdfaf9;border-color:#e8cfc8;border-left:3px solid #c0392b}
+.arbiter .bub{background:#fbf9ff;border-color:#d9d0f0;border-left:3px solid #6741d9}
+
+/* role label */
+.role-label{font-size:.68rem;font-weight:600;letter-spacing:.07em;
+            text-transform:uppercase;color:#8b909e;margin-bottom:8px}
+.skeptic .role-label{color:#a93226}
+.arbiter .role-label{color:#5b34b0}
+.proposer-r .role-label{color:#1565c0}
+
+/* summary line */
+.summary-line{font-size:.88rem;color:#3a3f4b;margin-bottom:10px}
+.summary-line strong{font-weight:600}
+.no-challenge-note{font-size:.88rem;color:#2e7d32;font-style:italic}
+
+/* ── query bubble ── */
+.query-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.query-section{padding:10px 12px;background:#f8f9fb;
+               border:1px solid #e4e7ed;border-radius:8px}
+.section-label{font-size:.65rem;font-weight:600;letter-spacing:.08em;
+               text-transform:uppercase;color:#8b909e;margin-bottom:6px}
+.met-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.met-chip{display:inline-block;font-size:.76rem;padding:2px 8px;
+          background:#edf2ff;color:#2c5282;border-radius:4px;
+          border:1px solid #c7d9f8;max-width:220px;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.met-more{display:inline-block;font-size:.76rem;padding:2px 8px;
+          background:#f1f3f5;color:#6b7280;border-radius:4px;
+          border:1px solid #dde1e7}
+.muted{color:#9ca3af;font-size:.82rem}
+
+/* class bars */
+.cls-block{margin-top:2px;display:flex;flex-direction:column;gap:5px}
+.cls-row{display:grid;grid-template-columns:130px 1fr 36px;
+         align-items:center;gap:6px;font-size:.75rem}
+.cls-name{color:#3a3f4b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cls-track{height:6px;background:#e4e7ed;border-radius:3px;overflow:hidden}
+.cls-fill {height:100%;background:#93afd4;border-radius:3px}
+.cls-pct  {color:#8b909e;text-align:right}
+
+/* context pills (phenotype / species / biospecimen) */
+.context-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.ctx-pill{font-size:.75rem;padding:2px 9px;background:#f1f3f5;
+          color:#4b5563;border-radius:20px;border:1px solid #e2e5ea}
+
+/* ── hypothesis cards ── */
+.hyp-card{background:#f8f9fb;border:1px solid #e4e7ed;border-radius:8px;
+          padding:11px 13px;margin-top:9px}
+.hyp-header{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+.hyp-id   {font-size:.68rem;font-weight:700;color:#6741d9;
+           background:#ede9fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.hyp-title{font-weight:600;font-size:.88rem;color:#1c1f26}
+.hyp-summary{font-size:.82rem;color:#4b5563;line-height:1.6;margin-top:2px}
+
+/* metabolite tags inside hypothesis cards */
+.mtag-row  {margin-top:7px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.mtag-label{font-size:.65rem;font-weight:600;letter-spacing:.05em;
+            text-transform:uppercase;color:#9ca3af;margin-right:3px;flex-shrink:0}
+.mtag      {font-size:.72rem;padding:1px 7px;border-radius:3px}
+.mtag-anc  {background:#e8f0fe;color:#1a56db;border:1px solid #c8d8f8}
+.mtag-ten  {background:#fef3e2;color:#b45309;border:1px solid #f5d99a}
+
+/* ── challenge items ── */
+.ch-item  {border-radius:6px;padding:9px 11px;margin-top:8px;
+           border-left:3px solid transparent}
+.ch-major {background:#fdf2f2;border-left-color:#c0392b}
+.ch-minor {background:#fdf8ee;border-left-color:#d4861a}
+.ch-meta  {display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
+.sev-pill {font-size:.65rem;font-weight:700;letter-spacing:.04em;
+           padding:2px 7px;border-radius:3px}
+.sev-major{background:#c0392b;color:#fff}
+.sev-minor{background:#d4861a;color:#fff}
+.ch-type  {font-size:.72rem;color:#6b7280;font-style:italic}
+.ch-target{font-size:.75rem;font-weight:600;color:#374151;
+           background:#f1f3f5;padding:1px 6px;border-radius:3px}
+.ch-text  {font-size:.82rem;color:#4b5563;line-height:1.6}
+
+/* ── revision items ── */
+.rev-item  {padding:9px 11px;margin-top:8px;border-radius:6px;
+            background:#f8f9fb;border:1px solid #e4e7ed;
+            border-left:3px solid #93afd4}
+.act-modify{border-left-color:#1565c0}
+.act-drop  {border-left-color:#c0392b}
+.act-keep  {border-left-color:#2e7d32}
+.rev-header{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.act-pill  {font-size:.65rem;font-weight:700;letter-spacing:.04em;
+            padding:2px 7px;border-radius:3px}
+.act-modify .act-pill,.act-pill.act-modify{background:#1565c0;color:#fff}
+.act-drop   .act-pill,.act-pill.act-drop  {background:#c0392b;color:#fff}
+.act-keep   .act-pill,.act-pill.act-keep  {background:#2e7d32;color:#fff}
+.rev-hid   {font-size:.8rem;font-weight:600;color:#374151}
+.rev-just  {font-size:.82rem;color:#4b5563;line-height:1.6}
+.rev-detail{margin-top:9px;padding:9px 11px;background:#fff;
+            border:1px solid #e4e7ed;border-radius:6px}
+.rev-new-title  {font-size:.85rem;font-weight:600;color:#1c1f26;margin-bottom:4px}
+.rev-new-summary{font-size:.8rem;color:#4b5563;line-height:1.55}
+
+/* ── verdict cards ── */
+.verdict-card{border-radius:8px;padding:14px 15px;margin-top:10px;
+              border:1px solid #e4e7ed;background:#fff}
+.st-accepted {background:#f4faf5;border-color:#b7dfc0}
+.st-uncertain{background:#fffbf0;border-color:#f0d88a}
+.st-rejected {background:#fdf3f3;border-color:#f0b8b8}
+
+.verdict-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.verdict-hid{font-size:.8rem;font-weight:700;color:#374151;
+             background:#f1f3f5;padding:2px 8px;border-radius:3px}
+.status-pill{font-size:.65rem;font-weight:700;letter-spacing:.05em;
+             padding:2px 8px;border-radius:3px}
+.st-accepted  .status-pill{background:#1a7a35;color:#fff}
+.st-uncertain .status-pill{background:#b45309;color:#fff}
+.st-rejected  .status-pill{background:#a12020;color:#fff}
+
+.verdict-title      {font-size:.9rem;font-weight:600;color:#1c1f26;margin-bottom:5px}
+.verdict-fin-summary{font-size:.82rem;color:#4b5563;line-height:1.6;
+                     font-style:italic;margin-bottom:10px;
+                     padding-bottom:10px;border-bottom:1px solid #e4e7ed}
+
+/* rationale sections */
+.rat-block {margin-top:8px}
+.rat-label {font-size:.65rem;font-weight:600;letter-spacing:.07em;
+            text-transform:uppercase;color:#8b909e;margin-bottom:4px;
+            display:flex;align-items:center;gap:8px}
+.rat-text  {font-size:.82rem;color:#4b5563;line-height:1.65}
+.rat-divider{height:1px;background:#e4e7ed;margin:10px 0}
+
+/* confidence pill inside rationale label */
+.conf-pill{font-size:.62rem;font-weight:600;padding:1px 7px;
+           border-radius:20px;letter-spacing:.03em}
+.conf-high  {background:#d1fae5;color:#065f46}
+.conf-medium{background:#fef9c3;color:#713f12}
+.conf-low   {background:#fee2e2;color:#7f1d1d}
+
+/* ambiguity note */
+.ambiguity-note{margin-top:12px;padding:9px 12px;background:#fffbf0;
+                border-left:3px solid #d4861a;border-radius:0 6px 6px 0;
+                font-size:.82rem;color:#4b5563}
+.ambiguity-note strong{color:#1c1f26}
+
+/* round divider */
+.round-divider{display:flex;align-items:center;gap:10px;
+               font-size:.65rem;font-weight:600;letter-spacing:.1em;
+               text-transform:uppercase;color:#9ca3af;margin:4px 0}
+.round-divider::before,.round-divider::after{
+  content:"";flex:1;height:1px;background:#e4e7ed}
+'
 }
 
 
@@ -353,10 +457,9 @@ p { font-size:.9rem; margin-bottom:10px; }
 #' @param p2_revisions    P2 revision decisions, or NULL
 #' @param hypotheses_final Final hypotheses after all revisions
 #' @param arbiter_result  List with $verdicts and $residual_ambiguity
-#' @param phenotype_relationships Named list of PubMed phenotype summaries
+#' @param phenotype_relationships Named list of PubMed phenotype summaries (unused in HTML)
 #' @param output_dir      Directory for the output file (default: getwd())
 #' @return Invisibly, the path of the written HTML file
-#' @export
 generate_debate_html <- function(module_id,
                                   module_obj,
                                   study_context,
@@ -364,207 +467,221 @@ generate_debate_html <- function(module_id,
                                   s1_challenges,
                                   p1_revisions,
                                   hypotheses_v1,
-                                  s2_challenges    = NULL,
-                                  p2_revisions     = NULL,
-                                  hypotheses_final = list(),
-                                  arbiter_result   = list(verdicts = list(),
-                                                          residual_ambiguity = NA),
+                                  s2_challenges          = NULL,
+                                  p2_revisions           = NULL,
+                                  hypotheses_final       = list(),
+                                  arbiter_result         = list(verdicts = list(),
+                                                                residual_ambiguity = NA),
                                   phenotype_relationships = NULL,
-                                  output_dir       = getwd()) {
+                                  output_dir             = getwd()) {
 
-  # ── Study context ────────────────────────────────────────────
+  # ── Extract module metadata ─────────────────────────────────
   top_names <- character(0)
   if (!is.null(module_obj$topN_metabolites) &&
       "Compound_name" %in% colnames(module_obj$topN_metabolites))
     top_names <- unique(as.character(module_obj$topN_metabolites$Compound_name))
-  top_str     <- if (length(top_names) > 0) paste(head(top_names, 10), collapse = ", ") else "—"
-  class_str   <- .top_class_text(module_obj, n = 3L)
+
   phenotype   <- study_context$phenotype   %||% "—"
   species     <- study_context$species     %||% "—"
   biospecimen <- study_context$biospecimen %||% "—"
+  n_total     <- if (!is.null(module_obj$topN_metabolites))
+                   nrow(module_obj$topN_metabolites) else length(top_names)
 
-  # ── 1. User query bubble ─────────────────────────────────────
+  # ── 1. Query bubble ─────────────────────────────────────────
+  ctx_pills <- paste(
+    sprintf('<span class="ctx-pill">%s</span>',
+            .he(c(species, biospecimen, phenotype))),
+    collapse = "")
+
   user_content <- sprintf(
-    '<div class="msg-role">\U0001f50d Research Query</div>
-    <p><strong>%s</strong> is a detected dysregulated functional module.
-       Please interpret its biological significance.</p>
-    <div class="meta-row">
-      <span>Top metabolites: <em>%s</em></span>
-      <span>Top classes: <em>%s</em></span>
-      <span>Phenotype: <em>%s</em></span>
-      <span>Species: <em>%s</em></span>
-      <span>Biospecimen: <em>%s</em></span>
+    '<div class="role-label">\U0001f50d Query</div>
+    <div class="summary-line">
+      Module <strong>%s</strong> comprises %d co-occurring metabolites.
+      Please interpret its biological significance.
+    </div>
+    <div class="query-grid">
+      <div class="query-section">
+        <div class="section-label">Core metabolites</div>
+        <div class="met-chips">%s</div>
+      </div>
+      <div class="query-section">
+        <div class="section-label">Dominant chemical classes</div>
+        %s
+      </div>
+    </div>
+    <div class="query-section" style="margin-top:8px">
+      <div class="section-label">Study context</div>
+      <div class="context-pills">%s</div>
     </div>',
-    .he(module_id),
-    .he(top_str), .he(class_str), .he(phenotype), .he(species), .he(biospecimen)
+    .he(module_id), n_total,
+    .met_chips(top_names, 6L),
+    .class_bars(module_obj, 4L),
+    ctx_pills
   )
-  bubbles <- .bubble("left", "\U0001f50d", "User", user_content)
+  bubbles <- .bubble("left", "\U0001f50d", "Query", user_content)
 
-  # ── 2. P0 Proposer ───────────────────────────────────────────
-  p0_cards <- paste(sapply(hypotheses_v0, .hyp_card), collapse = "\n")
+  # ── 2. P0 Proposer ──────────────────────────────────────────
+  p0_cards <- paste(vapply(hypotheses_v0, .hyp_card, character(1L)),
+                    collapse = "\n")
   p0_content <- sprintf(
-    '<div class="msg-role">\U0001f52c Proposer</div>
-    <p>Based on the module data, I propose <strong>%d</strong> candidate hypothesis%s:</p>
+    '<div class="role-label proposer-r">\U0001f52c Proposer &mdash; Initial</div>
+    <div class="summary-line">
+      I propose <strong>%d</strong> candidate hypothesis%s based on the module data:
+    </div>
     %s',
     length(hypotheses_v0),
-    if (length(hypotheses_v0) != 1) "es" else "",
+    if (length(hypotheses_v0) != 1L) "es" else "",
     p0_cards
   )
-  bubbles <- paste0(bubbles, "\n", .bubble("right", "\U0001f52c", "Proposer", p0_content))
+  bubbles <- paste0(bubbles, "\n",
+                    .bubble("right", "\U0001f52c", "Proposer", p0_content, "proposer-r"))
 
-  # ── 3. S1 Skeptic ────────────────────────────────────────────
+  # ── 3. S1 Skeptic ───────────────────────────────────────────
   real_s1 <- Filter(function(c) !identical(c$severity, "no_challenge"), s1_challenges)
-  if (length(real_s1) > 0) {
-    s1_items <- paste(vapply(real_s1, .ch_item, character(1)), collapse = "\n")
+  if (length(real_s1) > 0L) {
+    s1_items  <- paste(vapply(real_s1, .ch_item, character(1L)), collapse = "\n")
     s1_content <- sprintf(
-      '<div class="msg-role">\U0001f914 Skeptic — Round 1</div>
-      <p>I raise <strong>%d</strong> challenge%s against the proposed hypotheses:</p>
+      '<div class="role-label">\U0001f9d0 Skeptic &mdash; Round 1</div>
+      <div class="summary-line">I raise <strong>%d</strong> challenge%s:</div>
       %s',
       length(real_s1),
-      if (length(real_s1) != 1) "s" else "",
+      if (length(real_s1) != 1L) "s" else "",
       s1_items
     )
   } else {
-    s1_content <- '<div class="msg-role">\U0001f914 Skeptic — Round 1</div>
-    <p class="no-issue">No substantive challenges. The proposed hypotheses are well-supported.</p>'
+    s1_content <- sprintf(
+      '<div class="role-label">\U0001f9d0 Skeptic &mdash; Round 1</div>
+      <div class="no-challenge-note">%s</div>',
+      "No substantive challenges. The proposed hypotheses are well-supported by the data."
+    )
   }
   bubbles <- paste0(bubbles, "\n",
-                    .bubble("left", "\U0001f914", "Skeptic", s1_content, "skeptic"))
+                    .bubble("left", "\U0001f9d0", "Skeptic", s1_content, "skeptic"))
 
-  # ── 4. P1 Proposer revision ──────────────────────────────────
-  p1_items    <- paste(sapply(p1_revisions, .rev_item, hypotheses_after = hypotheses_v1),
+  # ── 4. P1 Proposer revision ─────────────────────────────────
+  p1_items    <- paste(vapply(p1_revisions, .rev_item,
+                              character(1L), hypotheses_after = hypotheses_v1),
                        collapse = "\n")
-  dropped_r1  <- .count_action(p1_revisions, "drop")
   modified_r1 <- .count_action(p1_revisions, "modify")
+  dropped_r1  <- .count_action(p1_revisions, "drop")
+  kept_r1     <- length(p1_revisions) - modified_r1 - dropped_r1
   p1_content  <- sprintf(
-    '<div class="msg-role">✏️ Proposer — Round 1 Revision</div>
-    <p>Addressing Round 1: <strong>%d modified</strong>, <strong>%d dropped</strong>, %d kept.</p>
+    '<div class="role-label proposer-r">✏️ Proposer &mdash; Revision 1</div>
+    <div class="summary-line">
+      Addressing Round 1:
+      <strong>%d modified</strong>, <strong>%d dropped</strong>, %d kept.
+    </div>
     %s',
-    modified_r1, dropped_r1,
-    length(p1_revisions) - modified_r1 - dropped_r1,
-    p1_items
+    modified_r1, dropped_r1, kept_r1, p1_items
   )
   bubbles <- paste0(bubbles, "\n",
-                    .bubble("right", "✏️", "Proposer", p1_content))
+                    .bubble("right", "✏️", "Proposer", p1_content, "proposer-r"))
 
-  # ── 5. S2 Skeptic (conditional) ──────────────────────────────
-  if (!is.null(s2_challenges) && length(s2_challenges) > 0) {
-    real_s2   <- Filter(function(c) !identical(c$severity, "no_challenge"), s2_challenges)
-    if (length(real_s2) > 0) {
+  # ── 5. S2 Skeptic (conditional) ─────────────────────────────
+  if (!is.null(s2_challenges) && length(s2_challenges) > 0L) {
+    real_s2 <- Filter(function(c) !identical(c$severity, "no_challenge"), s2_challenges)
+    if (length(real_s2) > 0L) {
       bubbles <- paste0(bubbles,
                         '\n<div class="round-divider">Round 2</div>')
-      s2_items  <- paste(vapply(real_s2, .ch_item, character(1)), collapse = "\n")
+      s2_items   <- paste(vapply(real_s2, .ch_item, character(1L)), collapse = "\n")
       s2_content <- sprintf(
-        '<div class="msg-role">\U0001f914 Skeptic — Round 2</div>
-        <p>After Round 1 revisions, I raise <strong>%d</strong> further challenge%s:</p>
+        '<div class="role-label">\U0001f9d0 Skeptic &mdash; Round 2</div>
+        <div class="summary-line">After revisions, I raise <strong>%d</strong> further challenge%s:</div>
         %s',
         length(real_s2),
-        if (length(real_s2) != 1) "s" else "",
+        if (length(real_s2) != 1L) "s" else "",
         s2_items
       )
       bubbles <- paste0(bubbles, "\n",
-                        .bubble("left", "\U0001f914", "Skeptic", s2_content, "skeptic"))
+                        .bubble("left", "\U0001f9d0", "Skeptic", s2_content, "skeptic"))
     }
   }
 
-  # ── 6. P2 Proposer revision (conditional) ────────────────────
-  if (!is.null(p2_revisions) && length(p2_revisions) > 0) {
-    p2_items    <- paste(sapply(p2_revisions, .rev_item, hypotheses_after = hypotheses_final),
+  # ── 6. P2 Proposer revision (conditional) ───────────────────
+  if (!is.null(p2_revisions) && length(p2_revisions) > 0L) {
+    p2_items    <- paste(vapply(p2_revisions, .rev_item,
+                                character(1L), hypotheses_after = hypotheses_final),
                          collapse = "\n")
-    dropped_r2  <- .count_action(p2_revisions, "drop")
     modified_r2 <- .count_action(p2_revisions, "modify")
+    dropped_r2  <- .count_action(p2_revisions, "drop")
+    kept_r2     <- length(p2_revisions) - modified_r2 - dropped_r2
     p2_content  <- sprintf(
-      '<div class="msg-role">✏️ Proposer — Round 2 Revision</div>
-      <p>Addressing Round 2: <strong>%d modified</strong>, <strong>%d dropped</strong>, %d kept.</p>
+      '<div class="role-label proposer-r">✏️ Proposer &mdash; Revision 2</div>
+      <div class="summary-line">
+        Addressing Round 2:
+        <strong>%d modified</strong>, <strong>%d dropped</strong>, %d kept.
+      </div>
       %s',
-      modified_r2, dropped_r2,
-      length(p2_revisions) - modified_r2 - dropped_r2,
-      p2_items
+      modified_r2, dropped_r2, kept_r2, p2_items
     )
     bubbles <- paste0(bubbles, "\n",
-                      .bubble("right", "✏️", "Proposer", p2_content))
+                      .bubble("right", "✏️", "Proposer", p2_content, "proposer-r"))
   }
 
-  # ── 7. PubMed relationship summaries ─────────────────────────
-  if (!is.null(phenotype_relationships) && length(phenotype_relationships) > 0) {
-    pm_items <- paste(
-      vapply(names(phenotype_relationships), function(hid) {
-        .pubmed_item(hid, phenotype_relationships[[hid]])
-      }, character(1)),
-      collapse = "\n"
-    )
-    pm_content <- sprintf(
-      '<div class="msg-role">📚 PubMed Relationship Summary</div>
-      <p>Phenotype relationship evidence summarized before final arbitration:</p>
-      %s',
-      pm_items
-    )
-    bubbles <- paste0(bubbles, "\n",
-                      .bubble("left", "📚", "PubMed Summary", pm_content))
-  }
+  # ── 7. A0 Arbiter ───────────────────────────────────────────
+  verdicts <- arbiter_result$verdicts %||% list()
+  n_acc    <- sum(vapply(verdicts, function(v) identical(v$status, "accepted"),  logical(1L)))
+  n_unc    <- sum(vapply(verdicts, function(v) identical(v$status, "uncertain"), logical(1L)))
+  n_rej    <- sum(vapply(verdicts, function(v) identical(v$status, "rejected"),  logical(1L)))
 
-  # ── 8. A0 Arbiter ────────────────────────────────────────────
-  verdicts     <- arbiter_result$verdicts %||% list()
-  n_acc        <- sum(sapply(verdicts, function(v) identical(v$status, "accepted")))
-  n_unc        <- sum(sapply(verdicts, function(v) identical(v$status, "uncertain")))
-  n_rej        <- sum(sapply(verdicts, function(v) identical(v$status, "rejected")))
-  hypotheses_lookup <- c(
-    hypotheses_final %||% list(),
-    hypotheses_v0 %||% list()
-  )
-  if (length(hypotheses_lookup) > 0) {
-    hypothesis_ids <- vapply(hypotheses_lookup, function(h) h$hypothesis_id %||% "", character(1))
-    hypotheses_lookup <- hypotheses_lookup[!duplicated(hypothesis_ids)]
-  }
-  verdict_cards <- paste(sapply(verdicts, .verdict_card,
-                                hypotheses_lookup = hypotheses_lookup),
-                         collapse = "\n")
-  amb      <- arbiter_result$residual_ambiguity %||% NA
+  vcards <- paste(vapply(verdicts, .verdict_card,
+                         character(1L), hypotheses_final = hypotheses_final),
+                  collapse = "\n")
+
+  amb     <- arbiter_result$residual_ambiguity %||% NA_character_
   amb_html <- if (!is.na(amb) && nzchar(trimws(amb)))
-    sprintf('<div class="ambiguity-note"><strong>Residual ambiguity:</strong> %s</div>', .he(amb))
+    sprintf('<div class="ambiguity-note"><strong>Residual ambiguity:</strong> %s</div>',
+            .he(amb))
   else ""
+
   arbiter_content <- sprintf(
-    '<div class="msg-role">⚖️ Arbiter — Final Verdict</div>
-    <p>After reviewing the full debate:
-       <strong>%d accepted</strong>,
-       <strong>%d uncertain</strong>,
-       <strong>%d rejected</strong>.</p>
+    '<div class="role-label">&#9878;&#65039; Arbiter &mdash; Final Verdict</div>
+    <div class="summary-line">
+      Reviewing the full debate:
+      <strong>%d accepted</strong> &middot;
+      <strong>%d uncertain</strong> &middot;
+      <strong>%d rejected</strong>.
+    </div>
     %s%s',
-    n_acc, n_unc, n_rej, verdict_cards, amb_html
+    n_acc, n_unc, n_rej, vcards, amb_html
   )
   bubbles <- paste0(bubbles, "\n",
-                    .bubble("center", "⚖️", "Arbiter",
+                    .bubble("center", "&#9878;&#65039;", "Arbiter",
                             arbiter_content, "arbiter"))
 
-  # ── Assemble final HTML ──────────────────────────────────────
+  # ── Assemble page ────────────────────────────────────────────
   html <- sprintf(
 '<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Debate — Module %s</title>
-  <style>%s</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module Debate &mdash; %s</title>
+<style>%s</style>
 </head>
 <body>
-  <div class="chat-header">
-    <h1>\U0001f9ec Module Debate: %s</h1>
-    <p>Multi-agent metabolic annotation pipeline &nbsp;·&nbsp; %s</p>
+<div class="page-header">
+  <h1>&#x1F9EC; Module Debate &mdash; %s</h1>
+  <div class="sub">
+    <span>%s</span>
+    <span>%s</span>
+    <span>%s</span>
+    <span>%s</span>
   </div>
-  <div class="chat-body">
+</div>
+<div class="chat-body">
 %s
-  </div>
+</div>
 </body>
 </html>',
     .he(module_id),
     .debate_css(),
     .he(module_id),
+    .he(species), .he(biospecimen), .he(phenotype),
     .he(as.character(Sys.Date())),
     bubbles
   )
 
-  # ── Write file ───────────────────────────────────────────────
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   fname    <- gsub("[^A-Za-z0-9._-]", "_", module_id)
   out_path <- file.path(output_dir, sprintf("debate_%s.html", fname))
   writeLines(html, out_path, useBytes = FALSE)

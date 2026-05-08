@@ -346,10 +346,15 @@ annotate_module <- function(res                  = NULL,
   # ---- Class-level structure (all metabolites, for prompt) -----------------
   module_class <- purrr::imap(module_list, ~ {
     if (nrow(.x) == 0) return(tibble::tibble())
-    .x %>%
+    class_input <- .x %>%
+      dplyr::mutate(class = trimws(as.character(class))) %>%
+      dplyr::filter(!is.na(class), nzchar(class), toupper(class) != "NA")
+    if (nrow(class_input) == 0) return(tibble::tibble())
+
+    class_input %>%
       dplyr::group_by(class) %>%
       dplyr::summarise(
-        n_metabolites  = round(n() / nrow(.x), 2),
+        n_metabolites  = round(n() / nrow(class_input), 2),
         metabolites    = paste(unique(Compound_name), collapse = "{}"),
         Compound_IDs   = paste(unique(Compound_ID),   collapse = "{}"),
         mean_priority  = mean(0.7 * Importance + 0.3 * Robustness, na.rm = TRUE),

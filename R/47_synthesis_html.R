@@ -80,22 +80,46 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .node text{font-size:10.5px;fill:#1f2937;paint-order:stroke;stroke:#fbfcfe;
            stroke-width:2.5px;user-select:none;pointer-events:none}
 
-/* hover tooltip card */
+/* hover tooltip — lightweight, title only, no pointer-events */
 #tooltip{position:absolute;pointer-events:none;display:none;z-index:30;
-         background:#fff;border:1px solid #d1d5db;border-radius:9px;
-         box-shadow:0 4px 18px rgba(0,0,0,.13);padding:12px 14px;
-         max-width:280px;min-width:180px;line-height:1.5}
-#tooltip .tt-id   {font-size:.68rem;font-weight:700;color:#6741d9;
-                   background:#ede9fb;padding:1px 6px;border-radius:3px;
-                   display:inline-block;margin-bottom:6px}
-#tooltip .tt-pills{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px}
-#tooltip .tt-pill {font-size:.68rem;padding:1px 6px;border-radius:4px;
-                   background:#f1f3f5;color:#4b5563;border:1px solid #e4e7ed}
-#tooltip .tt-pill.accepted {background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
-#tooltip .tt-pill.uncertain{background:#fffbeb;color:#92400e;border-color:#fcd34d}
-#tooltip .tt-title  {font-size:.83rem;font-weight:600;color:#1c1f26;margin-bottom:5px}
-#tooltip .tt-summary{font-size:.78rem;color:#4b5563;line-height:1.55;
-                     max-height:110px;overflow-y:auto}
+         background:rgba(28,31,38,.82);color:#fff;
+         padding:5px 10px;border-radius:6px;
+         font-size:.76rem;font-weight:500;white-space:nowrap;
+         max-width:260px;overflow:hidden;text-overflow:ellipsis;
+         line-height:1.4}
+
+/* pinned card — click to open, scrollable, pointer-events:auto */
+#pinned{position:absolute;display:none;z-index:40;
+        background:#fff;border:1px solid #d1d5db;border-radius:10px;
+        box-shadow:0 6px 24px rgba(0,0,0,.16);
+        width:290px;max-height:420px;flex-direction:column;overflow:hidden}
+
+/* study-context pills in page header */
+.ctx-pill{display:inline-flex;align-items:center;
+          font-size:.75rem;padding:2px 10px;border-radius:20px;
+          background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
+          color:#e8eaf0;margin-right:5px}
+#pinned .pin-hdr{padding:11px 13px 8px;border-bottom:1px solid #eef0f4;
+                 display:flex;align-items:flex-start;gap:6px;flex-shrink:0}
+#pinned .pin-id {font-size:.68rem;font-weight:700;color:#6741d9;
+                 background:#ede9fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
+#pinned .pin-pills{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
+#pinned .pin-pill{font-size:.67rem;padding:1px 6px;border-radius:3px;
+                  background:#f1f3f5;color:#4b5563;border:1px solid #e4e7ed}
+#pinned .pin-pill.accepted {background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
+#pinned .pin-pill.uncertain{background:#fffbeb;color:#92400e;border-color:#fcd34d}
+#pinned .pin-close{margin-left:auto;flex-shrink:0;cursor:pointer;
+                   font-size:1rem;color:#9ca3af;line-height:1;
+                   padding:0 2px;user-select:none}
+#pinned .pin-close:hover{color:#374151}
+#pinned .pin-body{padding:10px 13px 13px;overflow-y:auto;flex:1}
+#pinned .pin-title{font-size:.85rem;font-weight:600;color:#1c1f26;
+                   line-height:1.45;margin-bottom:7px}
+#pinned .pin-section{margin-top:9px;padding-top:9px;border-top:1px solid #f0f2f5}
+#pinned .pin-section:first-child{margin-top:0;padding-top:0;border-top:none}
+#pinned .pin-lbl{font-size:.63rem;font-weight:700;letter-spacing:.08em;
+                 text-transform:uppercase;color:#9ca3af;margin-bottom:3px}
+#pinned .pin-txt{font-size:.79rem;color:#4b5563;line-height:1.6;white-space:pre-wrap}
 
 /* right summary panel */
 .sum-panel{padding:16px;display:flex;flex-direction:column;gap:0}
@@ -136,11 +160,13 @@ const svg    = document.getElementById("network");
 const gEdges = document.getElementById("edges");
 const gNodes = document.getElementById("nodes");
 const tooltip = document.getElementById("tooltip");
+const pinned  = document.getElementById("pinned");
 const search  = document.getElementById("search");
 const controls = {
   direct:   document.getElementById("fDirect"),
   indirect: document.getElementById("fIndirect")
 };
+let pinnedNode = null;
 
 /* ── colour / size maps ── */
 const PALETTE = [
@@ -166,18 +192,8 @@ moduleIds.forEach(m => {
   modLeg.appendChild(sp);
 });
 
-/* ── physics state ── */
-const W0 = 900, H0 = 600;
-let nodes = data.nodes.map((d, i) => {
-  const cols = Math.max(1, Math.ceil(Math.sqrt(data.nodes.length * 1.4)));
-  const col  = i % cols, row = Math.floor(i / cols);
-  return {
-    ...d,
-    x: 80 + col * (W0 - 160) / Math.max(cols - 1, 1) + (Math.random() - .5) * 60,
-    y: 80 + row * (H0 - 160) / Math.max(Math.ceil(data.nodes.length / cols) - 1, 1) + (Math.random() - .5) * 60,
-    vx: 0, vy: 0
-  };
-});
+/* ── node / edge data ── */
+let nodes = data.nodes.map(d => ({...d, x: 0, y: 0}));
 const nodeById = Object.fromEntries(nodes.map(d => [d.node_id, d]));
 let edges = data.edges
   .map(e => ({...e, source: nodeById[e.node_1], target: nodeById[e.node_2]}))
@@ -225,18 +241,9 @@ function isOver(n, mx, my){
   return Math.abs(dx) <= sz && Math.abs(dy) <= sz;
 }
 
-/* ── tooltip via SVG-level mouse tracking (survives DOM re-renders) ── */
+/* ── hover tooltip — title only, follows mouse, no pointer-events ── */
 function showTooltip(ev, n){
-  const statusCls = n.verdict_status === "accepted" ? "accepted" : "uncertain";
-  tooltip.innerHTML =
-    `<div class="tt-id">${esc(n.node_id)}</div>` +
-    `<div class="tt-pills">` +
-      `<span class="tt-pill ${statusCls}">${esc(n.verdict_status)}</span>` +
-      (n.confidence_label ? `<span class="tt-pill">${esc(n.confidence_label)} confidence</span>` : "") +
-      `<span class="tt-pill">${esc(n.module_id)}</span>` +
-    `</div>` +
-    (n.title    ? `<div class="tt-title">${esc(n.title)}</div>` : "") +
-    (n.functional_summary ? `<div class="tt-summary">${esc(n.functional_summary)}</div>` : "");
+  tooltip.textContent = n.title || n.node_id;
   tooltip.style.display = "block";
   positionTooltip(ev);
 }
@@ -244,88 +251,191 @@ function showTooltip(ev, n){
 function positionTooltip(ev){
   const wrap = document.querySelector(".network-wrap");
   const r    = wrap.getBoundingClientRect();
-  let tx = ev.clientX - r.left + 16;
-  let ty = ev.clientY - r.top  + 16;
-  // flip left if overflowing right
-  if (tx + 290 > wrap.offsetWidth)  tx = ev.clientX - r.left - 294;
-  // flip up if overflowing bottom
-  if (ty + tooltip.offsetHeight + 10 > wrap.offsetHeight)
-    ty = ev.clientY - r.top - tooltip.offsetHeight - 10;
+  let tx = ev.clientX - r.left + 14;
+  let ty = ev.clientY - r.top  - 30;
+  if (tx + 270 > wrap.offsetWidth) tx = ev.clientX - r.left - 270;
+  if (ty < 4) ty = ev.clientY - r.top + 14;
   tooltip.style.left = Math.max(4, tx) + "px";
   tooltip.style.top  = Math.max(4, ty) + "px";
 }
 
+/* ── pinned card — click to open, scrollable ── */
+function pinSection(label, text){
+  if (!text || !text.trim()) return "";
+  return `<div class="pin-section">
+    <div class="pin-lbl">${esc(label)}</div>
+    <div class="pin-txt">${esc(text)}</div>
+  </div>`;
+}
+
+function showPin(ev, n){
+  pinnedNode = n.node_id;
+  const statusCls = n.verdict_status === "accepted" ? "accepted" : "uncertain";
+  const confLabel = n.confidence_label ? n.confidence_label + " confidence" : "";
+  pinned.innerHTML =
+    `<div class="pin-hdr">
+       <div>
+         <span class="pin-id">${esc(n.node_id)}</span>
+         <div class="pin-pills">
+           <span class="pin-pill ${statusCls}">${esc(n.verdict_status)}</span>
+           ${confLabel ? `<span class="pin-pill">${esc(confLabel)}</span>` : ""}
+           <span class="pin-pill">${esc(n.module_id)}</span>
+         </div>
+       </div>
+       <span class="pin-close" id="pin-close-btn">&#x2715;</span>
+     </div>
+     <div class="pin-body">
+       ${n.title ? `<div class="pin-title">${esc(n.title)}</div>` : ""}
+       ${pinSection("Functional summary",           n.functional_summary)}
+       ${pinSection("Phenotype relationship",       n.phenotype_relationship)}
+       ${pinSection("Confidence rationale",         n.rationale)}
+       ${pinSection("Core drivers",                 n.core_drivers)}
+       ${pinSection("Top KEGG pathways",            n.top_kegg_pathways)}
+       ${pinSection("Top HMDB pathways",            n.top_hmdb_pathways)}
+       ${pinSection("Phenotype literature support",
+           [n.phenotype_literature_support, n.phenotype_evidence_note].filter(Boolean).join("\n"))}
+     </div>`;
+
+  /* position near node */
+  const wrap = document.querySelector(".network-wrap");
+  const wW = wrap.offsetWidth, wH = wrap.offsetHeight;
+  const cardW = 290, cardH = Math.min(420, wH - 20);
+  let px = n.x + nodeSize(n) + 10;
+  let py = n.y - 60;
+  if (px + cardW > wW - 8) px = n.x - nodeSize(n) - cardW - 10;
+  if (py + cardH > wH - 8) py = wH - cardH - 8;
+  if (py < 8) py = 8;
+  if (px < 8) px = 8;
+
+  pinned.style.left    = px + "px";
+  pinned.style.top     = py + "px";
+  pinned.style.display = "flex";
+
+  /* close button */
+  document.getElementById("pin-close-btn")
+    .addEventListener("click", ev2 => { ev2.stopPropagation(); hidePin(); });
+}
+
+function hidePin(){
+  pinnedNode = null;
+  pinned.style.display = "none";
+  render();
+}
+
+/* ── SVG-level mouse tracking (survives DOM re-renders every tick) ── */
 svg.addEventListener("mousemove", ev => {
   const r  = svg.getBoundingClientRect();
   const mx = ev.clientX - r.left;
   const my = ev.clientY - r.top;
   const f  = filters();
   const vis = nodes.filter(n => nodeVisible(n, f));
-
-  // check nodes in reverse paint order so top-most wins
   let hit = null;
   for (let i = vis.length - 1; i >= 0; i--) {
     if (isOver(vis[i], mx, my)) { hit = vis[i]; break; }
   }
-  if (hit) showTooltip(ev, hit);
-  else      tooltip.style.display = "none";
+  /* show hover tooltip only if no pinned card open (or hovering a different node) */
+  if (hit && hit.node_id !== pinnedNode) {
+    showTooltip(ev, hit);
+  } else {
+    tooltip.style.display = "none";
+  }
 });
 
 svg.addEventListener("mouseleave", () => {
   tooltip.style.display = "none";
 });
 
-/* ── physics ── */
-function tick(){
-  const rect = svg.getBoundingClientRect();
-  const W = rect.width  || W0;
-  const H = rect.height || H0;
+/* click on SVG background dismisses pin */
+svg.addEventListener("click", ev => {
+  const r  = svg.getBoundingClientRect();
+  const mx = ev.clientX - r.left;
+  const my = ev.clientY - r.top;
   const f  = filters();
-  const vis    = nodes.filter(n => nodeVisible(n, f));
-  const visIds = new Set(vis.map(n => n.node_id));
-  const visE   = edges.filter(e => edgeVisible(e, visIds, f));
+  const vis = nodes.filter(n => nodeVisible(n, f));
+  const hit = vis.find(n => isOver(n, mx, my));
+  if (hit) {
+    tooltip.style.display = "none";
+    showPin(ev, hit);
+    render();  /* re-render to highlight selected node */
+  } else {
+    hidePin();
+  }
+});
 
-  /* centering */
-  for (const n of vis){
-    n.vx *= .84; n.vy *= .84;
-    n.vx += (W/2 - n.x) * .0007;
-    n.vy += (H/2 - n.y) * .0007;
-  }
-  /* repulsion – stronger to keep nodes spread */
-  for (let i = 0; i < vis.length; i++){
-    for (let j = i+1; j < vis.length; j++){
-      const a = vis[i], b = vis[j];
-      let dx = a.x - b.x, dy = a.y - b.y;
-      const d2 = dx*dx + dy*dy + 1;
-      const d  = Math.sqrt(d2);
-      const minD = nodeSize(a) + nodeSize(b) + 55;
-      /* hard push when too close */
-      const push = minD*minD*3 / (d2 + 200);
-      dx /= d; dy /= d;
-      a.vx += dx*push; a.vy += dy*push;
-      b.vx -= dx*push; b.vy -= dy*push;
+/* ── static layout ── */
+function computeLayout(){
+  const rect = svg.getBoundingClientRect();
+  const W = rect.width  || 860;
+  const H = rect.height || 560;
+  const cx = W / 2, cy = H / 2;
+
+  /* group nodes by module */
+  const groups = {};
+  nodes.forEach(n => { (groups[n.module_id] = groups[n.module_id] || []).push(n); });
+  const mids = Object.keys(groups).sort();
+  const nMod = mids.length;
+
+  /* place module centres in a circle */
+  const Rmod = Math.min(cx, cy) * (nMod <= 2 ? 0.30 : nMod <= 4 ? 0.44 : 0.52);
+  mids.forEach((mid, mi) => {
+    const angle = 2 * Math.PI * mi / nMod - Math.PI / 2;
+    const mcx   = cx + Rmod * Math.cos(angle);
+    const mcy   = cy + Rmod * Math.sin(angle);
+    const grp   = groups[mid];
+    const nN    = grp.length;
+    /* spread nodes in a small circle around module centre */
+    const Rnode = nN === 1 ? 0 : Math.max(28, nN * 13);
+    grp.forEach((n, ni) => {
+      const a = 2 * Math.PI * ni / nN - Math.PI / 2;
+      n.x = mcx + Rnode * Math.cos(a);
+      n.y = mcy + Rnode * Math.sin(a);
+    });
+  });
+
+  /* iterative overlap resolution — no animation, just converge */
+  for (let iter = 0; iter < 200; iter++){
+    /* repulsion between all pairs */
+    for (let i = 0; i < nodes.length; i++){
+      for (let j = i+1; j < nodes.length; j++){
+        const a = nodes[i], b = nodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        const d2 = dx*dx + dy*dy + 0.01;
+        const d  = Math.sqrt(d2);
+        const minD = nodeSize(a) + nodeSize(b) + 44;
+        if (d < minD){
+          const push = (minD - d) * 0.45;
+          dx /= d; dy /= d;
+          a.x += dx * push; a.y += dy * push;
+          b.x -= dx * push; b.y -= dy * push;
+        }
+      }
     }
+    /* gentle spring along edges (pull connected nodes closer) */
+    edges.forEach(e => {
+      const a = e.source, b = e.target;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx*dx + dy*dy) + 0.01;
+      const target = e.relation_class === "direct" ? 140 : 180;
+      if (d > target){
+        const pull = (d - target) * 0.04;
+        dx /= d; dy /= d;
+        a.x += dx * pull; a.y += dy * pull;
+        b.x -= dx * pull; b.y -= dy * pull;
+      }
+    });
+    /* soft pull back to module centre */
+    mids.forEach(mid => {
+      const grp = groups[mid];
+      const mcx = grp.reduce((s, n) => s + n.x, 0) / grp.length;  /* current centroid */
+      const mcy = grp.reduce((s, n) => s + n.y, 0) / grp.length;
+    });
+    /* boundary clamp */
+    nodes.forEach(n => {
+      const pad = nodeSize(n) + 16;
+      n.x = Math.max(pad, Math.min(W - pad, n.x));
+      n.y = Math.max(pad, Math.min(H - pad, n.y));
+    });
   }
-  /* spring attraction along edges */
-  for (const e of visE){
-    const a = e.source, b = e.target;
-    let dx = b.x - a.x, dy = b.y - a.y;
-    const d = Math.sqrt(dx*dx + dy*dy) + .01;
-    const target = e.relation_class === "direct" ? 170 : 220;
-    const k = .004;
-    const force = (d - target) * k;
-    dx /= d; dy /= d;
-    a.vx += dx*force; a.vy += dy*force;
-    b.vx -= dx*force; b.vy -= dy*force;
-  }
-  /* boundary */
-  for (const n of vis){
-    const pad = nodeSize(n) + 12;
-    n.x = Math.max(pad, Math.min(W-pad, n.x + n.vx));
-    n.y = Math.max(pad, Math.min(H-pad, n.y + n.vy));
-  }
-  render();
-  requestAnimationFrame(tick);
 }
 
 /* ── render ── */
@@ -366,10 +476,10 @@ function render(){
       shape.setAttribute("width", sz*2); shape.setAttribute("height", sz*2);
       shape.setAttribute("rx", "3");
     }
+    const isPinned = n.node_id === pinnedNode;
     shape.setAttribute("fill", fill);
-    shape.setAttribute("fill-opacity", isAcc ? "0.9" : "0.6");
-    shape.setAttribute("stroke", "#fff");
-    shape.setAttribute("stroke-width", "2");
+    shape.setAttribute("stroke", isPinned ? "#1c1f26" : "#fff");
+    shape.setAttribute("stroke-width", isPinned ? "3.5" : "2.5");
 
     const t = document.createElementNS("http://www.w3.org/2000/svg","text");
     t.setAttribute("x", sz + 4);
@@ -408,7 +518,10 @@ if (data.summary && data.summary.trim()) {
 for (const el of Object.values(controls)) el.addEventListener("change", render);
 search.addEventListener("input", render);
 
-tick();'
+window.addEventListener("load", function(){
+  computeLayout();
+  render();
+});'
 }
 
 # ── R public function ─────────────────────────────────────────
@@ -417,14 +530,17 @@ tick();'
 #'
 #' @param synthesis A \code{res$module_synthesis} list, or a featuremap result
 #'   object containing \code{module_synthesis}.
+#' @param study_context Optional list with \code{species}, \code{biospecimen},
+#'   \code{phenotype} to display in the page header.
 #' @param output_dir Directory for the output HTML.
 #' @param output_file File name for the output HTML.
 #' @param show_same_module Ignored (same-module links are never rendered).
 #' @return Invisibly, the written HTML path.
 #' @export
 generate_synthesis_network_html <- function(synthesis,
-                                            output_dir  = getwd(),
-                                            output_file = "synthesis_network.html",
+                                            study_context    = NULL,
+                                            output_dir       = getwd(),
+                                            output_file      = "synthesis_network.html",
                                             show_same_module = FALSE) {
   synthesis <- .syn_get_synthesis(synthesis)
   if (is.null(synthesis$nodes) || !is.data.frame(synthesis$nodes))
@@ -457,6 +573,21 @@ generate_synthesis_network_html <- function(synthesis,
   )
   js <- sub("GRAPH_DATA", graph_json, .syn_js(), fixed = TRUE)
 
+  # ── study context pills for page header ──────────────────────
+  ctx_html <- {
+    sc <- if (is.list(study_context)) study_context else list()
+    vals <- c(
+      .syn_scalar(sc$species,     ""),
+      .syn_scalar(sc$biospecimen, ""),
+      .syn_scalar(sc$phenotype,   "")
+    )
+    vals <- vals[nzchar(vals)]
+    if (length(vals) > 0)
+      paste(sprintf('<span class="ctx-pill">%s</span>', .syn_he(vals)), collapse = "")
+    else
+      ""
+  }
+
   html <- sprintf(
 '<!DOCTYPE html>
 <html lang="en">
@@ -470,9 +601,7 @@ generate_synthesis_network_html <- function(synthesis,
 
 <div class="page-header">
   <h1>&#x1F9EC; Hypothesis-level Synthesis Network</h1>
-  <div class="sub">Accepted &#x25CF; and uncertain &#x25A0; hypotheses &middot;
-    direct and indirect biological relationships &middot;
-    node size = confidence &middot; node colour = source module</div>
+  <div class="sub">%s</div>
 </div>
 
 <div class="layout">
@@ -486,7 +615,7 @@ generate_synthesis_network_html <- function(synthesis,
     </div>
     <div class="legend">
       <span><i class="leg-circle" style="background:#667085"></i>Accepted</span>
-      <span><i class="leg-square" style="background:#667085;opacity:.6"></i>Uncertain</span>
+      <span><i class="leg-square" style="background:#667085"></i>Uncertain</span>
       <i class="leg-sep"></i>
       <span>Size&nbsp;&rarr;&nbsp;confidence</span>
       <i class="leg-sep"></i>
@@ -498,6 +627,7 @@ generate_synthesis_network_html <- function(synthesis,
     <div class="network-wrap">
       <svg id="network"><g id="edges"></g><g id="nodes"></g></svg>
       <div id="tooltip"></div>
+      <div id="pinned"></div>
     </div>
   </div>
 
@@ -528,7 +658,7 @@ generate_synthesis_network_html <- function(synthesis,
 <script>%s</script>
 </body>
 </html>',
-    .syn_css(), js
+    .syn_css(), ctx_html, js
   )
 
   if (!dir.exists(output_dir))

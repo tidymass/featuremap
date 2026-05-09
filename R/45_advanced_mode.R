@@ -30,8 +30,8 @@
 #         + per-hypothesis PubMed phenotype summaries
 #         → does NOT receive global_direction (too complex to use as mechanistic constraint)
 #
-# PubMed: two-layer search (shared metabolites + per-hypothesis title, each with phenotype),
-#   merged per hypothesis → each hypothesis has its own independent PMID evidence set.
+# PubMed: two-layer search (deduplicated anchors + per-hypothesis title, each with phenotype),
+#   then anchor evidence is assigned back to the hypotheses that use those anchors.
 #   Search (fetch) and summarization (LLM) are separate steps.
 #
 # global_direction: computed from module data, stored in output row ONLY.
@@ -1326,16 +1326,15 @@ The following are the ORIGINAL proposed hypotheses for your consideration:
 # ============================================================
 
 # Two-layer PubMed search strategy:
-#   Layer 1 (shared): top metabolite names + phenotype — called ONCE, shared across hypotheses.
+#   Layer 1 (shared): all unique anchor metabolites + phenotype — called ONCE.
 #   Layer 2 (per-hypothesis): hypothesis title + phenotype — one call per hypothesis.
-#   Each hypothesis receives its OWN deduplicated PMID set (layer 2 + layer 1 merged),
-#   so every hypothesis has independent literature evidence for the summarizer to work with.
+#   Anchor records are assigned only to hypotheses that use the matching anchors, then
+#   merged with per-hypothesis title evidence and deduplicated by PMID.
 #
 # Searching and summarizing are kept separate:
 #   search_pubmed_advanced()              → fetches raw PubMed evidence per hypothesis
 #   summarize_pubmed_relationships_advanced() → LLM summarizes each hypothesis independently
 search_pubmed_advanced <- function(hypotheses_final,
-                                    top_metabolite_names = NULL,
                                     phenotype            = NULL,
                                     NCBI_api_key         = NULL,
                                     retmax_per_query     = 3L,
@@ -1343,11 +1342,19 @@ search_pubmed_advanced <- function(hypotheses_final,
 
   if (length(hypotheses_final) == 0) return(list())
 
-  # Layer 1: shared metabolite search (called once)
-  shared <- tryCatch(
+  clean_terms <- function(x) {
+    if (is.null(x) || length(x) == 0) return(character(0))
+    x <- unique(trimws(as.character(unlist(x, use.names = FALSE))))
+    x[!is.na(x) & nzchar(x) & x != "NA"]
+  }
+
+  # Layer 1: search all unique anchors once, then assign matching source_terms
+  # back to each hypothesis below.
+  all_anchor_names <- clean_terms(lapply(hypotheses_final, function(h) h$anchor_metabolites))
+  shared_anchors <- tryCatch(
     search_pubmed_for_annotation_evidence(
       module_title         = NULL,
-      top_metabolite_names = top_metabolite_names,
+      top_metabolite_names = all_anchor_names,
       phenotype            = phenotype,
       NCBI_api_key         = NCBI_api_key,
       retmax_per_query     = retmax_per_query,
@@ -1356,7 +1363,44 @@ search_pubmed_advanced <- function(hypotheses_final,
     error = function(e) NULL
   )
 
-  # Layer 2: per-hypothesis title search + merge with shared layer
+  filter_pubmed_by_source_term <- function(evidence, terms) {
+    terms <- clean_terms(terms)
+    if (is.null(evidence) || length(evidence$pmids) == 0 || length(terms) == 0) {
+      return(list(pmids = character(0), titles = character(0),
+                  abstracts = character(0), source_type = character(0),
+                  source_term = character(0)))
+    }
+    n <- min(length(evidence$pmids), length(evidence$titles), length(evidence$abstracts))
+    if (n == 0) {
+      return(list(pmids = character(0), titles = character(0),
+                  abstracts = character(0), source_type = character(0),
+                  source_term = character(0)))
+    }
+    source_term <- if (!is.null(evidence$source_term)) {
+      as.character(evidence$source_term[seq_len(n)])
+    } else {
+      rep("", n)
+    }
+    keep <- tolower(trimws(source_term)) %in% tolower(terms)
+    if (!any(keep, na.rm = TRUE)) {
+      return(list(pmids = character(0), titles = character(0),
+                  abstracts = character(0), source_type = character(0),
+                  source_term = character(0)))
+    }
+    list(
+      pmids       = as.character(evidence$pmids[seq_len(n)][keep]),
+      titles      = as.character(evidence$titles[seq_len(n)][keep]),
+      abstracts   = as.character(evidence$abstracts[seq_len(n)][keep]),
+      source_type = if (!is.null(evidence$source_type)) {
+        as.character(evidence$source_type[seq_len(n)][keep])
+      } else {
+        rep("unknown", sum(keep))
+      },
+      source_term = source_term[keep]
+    )
+  }
+
+  # Layer 2: per-hypothesis title search + merge with that hypothesis's anchor records.
   per_hyp <- lapply(hypotheses_final, function(h) {
     title <- if (!is.null(h$title) && nzchar(h$title)) h$title else NULL
     hyp_specific <- if (!is.null(title)) {
@@ -1373,7 +1417,8 @@ search_pubmed_advanced <- function(hypotheses_final,
       )
     } else NULL
 
-    adv_merge_pubmed(hyp_specific, shared)
+    hyp_anchor_evidence <- filter_pubmed_by_source_term(shared_anchors, h$anchor_metabolites)
+    adv_merge_pubmed(hyp_specific, hyp_anchor_evidence)
   })
   names(per_hyp) <- sapply(hypotheses_final, `[[`, "hypothesis_id")
   per_hyp
@@ -2241,14 +2286,9 @@ annotate_one_module_advanced <- function(module_obj,
     hyps_for_pubmed <- hyps_for_phenotype
     message("[advanced] Module ", mid, " | PubMed search for ",
             length(hyps_for_pubmed), " hypothesis(es) (pre-Arbiter)...")
-    top_names <- NULL
-    if (!is.null(module_obj$topN_metabolites) &&
-        "Compound_name" %in% colnames(module_obj$topN_metabolites))
-      top_names <- unique(module_obj$topN_metabolites$Compound_name)
 
     pubmed_per_hyp <- search_pubmed_advanced(
       hypotheses_final     = hyps_for_pubmed,
-      top_metabolite_names = top_names,
       phenotype            = study_context$phenotype,
       NCBI_api_key         = NCBI_api_key,
       retmax_per_query     = 3L,

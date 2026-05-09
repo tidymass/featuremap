@@ -106,8 +106,8 @@
 #'   \item P1 Proposer revision: keep / modify / drop each hypothesis.
 #'   \item (Conditional) S2 + P2: second debate round if revisions were made
 #'         or major challenges were kept without revision.
-#'   \item Optional PubMed: per-hypothesis title search + shared metabolite
-#'         search, results held for Arbiter only.
+#'   \item Optional PubMed: deduplicated anchor-metabolite search plus
+#'         per-hypothesis title search, results held for Arbiter only.
 #'   \item Optional PubMed: phenotype relationships are summarized per
 #'         hypothesis before Arbiter.
 #'   \item A0 Arbiter: final accepted / rejected verdicts using

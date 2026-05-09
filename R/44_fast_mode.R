@@ -67,11 +67,19 @@ Using only the provided information, return three fields:
    - Do NOT reference module-level statistics (Signal_concentration).
    - Mention secondary signals only briefly at the end if needed.
 
+4) ANCHOR_METABOLITES
+   - List 2-5 metabolites that most strongly anchor the module interpretation.
+   - Choose from the provided top metabolites, prioritising early-ranked high-priority ones.
+   - These will be used for literature retrieval; prefer metabolites with established names
+     (avoid generic class names).
+   - Return as a JSON array of strings.
+
 Return STRICT JSON only:
 {{
   \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
   \"title\": \"...\",
-  \"functional_summary\": \"...\"
+  \"functional_summary\": \"...\",
+  \"anchor_metabolites\": [\"metabolite1\", \"metabolite2\"]
 }}
 
 Do not invent metabolites, unsupported pathways, or unsupported mechanisms."
@@ -222,7 +230,7 @@ You will receive:
 - Origin profile: proportions of endogenous, exogenous, and unknown-origin metabolites
 - Study context: species, biospecimen, phenotype
 - Literature evidence: PubMed abstracts retrieved by searching the module title,
-  all top metabolites, and phenotype
+  anchor metabolites (key metabolites identified in Call 1), and phenotype
   (may be absent if pubmed = FALSE or no papers were found)
 
 Definitions:
@@ -667,9 +675,11 @@ annotate_one_module <- function(module_obj,
                    "Xenobiotic / Exogenous", "Host–Microbiome")
         ),
         title              = list(type = "STRING"),
-        functional_summary = list(type = "STRING")
+        functional_summary = list(type = "STRING"),
+        anchor_metabolites = list(type = "ARRAY",
+                                  items = list(type = "STRING"))
       ),
-      required = c("type", "title", "functional_summary")
+      required = c("type", "title", "functional_summary", "anchor_metabolites")
     )
     schema_call2 <- list(
       type = "OBJECT",
@@ -698,46 +708,51 @@ annotate_one_module <- function(module_obj,
     schema           = schema_call1,
     required_keys    = c("type", "title", "functional_summary"),
     retry_instruction = paste(
-      "Return ONLY a valid JSON object with exactly three keys:",
-      "\"type\", \"title\", and \"functional_summary\"."
+      "Return ONLY a valid JSON object with exactly four keys:",
+      "\"type\", \"title\", \"functional_summary\", and \"anchor_metabolites\"."
     ),
     stage_label = "call1 (type+title+summary)"
   )
-  
+
   hypothesis_type    <- NA_character_
   title              <- NA_character_
   functional_summary <- NA_character_
+  anchor_metabolites <- NA_character_
   if (!is.null(res1$parsed)) {
     hypothesis_type    <- normalize_fast_hypothesis_type(res1$parsed[["type"]] %||% NA_character_)
     title              <- as.character(res1$parsed[["title"]]              %||% NA_character_)
     functional_summary <- as.character(res1$parsed[["functional_summary"]] %||% NA_character_)
+    anc_raw            <- res1$parsed[["anchor_metabolites"]]
+    if (!is.null(anc_raw) && length(anc_raw) > 0) {
+      anchor_metabolites <- paste(as.character(unlist(anc_raw)), collapse = "; ")
+    }
   } else {
     message("[annotate_module] Call 1 failed for module ", mid,
             ". Returning NA for title/summary; continuing to Call 2.")
   }
   
   # ==================================================================
-  # PUBMED SEARCH (optional) – module title plus every top metabolite
+  # PUBMED SEARCH (optional) – module title plus anchor metabolites
   # ==================================================================
   pubmed_context <- NULL
-  
+
   if (pubmed && !is.na(title) && nzchar(trimws(title))) {
-    top_met_names <- NULL
-    if (!is.null(module_obj$topN_metabolites) &&
-        nrow(module_obj$topN_metabolites) > 0 &&
-        "Compound_name" %in% colnames(module_obj$topN_metabolites)) {
-      top_met_names <- unique(module_obj$topN_metabolites$Compound_name)
+    # Use anchor metabolites from Call 1 for focused literature retrieval
+    anchor_met_names <- NULL
+    if (!is.na(anchor_metabolites) && nzchar(anchor_metabolites)) {
+      anchor_met_names <- trimws(strsplit(anchor_metabolites, ";\\s*")[[1]])
+      anchor_met_names <- anchor_met_names[nzchar(anchor_met_names)]
     }
     phenotype_val <- NULL
     if (!is.null(study_context$phenotype)) {
       ph <- trimws(as.character(study_context$phenotype[1]))
       if (nzchar(ph) && !identical(ph, "NA")) phenotype_val <- ph
     }
-    
+
     pubmed_context <- tryCatch(
       search_pubmed_for_annotation_evidence(
         module_title         = title,
-        top_metabolite_names = top_met_names,
+        top_metabolite_names = anchor_met_names,
         phenotype            = phenotype_val,
         NCBI_api_key         = NCBI_api_key,
         retmax_per_query     = 3,
@@ -844,6 +859,7 @@ annotate_one_module <- function(module_obj,
     hypothesis_type        = hypothesis_type,
     title                  = title,
     functional_summary     = functional_summary,
+    anchor_metabolites     = anchor_metabolites,
     phenotype_relationship = phenotype_relationship,
     confidence_label       = confidence_label,
     rationale              = rationale,

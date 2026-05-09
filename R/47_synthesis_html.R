@@ -62,7 +62,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
         border-bottom:1px solid #eef0f4;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .leg-circle{width:11px;height:11px;border-radius:50%;background:#667085;flex-shrink:0}
-.leg-square{width:11px;height:11px;border-radius:2px;background:#667085;flex-shrink:0}
 .leg-edge-d{width:18px;height:2px;background:#516f9f;flex-shrink:0}
 .leg-edge-i{width:18px;height:0;border-top:2px dashed #9a8064;flex-shrink:0}
 .leg-sep{width:1px;height:11px;background:#d1d5db}
@@ -128,10 +127,19 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .sum-text{font-size:.81rem;color:#374151;line-height:1.65;white-space:pre-wrap}
 .sum-empty{font-size:.82rem;color:#9ca3af;font-style:italic}
 
-/* bottom table */
+/* bottom table tabs */
 .table-wrap{max-width:1360px;margin:14px auto 24px;padding:0 18px}
+.tab-bar{display:flex;border-bottom:2px solid #e4e7ed;margin-bottom:0}
+.tab-btn{border:none;background:none;padding:8px 18px;font-size:.8rem;font-weight:600;
+         color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;
+         margin-bottom:-2px;transition:color .15s}
+.tab-btn.active{color:#6741d9;border-bottom-color:#6741d9}
+.tab-btn:hover:not(.active){color:#374151}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
 .node-tbl{width:100%;border-collapse:collapse;background:#fff;
-          border:1px solid #e4e7ed;border-radius:10px;overflow:hidden;
+          border:1px solid #e4e7ed;border-radius:0 0 10px 10px;overflow:hidden;
           font-size:.78rem;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .node-tbl thead tr{background:#f8f9fb;border-bottom:2px solid #e4e7ed}
 .node-tbl th{padding:9px 12px;text-align:left;font-size:.66rem;font-weight:700;
@@ -144,9 +152,10 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .tbl-mod{white-space:nowrap}
 .tbl-pill{display:inline-block;font-size:.66rem;padding:1px 6px;border-radius:3px;
           font-weight:600;white-space:nowrap}
-.tbl-acc{background:#ecfdf5;color:#065f46}
-.tbl-unc{background:#fffbeb;color:#92400e}
+.tbl-direct {background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe}
+.tbl-indirect{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
 .tbl-conf{color:#6b7280;font-size:.74rem}
+.tbl-rat{font-size:.76rem;color:#6b7280;line-height:1.55}
 
 /* hypothesis type pills — pinned card + table */
 .type-endo {background:#e8f5e9;color:#2e7d32;border:1px solid #c8e6c9}
@@ -253,12 +262,20 @@ function edgeVisible(e, visIds, f){
   return false;
 }
 
-/* ── hit test (works for circle AND rect nodes) ── */
+/* ── hit test: all nodes are circles ── */
 function isOver(n, mx, my){
   const sz = nodeSize(n);
   const dx = n.x - mx, dy = n.y - my;
-  if (n.verdict_status === "accepted") return dx*dx + dy*dy <= sz*sz;
-  return Math.abs(dx) <= sz && Math.abs(dy) <= sz;
+  return dx*dx + dy*dy <= sz*sz;
+}
+
+/* ── hit test: point-to-segment distance for edge tooltips ── */
+function ptSegDist(px, py, x1, y1, x2, y2){
+  const dx = x2-x1, dy = y2-y1;
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq === 0) return Math.hypot(px-x1, py-y1);
+  const t = Math.max(0, Math.min(1, ((px-x1)*dx + (py-y1)*dy) / lenSq));
+  return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
 }
 
 /* ── hover tooltip — title only, follows mouse, no pointer-events ── */
@@ -290,14 +307,12 @@ function pinSection(label, text){
 
 function showPin(ev, n){
   pinnedNode = n.node_id;
-  const statusCls = n.verdict_status === "accepted" ? "accepted" : "";
   const confLabel = n.confidence_label ? n.confidence_label + " confidence" : "";
   pinned.innerHTML =
     `<div class="pin-hdr">
        <div>
          <span class="pin-id">${esc(n.node_id)}</span>
          <div class="pin-pills">
-           <span class="pin-pill ${statusCls}">${esc(n.verdict_status)}</span>
            ${confLabel ? `<span class="pin-pill">${esc(confLabel)}</span>` : ""}
            ${n.hypothesis_type ? `<span class="pin-pill ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type)}</span>` : ""}
          </div>
@@ -341,14 +356,33 @@ svg.addEventListener("mousemove", ev => {
   const mx = ev.clientX - r.left;
   const my = ev.clientY - r.top;
   const f  = filters();
-  const vis = nodes.filter(n => nodeVisible(n, f));
+  const vis    = nodes.filter(n => nodeVisible(n, f));
+  const visIds = new Set(vis.map(n => n.node_id));
   let hit = null;
   for (let i = vis.length - 1; i >= 0; i--) {
     if (isOver(vis[i], mx, my)) { hit = vis[i]; break; }
   }
-  /* show hover tooltip only if no pinned card open (or hovering a different node) */
   if (hit && hit.node_id !== pinnedNode) {
+    /* node hover: show title */
     showTooltip(ev, hit);
+  } else if (!hit) {
+    /* edge hover: find nearest visible edge within 6px */
+    const visE = edges.filter(e => edgeVisible(e, visIds, f));
+    let hitEdge = null;
+    for (const e of visE) {
+      if (ptSegDist(mx, my,
+                    e.source.x, e.source.y,
+                    e.target.x, e.target.y) < 6) {
+        hitEdge = e; break;
+      }
+    }
+    if (hitEdge) {
+      tooltip.textContent = hitEdge.relation_class + "  ·  " + (hitEdge.subtype || "");
+      tooltip.style.display = "block";
+      positionTooltip(ev);
+    } else {
+      tooltip.style.display = "none";
+    }
   } else {
     tooltip.style.display = "none";
   }
@@ -497,19 +531,41 @@ function render(){
   }
 }
 
-/* ── bottom table ── */
+/* ── node table ── */
 const tbody = document.getElementById("tbl-body");
 nodes.forEach(n => {
   const tr = document.createElement("tr");
-  const isAcc = n.verdict_status === "accepted";
   tr.innerHTML =
     `<td class="tbl-id">${esc(n.node_id)}</td>` +
     `<td class="tbl-mod">${esc(n.module_id)}</td>` +
-    `<td><span class="tbl-pill ${isAcc ? "tbl-acc" : "tbl-unc"}">${esc(n.verdict_status)}</span></td>` +
     `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "—")}</span></td>` +
     `<td class="tbl-conf">${esc(n.confidence_label || "—")}</td>` +
     `<td>${esc(n.title || "—")}</td>`;
   tbody.appendChild(tr);
+});
+
+/* ── edge table ── */
+const etbody = document.getElementById("etbl-body");
+data.edges.forEach(e => {
+  const tr = document.createElement("tr");
+  const pillCls = e.relation_class === "direct" ? "tbl-direct" : "tbl-indirect";
+  tr.innerHTML =
+    `<td class="tbl-id">${esc(e.node_1)}</td>` +
+    `<td class="tbl-id">${esc(e.node_2)}</td>` +
+    `<td><span class="tbl-pill ${pillCls}">${esc(e.relation_class)}</span></td>` +
+    `<td>${esc(e.subtype || "—")}</td>` +
+    `<td class="tbl-rat">${esc(e.rationale || "—")}</td>`;
+  etbody.appendChild(tr);
+});
+
+/* ── tab switching ── */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+  });
 });
 
 /* ── summary ── */
@@ -620,8 +676,7 @@ generate_synthesis_network_html <- function(synthesis,
       <input type="text" id="search" placeholder="Search module, hypothesis, title&hellip;">
     </div>
     <div class="legend">
-      <span><i class="leg-circle" style="background:#667085"></i>Accepted</span>
-      <span><i class="leg-square" style="background:#667085"></i>Uncertain</span>
+      <span><i class="leg-circle" style="background:#667085"></i>Node</span>
       <i class="leg-sep"></i>
       <span>Size&nbsp;&rarr;&nbsp;confidence</span>
       <i class="leg-sep"></i>
@@ -645,21 +700,42 @@ generate_synthesis_network_html <- function(synthesis,
 
 </div>
 
-<!-- node table -->
+<!-- node / edge tables with tabs -->
 <div class="table-wrap">
-  <table class="node-tbl">
-    <thead>
-      <tr>
-        <th>Hypothesis</th>
-        <th>Module</th>
-        <th>Status</th>
-        <th>Type</th>
-        <th>Confidence</th>
-        <th>Title</th>
-      </tr>
-    </thead>
-    <tbody id="tbl-body"></tbody>
-  </table>
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="nodes">Nodes</button>
+    <button class="tab-btn" data-tab="edges">Edges</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-nodes">
+    <table class="node-tbl">
+      <thead>
+        <tr>
+          <th>Hypothesis</th>
+          <th>Module</th>
+          <th>Type</th>
+          <th>Confidence</th>
+          <th>Title</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-body"></tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="tab-edges">
+    <table class="node-tbl">
+      <thead>
+        <tr>
+          <th>Node 1</th>
+          <th>Node 2</th>
+          <th>Relation</th>
+          <th>Subtype</th>
+          <th>Rationale</th>
+        </tr>
+      </thead>
+      <tbody id="etbl-body"></tbody>
+    </table>
+  </div>
 </div>
 
 <script>%s</script>

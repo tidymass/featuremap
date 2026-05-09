@@ -254,8 +254,11 @@ Return three fields:
    not an accepted/rejected verdict.
 
    Scoring rules:
-   - High: Strong module evidence. Top metabolites, annotation type, class/pathway evidence,
-     species, biospecimen, and available phenotype/literature evidence are coherent.
+   - High: Strong module evidence AND adequate phenotype/literature support. Top metabolites,
+     annotation type, class/pathway evidence, species, biospecimen, and available
+     phenotype/literature evidence are coherent. High confidence requires at least indirect
+     PubMed support; if no PubMed evidence is retrieved or the evidence is insufficient,
+     confidence_label must not be high.
    - Medium: Reasonable module interpretation, but with partial evidence, indirect pathway
      support, incomplete explanation, limited literature support, or minor limitations.
    - Low: Weak but still useful interpretation. Evidence is sparse, indirect, partly unresolved,

@@ -1201,8 +1201,11 @@ Confidence reflects evidence strength for the accepted annotation. It is seconda
 status and should not be used as an independent verdict.
 
 Confidence rules:
-- high   : Strong module evidence. Top metabolites, hypothesis type, class/pathway evidence,
-           species, biospecimen, and debate record are coherent.
+- high   : Strong module evidence AND adequate phenotype/literature support. Top metabolites,
+           hypothesis type, class/pathway evidence, species, biospecimen, debate record, and
+           PubMed phenotype evidence are coherent. High confidence requires at least indirect
+           PubMed support; if literature_support is insufficient, confidence_label must not
+           be high.
 - medium : Reasonable module interpretation, but with partial evidence, indirect pathway support,
            incomplete explanation, limited literature support, or minor unresolved limitations.
 - low    : Weak but still useful interpretation. Evidence is sparse, indirect, or partly

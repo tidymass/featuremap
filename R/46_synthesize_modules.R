@@ -139,7 +139,9 @@ For each relationship provide:
 - node_2         : node_id
 - relation_class : \"direct\" | \"indirect\"
 - subtype        : one of the five subtypes above
-- rationale      : 1-2 sentences citing specific metabolites, pathways, or phenotype evidence
+- rationale      : 1-2 sentences citing specific metabolites, pathways, or phenotype evidence.
+                   Do not claim metabolite overlap unless the exact same metabolite names are
+                   visible in both node records.
 
 ────────────────────────────────────────
 PART 3 — SUMMARY
@@ -153,6 +155,12 @@ Write a 4-7 sentence narrative integrating the findings. Structure it as:
 RULES:
 - Base all statements on the provided node information only
 - Do NOT invent metabolites, pathways, or literature not present in the inputs
+- Treat modules as distinct community-detected modules. Do NOT describe two modules as
+  having \"overlapping\" or \"shared\" metabolites unless the exact same metabolite
+  name is explicitly present in both nodes' Core drivers or pathway evidence.
+- For shared_pathway relationships, cite shared or adjacent pathway evidence,
+  biochemical class, or process similarity. Same pathway evidence is not the same
+  as overlapping metabolites.
 - Use core drivers and pathway evidence when deciding shared pathways, containment, or cross-talk
 - Use phenotype relationship and literature support when deciding phenotype_convergent relationships
 - Do NOT rank accepted nodes by verdict status in the summary (treat all accepted nodes equally)

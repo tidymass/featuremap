@@ -766,6 +766,7 @@ export_synthesis_network_html <- function(res,
     stop("res$module_synthesis is missing. Run synthesize_modules() first.")
   generate_synthesis_network_html(
     synthesis        = res$module_synthesis,
+    study_context    = res$study_context,
     output_dir       = output_dir,
     output_file      = output_file,
     show_same_module = show_same_module

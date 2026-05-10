@@ -77,7 +77,7 @@
   rows <- head(df, n)
   bars <- paste(vapply(seq_len(nrow(rows)), function(i) {
     pct <- round(rows$n_metabolites[[i]] * 100)
-    lbl <- .trunc(rows$class[[i]], 36L)
+    lbl <- rows$class[[i]]
     sprintf(
       '<div class="cls-row">
         <div class="cls-name">%s</div>
@@ -393,12 +393,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 
 /* class bars */
 .cls-block{margin-top:2px;display:flex;flex-direction:column;gap:5px}
-.cls-row{display:grid;grid-template-columns:130px 1fr 36px;
+.cls-row{display:grid;grid-template-columns:1fr 60px 36px;
          align-items:center;gap:6px;font-size:.75rem}
-.cls-name{color:#3a3f4b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cls-name{color:#3a3f4b;white-space:normal;line-height:1.35}
 .cls-track{height:6px;background:#e4e7ed;border-radius:3px;overflow:hidden}
 .cls-fill {height:100%;background:#93afd4;border-radius:3px}
-.cls-pct  {color:#8b909e;text-align:right}
+.cls-pct  {color:#8b909e;text-align:right;white-space:nowrap}
 
 /* context pills (phenotype / species / biospecimen) */
 .context-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
@@ -479,7 +479,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
                     border:1px solid #d9e8df;padding:2px 6px;border-radius:999px;margin-bottom:5px}
 .verdict-title      {font-size:.9rem;font-weight:600;color:#1c1f26;margin-bottom:5px}
 .verdict-fin-summary{font-size:.82rem;color:#4b5563;line-height:1.6;
-                     font-style:italic;margin-bottom:10px;
+                     margin-bottom:10px;
                      padding-bottom:10px;border-bottom:1px solid #e4e7ed}
 
 /* rationale sections */

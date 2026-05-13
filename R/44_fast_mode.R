@@ -41,9 +41,23 @@ Using only the provided information, return three fields:
    - Choose exactly one:
      Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
    - Type is an interpretation scope for the module annotation, not a confidence score.
-   - Use metabolite identity, chemical class, pathway evidence, and general biochemical knowledge
-     to assign the best-supported type.
-   - Do not mention study phenotype or disease when assigning type.
+   - Assign type from the module evidence, especially top-ranked high-priority metabolites;
+     use chemical class and KEGG/HMDB pathway evidence as support.
+   - Assign type by the biological origin of the module's core substrate, dominant metabolite
+     class, or central biochemical theme, not merely by the organism/enzyme performing a
+     downstream step.
+   - Host-Endogenous: intrinsic host metabolites/processes such as central metabolism, redox,
+     lipid/amino acid/nucleotide metabolism, bile acids, steroids, or cofactors.
+   - Microbiome-Derived: microbial products or transformations are the central signal.
+   - Diet-Derived: food, nutrient, beverage, or plant-derived compounds, even if later modified
+     by host enzymes.
+   - Xenobiotic / Exogenous: drugs, pollutants, pesticides, industrial/consumer chemicals,
+     heavy metals, or other non-dietary external exposures.
+   - Host–Microbiome: the core theme requires both host and microbial metabolism, e.g. host
+     conjugation of microbial products or microbial remodeling of host compounds.
+   - If multiple labels fit, choose the one that best explains the top anchor metabolites.
+   - The type, title, and functional_summary must describe the same central biochemical theme.
+   - Do not use or mention phenotype/disease when assigning type.
 
 2) TITLE
    - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.

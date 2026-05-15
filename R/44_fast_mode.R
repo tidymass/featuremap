@@ -41,23 +41,31 @@ Using only the provided information, return three fields:
    - Choose exactly one:
      Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
    - Type is an interpretation scope for the module annotation, not a confidence score.
-   - Assign type from the module evidence, especially top-ranked high-priority metabolites;
-     use chemical class and KEGG/HMDB pathway evidence as support.
-   - Assign type by the biological origin of the module's core substrate, dominant metabolite
-     class, or central biochemical theme, not merely by the organism/enzyme performing a
-     downstream step.
+   - Do not use or mention phenotype/disease when assigning type.
+
+   Procedure: first decide the title that best names this module's central biochemical
+   theme; then assign the type that matches that title. The type, title, and
+   functional_summary must all describe the same central biochemical theme.
+
+   Type definitions and example titles (examples are for reference only; always generate
+   the title that best fits the current module's evidence):
    - Host-Endogenous: intrinsic host metabolites/processes such as central metabolism, redox,
      lipid/amino acid/nucleotide metabolism, bile acids, steroids, or cofactors.
+     Example: \"Sphingolipid metabolism\"
    - Microbiome-Derived: microbial products or transformations are the central signal.
+     Example: \"Short-chain fatty acid metabolism\"
    - Diet-Derived: food, nutrient, beverage, or plant-derived compounds, even if later modified
      by host enzymes.
+     Example: \"Dietary polyphenol catabolism\"
    - Xenobiotic / Exogenous: drugs, pollutants, pesticides, industrial/consumer chemicals,
      heavy metals, or other non-dietary external exposures.
-   - Host–Microbiome: the core theme requires both host and microbial metabolism, e.g. host
+     Example: \"Organophosphate pesticide metabolism\"
+   - Host–Microbiome: the core theme requires both host and microbial contributions, e.g. host
      conjugation of microbial products or microbial remodeling of host compounds.
+     Example: \"Tryptophan–indole axis\"
    - If multiple labels fit, choose the one that best explains the top anchor metabolites.
-   - The type, title, and functional_summary must describe the same central biochemical theme.
-   - Do not use or mention phenotype/disease when assigning type.
+   - Assign type by the biological origin of the module's core substrate or dominant
+     metabolite class, not merely by the organism/enzyme performing a downstream step.
 
 2) TITLE
    - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.

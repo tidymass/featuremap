@@ -47,8 +47,9 @@ Larger values usually improve robustness but increase runtime.}
 
 \item{b}{Numeric. Prize scaling factor for terminal nodes in PCSF.}
 
-\item{mu}{Numeric. Hub penalty coefficient. Larger values penalize high-degree
-nodes more strongly.}
+\item{mu}{Numeric. Hub penalty coefficient. Non-terminal nodes receive a
+negative prize proportional to their network degree; larger values penalize
+high-degree nodes more strongly.}
 
 \item{w}{Numeric. Dummy edge cost in PCSF.}
 

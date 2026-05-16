@@ -27,8 +27,9 @@
 #' @param times Integer. Number of PCSF repeats for final subnetwork construction.
 #'   Larger values usually improve robustness but increase runtime.
 #' @param b Numeric. Prize scaling factor for terminal nodes in PCSF.
-#' @param mu Numeric. Hub penalty coefficient. Larger values penalize high-degree
-#'   nodes more strongly.
+#' @param mu Numeric. Hub penalty coefficient. Non-terminal nodes receive a
+#'   negative prize proportional to their network degree; larger values penalize
+#'   high-degree nodes more strongly.
 #' @param w Numeric. Dummy edge cost in PCSF.
 #' @param r Numeric. Random perturbation magnitude applied to edge weights across
 #'   repeats (robustness resampling factor).
@@ -252,7 +253,7 @@ extract_subnetwork = function(res = NULL,
     name = node_names,
     degree = igraph::degree(imrn)
   ) %>%
-    dplyr::mutate(penalty = -mu * sqrt(degree)) %>%
+    dplyr::mutate(penalty = -mu * degree) %>%
     dplyr::pull(penalty)
 
   ## set dummy edge endpoints (independent of b, w) ---

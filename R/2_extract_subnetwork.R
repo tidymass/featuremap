@@ -294,7 +294,7 @@ extract_subnetwork = function(res = NULL,
             igraph::E(imrn)$weight + igraph::E(imrn)$weight *
               stats::runif(length(igraph::E(imrn)), 0, max(r, stats::sd(igraph::E(imrn)$weight)))
           )
-          output <- PCSF2::call_sr(from, to, cost, node_names, node_prizes)
+          output <- pcsf2featuremap::call_sr(from, to, cost, node_names, node_prizes)
           edge <- data.frame(
             source = as.character(output[[1]]),
             target = as.character(output[[2]]),
@@ -329,7 +329,7 @@ extract_subnetwork = function(res = NULL,
             igraph::E(imrn)$weight + igraph::E(imrn)$weight *
               stats::runif(length(igraph::E(imrn)), 0, max(r, stats::sd(igraph::E(imrn)$weight)))
           )
-          output <- PCSF2::call_sr(from, to, cost, node_names, node_prizes)
+          output <- pcsf2featuremap::call_sr(from, to, cost, node_names, node_prizes)
           edge <- data.frame(
             source = as.character(output[[1]]),
             target = as.character(output[[2]]),

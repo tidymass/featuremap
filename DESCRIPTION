@@ -24,7 +24,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
     MASS,
-    PCSF2,
+    pcsf2featuremap,
     R6,
     cli,
     data.table,
@@ -54,7 +54,7 @@ Imports:
 Remotes:
     tidymass/massdataset,
     tidymass/metid,
-    ytwangZero/PCSF2,
+    tidymass/pcsf2featuremap,
     tidymass/masstools
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

@@ -104,6 +104,9 @@ Feature importance scores are derived from effects value and p-value.
 The PCSF algorithm is executed multiple times with relative Gaussian
 perturbation of edge costs to estimate robustness. Final subnetworks are
 constructed based on node and edge frequency across runs.
+Network-supported annotation confidence combines normalized annotation score
+and edge frequency with a global adaptive edge-frequency weight bounded
+between 0.1 and 0.3.
 }
 \examples{
 \dontrun{

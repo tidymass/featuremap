@@ -67,6 +67,9 @@
 #' The PCSF algorithm is executed multiple times with relative Gaussian
 #' perturbation of edge costs to estimate robustness. Final subnetworks are
 #' constructed based on node and edge frequency across runs.
+#' Network-supported annotation confidence combines normalized annotation score
+#' and edge frequency with a global adaptive edge-frequency weight bounded
+#' between 0.1 and 0.3.
 #'
 #' @examples
 #' \dontrun{
@@ -498,8 +501,15 @@ extract_subnetwork = function(res = NULL,
       dplyr::rename(edge_freq = freq) %>%
       dplyr::arrange(variable_id, dplyr::desc(score_norm), dplyr::desc(edge_freq))
 
+    edge_info <- stats::sd(anno_feature_table2_extra$edge_freq, na.rm = TRUE)
+    if (is.na(edge_info) || !is.finite(edge_info)) edge_info <- 0
+    edge_weight <- 0.1 + 0.2 * pmin(edge_info / 0.25, 1)
+    score_weight <- 1 - edge_weight
+
     anno_feature_table2_extra <- anno_feature_table2_extra %>%
-      dplyr::mutate(weighted_anno_score = 0.7*score_norm + 0.3*edge_freq) %>%
+      dplyr::mutate(
+        weighted_anno_score = score_weight * score_norm + edge_weight * edge_freq
+      ) %>%
       dplyr::group_by(variable_id) %>%
       dplyr::mutate(confidence_rank = dplyr::dense_rank(dplyr::desc(weighted_anno_score))) %>%
       dplyr::ungroup()

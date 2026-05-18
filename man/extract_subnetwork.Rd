@@ -11,13 +11,13 @@ extract_subnetwork(
   mrn = NULL,
   workers = 4,
   times = 100,
-  b = 40,
+  b = 20,
   mu = 1e-04,
-  w = 30,
-  r = 0.3,
+  w = 25,
+  r = 0.2,
   grid_tune = FALSE,
   b_grid = seq(20, 40, by = 5),
-  w_grid = seq(25, 40, by = 5),
+  w_grid = seq(20, 40, by = 5),
   times_tune = 10
 )
 }
@@ -53,8 +53,9 @@ high-degree nodes more strongly.}
 
 \item{w}{Numeric. Dummy edge cost in PCSF.}
 
-\item{r}{Numeric. Random perturbation magnitude applied to edge weights across
-repeats (robustness resampling factor).}
+\item{r}{Numeric. Relative Gaussian edge-cost noise applied across repeated
+PCSF runs. For example, \code{r = 0.20} perturbs each edge cost by a
+multiplicative factor sampled from \code{N(1, 0.20)}.}
 
 \item{grid_tune}{Logical. Whether to tune \code{b} and \code{w} on a grid
 before the final run.}
@@ -100,9 +101,9 @@ is available. Only annotation rows supported by the final PCSF subnetwork are
 retained in \code{anno_feature_table2}.
 
 Feature importance scores are derived from effects value and p-value.
-The PCSF algorithm is executed multiple times with randomized edge
-perturbation to ensure robustness. Final subnetworks are constructed
-based on node and edge frequency across runs.
+The PCSF algorithm is executed multiple times with relative Gaussian
+perturbation of edge costs to estimate robustness. Final subnetworks are
+constructed based on node and edge frequency across runs.
 }
 \examples{
 \dontrun{
@@ -114,10 +115,10 @@ res <- extract_subnetwork(
   mrn = NULL,
   workers = 4,
   times = 100,
-  b = 40,
+  b = 20,
   mu = 1e-4,
-  w = 35,
-  r = 0.30,
+  w = 25,
+  r = 0.20,
   grid_tune = FALSE
 )
 }

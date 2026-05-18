@@ -31,8 +31,9 @@
 #'   negative prize proportional to their network degree; larger values penalize
 #'   high-degree nodes more strongly.
 #' @param w Numeric. Dummy edge cost in PCSF.
-#' @param r Numeric. Random perturbation magnitude applied to edge weights across
-#'   repeats (robustness resampling factor).
+#' @param r Numeric. Relative Gaussian edge-cost noise applied across repeated
+#'   PCSF runs. For example, \code{r = 0.20} perturbs each edge cost by a
+#'   multiplicative factor sampled from \code{N(1, 0.20)}.
 #' @param grid_tune Logical. Whether to tune \code{b} and \code{w} on a grid
 #'   before the final run.
 #' @param b_grid Numeric vector of candidate \code{b} values when
@@ -63,9 +64,9 @@
 #' retained in \code{anno_feature_table2}.
 #'
 #' Feature importance scores are derived from effects value and p-value.
-#' The PCSF algorithm is executed multiple times with randomized edge
-#' perturbation to ensure robustness. Final subnetworks are constructed
-#' based on node and edge frequency across runs.
+#' The PCSF algorithm is executed multiple times with relative Gaussian
+#' perturbation of edge costs to estimate robustness. Final subnetworks are
+#' constructed based on node and edge frequency across runs.
 #'
 #' @examples
 #' \dontrun{
@@ -80,7 +81,7 @@
 #'   b = 20,
 #'   mu = 1e-4,
 #'   w = 25,
-#'   r = 0.30,
+#'   r = 0.20,
 #'   grid_tune = FALSE
 #' )
 #' }
@@ -96,7 +97,7 @@ extract_subnetwork = function(res = NULL,
                               b = 20,
                               mu = 1e-4,
                               w = 25,
-                              r = 0.30,
+                              r = 0.20,
                               grid_tune = FALSE,
                               b_grid = seq(20, 40, by = 5),
                               w_grid = seq(20, 40, by = 5),
@@ -295,8 +296,11 @@ extract_subnetwork = function(res = NULL,
         function(i) {
           cost <- c(
             rep(w_val, length(dummies)),
-            igraph::E(imrn)$weight + igraph::E(imrn)$weight *
-              stats::runif(length(igraph::E(imrn)), 0, max(r, stats::sd(igraph::E(imrn)$weight)))
+            pmax(
+              igraph::E(imrn)$weight *
+                stats::rnorm(length(igraph::E(imrn)), mean = 1, sd = r),
+              1e-4
+            )
           )
           output <- pcsf2featuremap::call_sr(from, to, cost, node_names, node_prizes)
           edge <- data.frame(
@@ -330,8 +334,11 @@ extract_subnetwork = function(res = NULL,
         function(i) {
           cost <- c(
             rep(w_val, length(dummies)),
-            igraph::E(imrn)$weight + igraph::E(imrn)$weight *
-              stats::runif(length(igraph::E(imrn)), 0, max(r, stats::sd(igraph::E(imrn)$weight)))
+            pmax(
+              igraph::E(imrn)$weight *
+                stats::rnorm(length(igraph::E(imrn)), mean = 1, sd = r),
+              1e-4
+            )
           )
           output <- pcsf2featuremap::call_sr(from, to, cost, node_names, node_prizes)
           edge <- data.frame(

@@ -77,9 +77,9 @@
 #'   mrn = NULL,
 #'   workers = 4,
 #'   times = 100,
-#'   b = 40,
+#'   b = 20,
 #'   mu = 1e-4,
-#'   w = 35,
+#'   w = 25,
 #'   r = 0.30,
 #'   grid_tune = FALSE
 #' )
@@ -93,13 +93,13 @@ extract_subnetwork = function(res = NULL,
                               mrn = NULL,
                               workers = 4,
                               times = 100,
-                              b = 40,
+                              b = 20,
                               mu = 1e-4,
-                              w = 30,
+                              w = 25,
                               r = 0.30,
                               grid_tune = FALSE,
                               b_grid = seq(20, 40, by = 5),
-                              w_grid = seq(25, 40, by = 5),
+                              w_grid = seq(20, 40, by = 5),
                               times_tune = 10){
   feature <- match.arg(feature)
 
@@ -139,7 +139,11 @@ extract_subnetwork = function(res = NULL,
         (fc - min(fc, na.rm = TRUE)) /
           (max(fc, na.rm = TRUE) - min(fc, na.rm = TRUE))
       },
-      score_p = -log10(pvalue),
+      score_p = {
+        sp <- -log10(pvalue)
+        (sp - min(sp, na.rm = TRUE)) /
+          (max(sp, na.rm = TRUE) - min(sp, na.rm = TRUE))
+      },
       importance = sqrt(score_fc * score_p)
     ) %>%
     as.data.frame() -> res$feature_table

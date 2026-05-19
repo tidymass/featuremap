@@ -572,6 +572,7 @@ synthesize_modules <- function(res,
                                 provider       = "openai",
                                 llm_api_key    = "",
                                 llm_model      = "gpt-4.1-mini",
+                                base_url       = NULL,
                                 max_tokens     = 4000L,
                                 temperature    = 0,
                                 sleep_sec      = 0) {
@@ -661,6 +662,7 @@ synthesize_modules <- function(res,
     provider    = provider,
     llm_api_key = llm_api_key,
     model       = llm_model,
+    base_url    = base_url,
     max_tokens  = max_tokens,
     temperature = temperature
   )

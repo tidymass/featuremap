@@ -465,6 +465,7 @@ annotate_one_module <- function(module_obj,
                                 provider,
                                 llm_api_key,
                                 model,
+                                base_url     = NULL,
                                 max_tokens   = 5000,
                                 temperature  = 0,
                                 pubmed       = FALSE,
@@ -618,6 +619,7 @@ annotate_one_module <- function(module_obj,
         provider        = provider,
         api_key         = llm_api_key,
         model           = model,
+        base_url        = base_url,
         max_tokens      = cur_max,
         temperature     = temperature,
         response_schema = schema
@@ -922,26 +924,28 @@ annotate_all_modules <- function(all_modules_ready,
                                  provider,
                                  llm_api_key,
                                  model,
+                                 base_url     = NULL,
                                  max_tokens   = 2000,
                                  temperature  = 0,
                                  sleep_sec    = 0,
                                  pubmed       = FALSE,
                                  NCBI_api_key = NULL,
                                  years        = 5) {
-  
+
   n_mod <- length(all_modules_ready)
-  
+
   results_list <- lapply(seq_len(n_mod), function(i) {
     mod <- all_modules_ready[[i]]
     message("[annotate_module] Processing module ", mod$module_id %||% i,
             " (", i, "/", n_mod, ")")
-    
+
     out <- annotate_one_module(
       module_obj    = mod,
       study_context = study_context,
       provider      = provider,
       llm_api_key   = llm_api_key,
       model         = model,
+      base_url      = base_url,
       max_tokens    = max_tokens,
       temperature   = temperature,
       pubmed        = pubmed,

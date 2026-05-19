@@ -111,6 +111,7 @@ adv_request_json <- function(messages,
                               provider,
                               llm_api_key,
                               model,
+                              base_url      = NULL,
                               max_tokens    = 2000,
                               temperature   = 0) {
 
@@ -124,6 +125,7 @@ adv_request_json <- function(messages,
       provider        = provider,
       api_key         = llm_api_key,
       model           = model,
+      base_url        = base_url,
       max_tokens      = cur_max,
       temperature     = temperature,
       response_schema = schema
@@ -1610,6 +1612,7 @@ summarize_pubmed_relationships_advanced <- function(hypotheses,
                                                      provider,
                                                      llm_api_key,
                                                      model,
+                                                     base_url   = NULL,
                                                      max_tokens = 1200L,
                                                      temperature = 0,
                                                      schema = NULL) {
@@ -1630,6 +1633,7 @@ summarize_pubmed_relationships_advanced <- function(hypotheses,
       provider = provider,
       llm_api_key = llm_api_key,
       model = model,
+      base_url = base_url,
       max_tokens = max_tokens,
       temperature = temperature
     )
@@ -2067,6 +2071,7 @@ annotate_one_module_advanced <- function(module_obj,
                                           provider,
                                           llm_api_key,
                                           model,
+                                          base_url             = NULL,
                                           max_tokens           = 2000L,
                                           proposer_temperature = 0.3,
                                           temperature          = 0,
@@ -2109,7 +2114,7 @@ annotate_one_module_advanced <- function(module_obj,
     required_keys = "hypotheses",
     schema      = sch_proposer,
     retry_instr = "Return only valid JSON with key \"hypotheses\" (array of hypothesis objects).",
-    provider    = provider, llm_api_key = llm_api_key, model = model,
+    provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
     max_tokens  = max_tokens, temperature = proposer_temperature
   )
   raw_texts$p0 <- p0_res$raw_text
@@ -2127,6 +2132,7 @@ annotate_one_module_advanced <- function(module_obj,
       provider      = provider,
       llm_api_key   = llm_api_key,
       model         = model,
+      base_url      = base_url,
       max_tokens    = max_tokens,
       temperature   = temperature,
       pubmed        = pubmed,
@@ -2161,7 +2167,7 @@ annotate_one_module_advanced <- function(module_obj,
     required_keys = "challenges",
     schema      = sch_skeptic,
     retry_instr = "Return only valid JSON with key \"challenges\" (array of challenge objects).",
-    provider    = provider, llm_api_key = llm_api_key, model = model,
+    provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
     max_tokens  = max_tokens, temperature = temperature
   )
   raw_texts$s1 <- s1_res$raw_text
@@ -2187,7 +2193,7 @@ annotate_one_module_advanced <- function(module_obj,
     required_keys = "revisions",
     schema      = sch_revision,
     retry_instr = "Return only valid JSON with key \"revisions\" (array of revision objects).",
-    provider    = provider, llm_api_key = llm_api_key, model = model,
+    provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
     max_tokens  = max_tokens, temperature = temperature
   )
   raw_texts$p1 <- p1_res$raw_text
@@ -2241,7 +2247,7 @@ annotate_one_module_advanced <- function(module_obj,
       required_keys = "challenges",
       schema      = sch_skeptic,
       retry_instr = "Return only valid JSON with key \"challenges\".",
-      provider    = provider, llm_api_key = llm_api_key, model = model,
+      provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
       max_tokens  = max_tokens, temperature = temperature
     )
     raw_texts$s2 <- s2_res$raw_text
@@ -2264,7 +2270,7 @@ annotate_one_module_advanced <- function(module_obj,
       required_keys = "revisions",
       schema      = sch_revision,
       retry_instr = "Return only valid JSON with key \"revisions\".",
-      provider    = provider, llm_api_key = llm_api_key, model = model,
+      provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
       max_tokens  = max_tokens, temperature = temperature
     )
     raw_texts$p2 <- p2_res$raw_text
@@ -2320,6 +2326,7 @@ annotate_one_module_advanced <- function(module_obj,
       provider        = provider,
       llm_api_key     = llm_api_key,
       model           = model,
+      base_url        = base_url,
       max_tokens      = 1200L,
       temperature     = temperature,
       schema          = sch_pubmed_rel
@@ -2370,7 +2377,7 @@ annotate_one_module_advanced <- function(module_obj,
     required_keys = "verdicts",
     schema      = sch_arbiter,
     retry_instr = "Return only valid JSON with key \"verdicts\" (array) and \"residual_ambiguity\" (string or null).",
-    provider    = provider, llm_api_key = llm_api_key, model = model,
+    provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
     max_tokens  = max_tokens, temperature = temperature
   )
   raw_texts$arbiter <- a0_res$raw_text
@@ -2488,6 +2495,7 @@ annotate_all_modules_advanced <- function(all_modules_ready,
                                            provider,
                                            llm_api_key,
                                            model,
+                                           base_url             = NULL,
                                            max_tokens           = 2000L,
                                            proposer_temperature = 0.3,
                                            temperature          = 0,
@@ -2511,6 +2519,7 @@ annotate_all_modules_advanced <- function(all_modules_ready,
         provider             = provider,
         llm_api_key          = llm_api_key,
         model                = model,
+        base_url             = base_url,
         max_tokens           = max_tokens,
         proposer_temperature = proposer_temperature,
         temperature          = temperature,

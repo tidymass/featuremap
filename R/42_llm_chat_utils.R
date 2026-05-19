@@ -203,9 +203,10 @@ chat_gemini_call <- function(
 
 chat_api_call <- function(
     messages,
-    provider = c("siliconflow", "openai", "gemini"),
+    provider = c("siliconflow", "openai", "gemini", "local"),
     api_key,
     model,
+    base_url = NULL,
     max_tokens = 2000,
     temperature = 0,
     response_schema = NULL
@@ -244,12 +245,26 @@ chat_api_call <- function(
     ))
   }
 
+  if (provider == "local") {
+    if (is.null(base_url) || !nzchar(trimws(base_url))) {
+      stop("provider = \"local\" requires a non-empty base_url.")
+    }
+    return(chat_openai_silicon_call(
+      messages = messages,
+      api_key = if (is.null(api_key) || !nzchar(trimws(api_key))) "EMPTY" else api_key,
+      model = model,
+      base_url = base_url,
+      max_tokens = max_tokens,
+      temperature = temperature
+    ))
+  }
+
   stop("Unsupported provider: ", provider)
 }
 
-safe_chat_call <- function(...) {
+safe_chat_call <- function(..., base_url = NULL) {
   for (i in 1:5) {
-    out <- chat_api_call(...)
+    out <- chat_api_call(..., base_url = base_url)
     if (!is.null(out)) return(out)
 
     message("Chat call failed. Waiting ", i * 3, " seconds...")

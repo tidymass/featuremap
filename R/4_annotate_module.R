@@ -150,6 +150,7 @@ annotate_module <- function(res                  = NULL,
                              llm_model            = "gpt-4.1-mini",
                              NCBI_api_key         = "",
                              llm_api_key          = "",
+                             base_url             = NULL,
                              proposer_temperature = 0.3,
                              synthesize           = FALSE,
                              synthesis_model      = llm_model,
@@ -275,7 +276,7 @@ annotate_module <- function(res                  = NULL,
   if (!"Use_for_annotation" %in% colnames(module_table_for_annotation))
     module_table_for_annotation$Use_for_annotation <- TRUE
   module_table_for_annotation <- module_table_for_annotation %>%
-    dplyr::mutate(Use_for_annotation = dplyr::coalesce(Use_for_annotation, TRUE))
+    dplyr::mutate(Use_for_annotation = dplyr::coalesce(as.logical(Use_for_annotation), TRUE))
 
   sig_module <- module_table_for_annotation %>%
     dplyr::mutate(
@@ -519,6 +520,7 @@ annotate_module <- function(res                  = NULL,
       provider             = provider,
       llm_api_key          = llm_api_key,
       model                = llm_model,
+      base_url             = base_url,
       max_tokens           = if (identical(provider, "gemini")) 4000L else 2000L,
       proposer_temperature = proposer_temperature,
       temperature          = 0,
@@ -536,6 +538,7 @@ annotate_module <- function(res                  = NULL,
       provider          = provider,
       llm_api_key       = llm_api_key,
       model             = llm_model,
+      base_url          = base_url,
       max_tokens        = if (identical(provider, "gemini")) 4000L else 2000L,
       temperature       = 0,
       sleep_sec         = sleep_sec,
@@ -568,6 +571,7 @@ annotate_module <- function(res                  = NULL,
         provider      = provider,
         llm_api_key   = llm_api_key,
         llm_model     = synthesis_model,
+        base_url      = base_url,
         max_tokens    = synthesis_max_tokens,
         temperature   = 0,
         sleep_sec     = sleep_sec

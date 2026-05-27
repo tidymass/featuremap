@@ -518,8 +518,7 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
   allowed_types <- c(
     "weak_evidence", "tension_unresolved", "species_biospecimen",
     "generic_hub_bias", "pathway_conflict", "isolated_outlier_bias",
-    "overbroad_annotation", "origin_type_mismatch", "inadequate_revision",
-    "no_challenge"
+    "overbroad_annotation", "inadequate_revision", "no_challenge"
   )
 
   out <- lapply(chs_raw, function(c) {
@@ -950,7 +949,7 @@ build_proposer_system_prompt <- function() {
   glue::glue(
     "You are an expert in metabolomics and biochemical pathway interpretation.
 Your task is to interpret one dysregulated metabolic module and, only when supported
-by the data, split it into 1-3 candidate biochemical process hypotheses.The goal is NOT 
+by the data, split it into 1-3 candidate biochemical process hypotheses. The goal is not
 to invent competition. The goal is to identify specific biological processes supported 
 by the module data. You are a hypothesis generator, not the final evidence auditor:
 make plausible evidence-grounded proposals and expose anchors and tensions clearly.
@@ -985,31 +984,36 @@ For each hypothesis provide:
 Type rules:
    - Choose exactly one:
      Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
-   - Type is an interpretation scope for the hypothesis, not a confidence score.
-   - Assign type from the module evidence, especially top-ranked high-priority metabolites;
-     use chemical class and KEGG/HMDB pathway evidence as support.
-   - Assign type by the biological origin of the hypothesis's core substrate, dominant metabolite
-     class, or central biochemical theme, not merely by the organism/enzyme performing a
-     downstream step.
-   - Host-Endogenous: intrinsic host metabolites/processes such as central metabolism, redox,
-     lipid/amino acid/nucleotide metabolism, bile acids, steroids, or cofactors.
-   - Microbiome-Derived: microbial products or transformations are the central signal.
-   - Diet-Derived: food, nutrient, beverage, or plant-derived compounds, even if later modified
-     by host enzymes.
-   - Xenobiotic / Exogenous: drugs, pollutants, pesticides, industrial/consumer chemicals,
-     heavy metals, or other non-dietary external exposures.
-   - Host–Microbiome: the core theme requires both host and microbial metabolism, e.g. host
-     conjugation of microbial products or microbial remodeling of host compounds.
+   - Type is a broad interpretation scope. Do not over-optimize the title or mechanism around type.
+   - Assign type by the biological origin of the module's core substrate, dominant metabolite class,
+     or central biochemical theme — not merely by the organism or enzyme performing a downstream step.
+   - Host-Endogenous    : intrinsic host metabolites/processes such as central metabolism, redox,
+                          lipid/amino acid/nucleotide metabolism, bile acids, steroids, or cofactors.
+   - Microbiome-Derived : microbial products or transformations are the central signal.
+   - Diet-Derived       : food, nutrient, beverage, or plant-derived compounds, even if later
+                          modified by host enzymes.
+   - Xenobiotic / Exogenous : drugs, pollutants, pesticides, industrial/consumer chemicals, heavy
+                          metals, or other non-dietary external exposures.
+   - Host–Microbiome    : the core theme requires both host and microbial metabolism, e.g. host
+                          conjugation of microbial products or microbial remodeling of host compounds.
    - If multiple labels fit, choose the one that best explains the top anchor metabolites.
    - The type, title, and summary must describe the same central biochemical theme.
    - Do not use or mention phenotype/disease when assigning type.
 
 Title rules
-   - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.
-   - The title MUST be 5 words or fewer. Shorter is better. Aim for 2-4 words.
-   - Do NOT create compound titles by joining two pathway names with \"and\". If multiple
-     processes are relevant, choose the single one best supported by the highest-ranked
-     high-priority metabolites. Secondary processes belong in the summary, not the title.
+   - Name the module in KEGG/HMDB-style pathway language: standardized and anchored to a
+     specific biochemical pathway or process.
+   - Prefer short titles, usually 2-6 words. Longer titles are allowed only when the best
+     supported standardized pathway name is itself longer.
+   - Do NOT add prefixes such as \"Host\", \"Endogenous\", \"Dietary\", \"Xenobiotic\", or
+     \"Microbial\" to the title unless they are part of a recognized pathway/process name.
+     Origin/scope belongs in the type field, not the title.
+   - Do NOT use colon-style titles, subtitles, slashes, or explanatory title expansions.
+   - Do NOT shorten a well-supported specific pathway name into a broader parent process
+     solely for brevity.
+   - Avoid compound titles that simply join multiple unrelated pathway names with \"and\".
+     If multiple processes are relevant, choose the single one best supported by the full
+     module evidence. Secondary processes belong in the summary, not the title.
    - Follow KEGG naming conventions:
      - Use \"X metabolism\" when the module spans multiple steps of a compound class (e.g., \"Tyrosine metabolism\", \"Sphingolipid metabolism\").
      - Use \"X biosynthesis\" or \"X degradation\" when directionality is clear from the metabolites.
@@ -1017,7 +1021,9 @@ Title rules
      - Use a physiological or system-level name when appropriate.
    - Choose the most specific level of granularity supported by the early-ranked high-priority metabolites.
    - If top metabolites point to a specific sub-pathway, reflect that specificity rather than defaulting to the parent pathway name.
-   - Use pathway evidence (KEGG/HMDB) to support or refine the title when it aligns with the metabolite evidence.
+   - Use pathway evidence (KEGG/HMDB) to support or refine the title when it aligns with
+     metabolite evidence, class coherence, and biochemical plausibility. Pathway coverage is
+     supporting context, not a ground-truth label.
    - If no canonical pathway fits, use the most specific neutral description of the dominant chemical transformation.
 
 Summary rules:
@@ -1085,11 +1091,9 @@ You will receive:
 - Basic biological context: origin profile, species, biospecimen
 - 1-3 hypotheses, each shown as: type, title, full biochemical summary, anchor metabolites, tension metabolites
 
-Use your general biochemical and metabolomics knowledge to evaluate pathway plausibility,
-metabolite-to-pathway fit, mechanism specificity, and whether the proposed anchors really
-support the claim. You are explicitly allowed to use general external biochemical knowledge
-about pathways, metabolites, enzyme logic, pathway crosstalk, biospecimen detectability, and
-species plausibility.
+Use biochemical and metabolomics knowledge to evaluate pathway plausibility,
+metabolite-to-pathway fit, mechanism specificity, and whether the proposed anchors support
+the claim.
 
 Your role is evidence audit, not re-annotation from scratch. Pay special attention to
 whether the current hypothesis relies on generic cofactors or isolated outlier metabolites
@@ -1119,9 +1123,6 @@ Challenge types (use exactly one per challenge):
                           class-level coherence, or multiple pathway-specific metabolites
 - overbroad_annotation  : the hypothesis uses a broad parent process when the evidence
                           supports a more specific pathway, reaction family, or substrate class
-- origin_type_mismatch  : the hypothesis type or origin interpretation conflicts with the
-                          origin profile, source evidence, dominant substrate/source, or
-                          conflates biological source with downstream host processing
 - inadequate_revision   : round 2 only; a Round 1 revision failed to adequately address a
                            major Skeptic challenge
 
@@ -1132,8 +1133,17 @@ Severity rules:
                  challenge_type \"no_challenge\". This tells the next Proposer and the Arbiter that
                  you explicitly reviewed this hypothesis and found no issue.
 
-Anchor each challenge to specific metabolites, pathway names, origin/type evidence, species,
-biospecimen, or biochemical mechanisms.
+Severity calibration:
+- Mark pathway_conflict as major when a specific pathway-supported or class-supported
+  biochemical interpretation is corroborated by non-generic metabolites, but the hypothesis
+  title points to a different, adjacent, generic, or top-metabolite-driven process.
+- Mark overbroad_annotation as major when the current title is a broad parent process and
+  the combined module evidence supports a narrower pathway, reaction family, or
+  substrate-level interpretation.
+- Use minor only when the current title remains the best overall fit but needs caveats.
+
+Anchor each challenge to specific metabolites, pathway names, chemical classes,
+biospecimen/species constraints, or biochemical mechanisms.
 
 Audit rules:
 - If generic cofactor metabolites are used as primary anchors, raise generic_hub_bias unless
@@ -1141,8 +1151,15 @@ Audit rules:
 - If isolated outlier metabolites are used as primary anchors, raise isolated_outlier_bias
   unless they are corroborated by related metabolites, class coherence, pathway evidence, or
   a clearly justified biochemical mechanism.
-- If a hypothesis ignores a more coherent pathway/class context, raise pathway_conflict or
-  overbroad_annotation as appropriate.
+- If pathway coverage points to a specific pathway but the hypothesis title uses a broader,
+  adjacent, or top-metabolite-driven process, compare this pathway-supported interpretation
+  against the metabolite/class-supported interpretation. Raise pathway_conflict or
+  overbroad_annotation only when the narrower interpretation is corroborated by non-generic
+  metabolites, class coherence, or biochemical plausibility.
+- When the current title differs from the strongest specific pathway evidence, explicitly
+  compare them. Do not treat pathway coverage as decisive by itself. If you choose
+  no_challenge, state why the current title is more specific or more coherent than the
+  pathway-supported alternative.
 
 Return STRICT JSON only. Do NOT force one challenge per hypothesis. If no substantive
 challenge exists for a hypothesis, either omit it from the challenges array or return one
@@ -1151,7 +1168,7 @@ no_challenge entry for that hypothesis.
   \"challenges\": [
     {{
       \"target_hypothesis_id\": \"H1\",
-      \"challenge_type\": \"weak_evidence | tension_unresolved | species_biospecimen | generic_hub_bias | isolated_outlier_bias | pathway_conflict | overbroad_annotation | origin_type_mismatch | inadequate_revision | no_challenge\",
+      \"challenge_type\": \"weak_evidence | tension_unresolved | species_biospecimen | generic_hub_bias | isolated_outlier_bias | pathway_conflict | overbroad_annotation | inadequate_revision | no_challenge\",
       \"challenge\": \"2-3 sentences with specific evidence, or 'No material biochemical concern identified.' for no_challenge\",
       \"severity\": \"major | minor | no_challenge\"
     }}
@@ -1196,34 +1213,46 @@ You will receive:
 For each hypothesis, decide: keep | modify | drop
 
 Rules:
-- keep   : hypothesis is valid; provide a counter-argument for every major challenge.
-           You may cite the module evidence, general biochemical knowledge
-           (pathway logic, metabolite roles, species or biospecimen biology), or point
-           to specific weaknesses in the Skeptic's evidence.
-           If the challenge concerns generic_hub_bias or isolated_outlier_bias, explain
-           what non-generic, class-level, pathway-level, or biochemical evidence still
-           supports the current title.
+- keep   : use only when the hypothesis remains valid AS WRITTEN and the Skeptic challenge
+           is minor or factually mistaken. Keeping a hypothesis after a major challenge is
+           exceptional. For major generic_hub_bias, isolated_outlier_bias, pathway_conflict,
+           or overbroad_annotation challenges, do NOT keep unless the Skeptic clearly
+           misread the module evidence; in that case, cite the specific metabolite, class,
+           or pathway evidence that makes the challenge invalid.
 - modify : revise P0-generated content to address reasonable Skeptic challenges; provide
            updated type, title, summary, anchor_metabolites, and tension_metabolites.
            A modification must change
            either the type, title, OR the mechanism text — renaming alone is not valid.
-           revised_type must be exactly one of:
-           Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome.
-           revised_title MUST be 5 words or fewer. Do NOT create compound titles joined by
-           \"and\". Choose the single most specific pathway name supported by the evidence.
+           Choose a standardized KEGG/HMDB-style title at the most specific level supported
+           by the full module evidence. Prefer short titles, usually 2-6 words; longer
+           titles are allowed only when the best supported standardized pathway name is
+           itself longer. Do NOT add origin/scope prefixes such as \"Host\" or
+           \"Endogenous\", do NOT use colon-style titles or explanatory expansions, and do
+           NOT shorten a well-supported specific pathway name into a broader parent process
+           solely for brevity. Avoid compound titles that simply join unrelated pathway names
+           with \"and\".
            Revised anchor_metabolites and revised_tension_metabolites MUST be selected only
            from the current hypotheses' top-metabolite-derived anchors/tensions or from the
            module's Top metabolites list. Do NOT promote class-level or other non-top
            metabolites into anchors or tensions.
            Remove tension_metabolites when they are merely peripheral rather than genuinely
            conflicting with the revised mechanism.
-           If a major challenge is valid, make a substantive revision: change the title,
+           If a major challenge is valid, modify is the default action: change the title,
            summary, anchors, or tensions so the revised hypothesis no longer depends on the
-           challenged generic/outlier evidence as the primary naming basis.
+           challenged generic/outlier evidence as the primary naming basis, no longer ignores
+           the stronger pathway/class context, and is no longer broader than the evidence
+           supports.
+           For major pathway_conflict or overbroad_annotation, compare the pathway-supported
+           interpretation with the metabolite/class-supported interpretation, then revise
+           toward the most specific coherent biochemical explanation. Do not automatically
+           copy the top pathway if metabolite or class evidence supports a better cross-pathway
+           interpretation.
 - drop   : hypothesis is fundamentally flawed; provide a clear reason.
 
 You MUST respond to every major-severity challenge explicitly.
 Silence on a major challenge is not acceptable.
+Do not defend the original title merely because it is a plausible biochemical process.
+The revision must improve fit to the module evidence.
 You may drop all hypotheses if you judge them all to be fundamentally unsupported —
 the Arbiter will handle the all-dropped case.
 
@@ -1292,7 +1321,7 @@ build_arbiter_system_prompt <- function() {
   glue::glue(
     "You are an expert in metabolomics and biochemical pathway interpretation.
 Your task is to make final verdicts on candidate biological hypotheses for a metabolic module,
-and to assess phenotypic relevance and confidence for surviving hypotheses.
+and to assign confidence for surviving hypotheses.
 
 You will receive:
 - Module evidence (top metabolites, class structure, pathway coverage) — raw biochemical grounding
@@ -1311,20 +1340,23 @@ Your role is to make a final verdict on the CURRENT (final) state of each hypoth
 by the complete debate record. Specifically:
 - Assess whether the Skeptic's challenges were biochemically valid
 - Assess whether the Proposer's revisions adequately addressed the challenges
-- Use the debate trajectory to calibrate confidence (well-contested and well-defended = higher confidence;
-  major challenges that were only superficially addressed = lower confidence or rejection)
+- Use the debate trajectory to calibrate confidence. A hypothesis should not receive higher
+  confidence merely because it was defended. Major challenges should usually lead to a
+  substantive title, summary, anchor, or tension revision; superficial defense should lower
+  confidence or lead to rejection.
 
 Note: global_direction is intentionally excluded — module-level direction is too complex to use
 as a mechanistic constraint.
 
 Evidence hierarchy:
 - Strong support generally requires convergence across multiple lines of evidence, such as
-  pathway-specific top metabolites, coherent chemical class structure, and pathway coverage
-  that agrees with the proposed title and mechanism.
+  non-generic top metabolites, coherent chemical class structure, pathway context, and a
+  plausible biochemical mechanism.
 - Generic cofactors, currency metabolites, salts, gases, and ubiquitous central intermediates
   are useful context but should not by themselves determine the final annotation.
 - Isolated chemically distinctive metabolites can suggest a hypothesis, but should not dominate
-  the verdict unless supported by related metabolites, class structure, or pathway evidence.
+  the verdict unless supported by related metabolites, class structure, pathway context, or a
+  plausible biochemical mechanism.
 - When evidence sources disagree, prefer the hypothesis that explains the most specific coherent
   subset of module evidence and explicitly acknowledge remaining ambiguity.
 - Do not accept a broad parent-process annotation when a narrower pathway or substrate-level
@@ -1332,6 +1364,9 @@ Evidence hierarchy:
 - Evaluate the debate process itself: if Skeptic raised a valid generic_hub_bias,
   isolated_outlier_bias, pathway_conflict, or overbroad_annotation challenge and the Proposer
   did not substantively revise or defend it, reject the hypothesis or lower confidence.
+- A keep decision after a major generic_hub_bias, isolated_outlier_bias, pathway_conflict,
+  or overbroad_annotation challenge is acceptable only when the Skeptic challenge was clearly
+  factually mistaken. Otherwise, unresolved keep decisions should be penalized.
 
 Verdict options:
 - accepted  : biologically plausible and useful as the final module annotation, with
@@ -1348,27 +1383,17 @@ Confidence reflects evidence strength for the accepted annotation. It is seconda
 status and should not be used as an independent verdict.
 
 Confidence rules:
-- high   : Strong module evidence AND adequate phenotype/literature support. Top metabolites,
-           hypothesis type, class/pathway evidence, species, biospecimen, debate record, and
-           PubMed phenotype evidence are coherent. High confidence requires at least indirect
-           PubMed support; if literature_support is insufficient, confidence_label must not
-           be high.
+- high   : Strong module evidence. Non-generic top metabolites, class/pathway context,
+           species/biospecimen plausibility, and debate record are coherent.
 - medium : Reasonable module interpretation, but with partial evidence, indirect pathway support,
-           incomplete explanation, limited literature support, or minor unresolved limitations.
+           incomplete explanation, or minor unresolved limitations.
 - low    : Weak but still useful interpretation. Evidence is sparse, indirect, or partly
            unresolved, but the hypothesis remains more informative than rejecting the module
            annotation entirely.
 
 Origin rule:
-- Origin profile is an interpretation-scope check, not an automatic penalty.
-- High exogenous fraction does NOT automatically lower confidence if the hypothesis type
-  is Diet-Derived, Xenobiotic / Exogenous, Microbiome-Derived, or otherwise consistent with
-  the origin profile.
-- Lower confidence or reject only when the hypothesis type or summary conflicts with the
-  origin profile.
-- Distinguish biological source from downstream processing. A pathway can involve host
-  enzymes while its core substrate or exposure source supports a diet-derived, microbial,
-  xenobiotic/exogenous, or host-microbiome interpretation.
+- Origin profile is background context. Do not let origin/type issues override a clearly
+  supported biochemical title unless they directly contradict the proposed mechanism.
 
 Phenotype evidence rule:
 - If phenotype is provided but PubMed phenotype summaries state insufficient evidence,

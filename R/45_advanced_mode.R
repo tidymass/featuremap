@@ -220,7 +220,7 @@ build_skeptic_module_evidence <- function(module_obj) {
   )
 
   # Data-layer annotation notes (generic anchor + isolated outlier warnings)
-  data_notes    <- build_advanced_data_notes(module_obj)
+  data_notes    <- build_advanced_data_notes(module_obj, audience = "reviewer")
   notes_section <- if (nzchar(data_notes)) paste0("\n\n", data_notes) else ""
 
   glue::glue(
@@ -277,40 +277,63 @@ Biospecimen: {bio}"
 }
 
 
-# Build [DATA NOTE] warning text from the data-layer flags embedded in
-# module_obj by prepare_module().  Returns "" when no flags are set.
+# Build [DATA NOTE] text from the data-layer flags embedded in module_obj by
+# prepare_module(). Returns "" when no flags are set.
+# audience = "proposer" uses a lighter note for P0; audience = "reviewer" uses
+# stronger audit language for Skeptic, revision, and Arbiter prompts.
 # Used by:
 #   • annotate_one_module_advanced() — appended to P0's user prompt
 #   • build_skeptic_module_evidence() — appended to the evidence block
 #     shown to S1/S2/P1/P2 and the Arbiter
-build_advanced_data_notes <- function(module_obj) {
+build_advanced_data_notes <- function(module_obj, audience = c("reviewer", "proposer")) {
+  audience <- match.arg(audience)
   notes <- character(0)
 
-  # ---- Generic cofactor dominance ----
+  # ---- Generic cofactors among top metabolites ----
   gf <- module_obj$generic_anchor_flags
-  if (!is.null(gf) && isTRUE(gf$is_dominated) && length(gf$generic_names) > 0) {
+  if (!is.null(gf) && isTRUE(gf$has_generic) && length(gf$generic_names) > 0) {
     names_str <- paste(gf$generic_names, collapse = ", ")
-    notes <- c(notes, glue::glue(
-      "[DATA NOTE — Generic cofactor dominance]
+    if (identical(audience, "proposer")) {
+      notes <- c(notes, glue::glue(
+        "[DATA NOTE — Shared cofactors among top metabolites]
+Some top metabolites are ubiquitous energy/redox cofactors: {names_str}.
+They may provide biochemical context, but they are usually less specific for naming
+a module than pathway- or class-specific metabolites."
+      ))
+    } else {
+      notes <- c(notes, glue::glue(
+        "[DATA NOTE — Generic cofactors among top metabolites]
 The following top metabolites are ubiquitous energy/redox cofactors: {names_str}.
-These metabolites appear across virtually all metabolic pathways and MUST NOT serve
-as primary anchor metabolites. They may appear in the biochemical summary as supporting
-context only. The annotation must be grounded in pathway-specific metabolites."
-    ))
+These metabolites appear across many metabolic pathways and should not serve as
+primary naming evidence unless supported by non-generic metabolites, class coherence,
+pathway evidence, or a clearly justified biochemical mechanism."
+      ))
+    }
   }
 
   # ---- Isolated outlier metabolites ----
   iso <- module_obj$isolation_flags
   if (!is.null(iso) && isTRUE(iso$n_outliers > 0L) && length(iso$outlier_names) > 0) {
     names_str <- paste(iso$outlier_names, collapse = ", ")
-    notes <- c(notes, glue::glue(
-      "[DATA NOTE — Isolated outlier metabolites]
+    if (identical(audience, "proposer")) {
+      notes <- c(notes, glue::glue(
+        "[DATA NOTE — Limited-context top metabolites]
+Some top metabolites have limited support from the current pathway/class context:
+{names_str}.
+They may still reflect cross-pathway biology, exposure-specific signals, or noise;
+use them cautiously when naming hypotheses."
+      ))
+    } else {
+      notes <- c(notes, glue::glue(
+        "[DATA NOTE — Isolated outlier metabolites]
 The following top metabolites are absent from the top pathway hit sets and do not
 belong to the dominant chemical class: {names_str}.
-These metabolites are likely noise or non-pathway members. If a hypothesis is driven
-primarily by these metabolites without corroborating pathway or class evidence,
-list them as tension_metabolites rather than anchor_metabolites."
-    ))
+These metabolites have limited support from the current pathway/class context. They
+may represent noise, exposure-specific signals, or cross-pathway biology. Do not let
+them dominate the main annotation unless corroborated by related metabolites, class
+coherence, pathway evidence, or biochemical plausibility."
+      ))
+    }
   }
 
   if (length(notes) == 0L) return("")
@@ -493,8 +516,8 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
   if (is.null(chs_raw) || length(chs_raw) == 0) return(list())
 
   allowed_types <- c(
-    "weak_evidence", "tension_unresolved", "origin_inconsistency",
-    "species_biospecimen", "generic_hub_bias", "pathway_conflict",
+    "weak_evidence", "tension_unresolved", "species_biospecimen",
+    "generic_hub_bias", "pathway_conflict", "isolated_outlier_bias",
     "overbroad_annotation", "origin_type_mismatch", "inadequate_revision",
     "no_challenge"
   )
@@ -929,7 +952,8 @@ build_proposer_system_prompt <- function() {
 Your task is to interpret one dysregulated metabolic module and, only when supported
 by the data, split it into 1-3 candidate biochemical process hypotheses.The goal is NOT 
 to invent competition. The goal is to identify specific biological processes supported 
-by the module data.
+by the module data. You are a hypothesis generator, not the final evidence auditor:
+make plausible evidence-grounded proposals and expose anchors and tensions clearly.
 
 You will receive:
 - Signal_concentration (high | medium | low): whether importance is concentrated in a few metabolites
@@ -945,10 +969,9 @@ Number-of-hypotheses guidance:
 - If top metabolites, class-level structure, and pathway evidence point to different
   plausible biochemical themes, represent them as separate competing hypotheses rather
   than forcing them into one integrated explanation.
-- When a candidate interpretation is driven mainly by generic cofactors, currency
-  metabolites, or isolated chemically distinctive outliers, keep it as a separate
-  hypothesis only if there is additional module-level support from related metabolites,
-  class structure, or pathway coverage.
+- Shared cofactors and limited-context metabolites may be used as biochemical context,
+  but be transparent about whether they are anchors or tensions. Later reviewers will
+  audit whether they are specific enough to support the title.
 
 For each hypothesis provide:
 1. hypothesis_id : \"H1\", \"H2\", or \"H3\"
@@ -983,6 +1006,10 @@ Type rules:
 
 Title rules
    - Name the module in KEGG pathway style: concise, standardized, and anchored to a specific biochemical pathway or process.
+   - The title MUST be 5 words or fewer. Shorter is better. Aim for 2-4 words.
+   - Do NOT create compound titles by joining two pathway names with \"and\". If multiple
+     processes are relevant, choose the single one best supported by the highest-ranked
+     high-priority metabolites. Secondary processes belong in the summary, not the title.
    - Follow KEGG naming conventions:
      - Use \"X metabolism\" when the module spans multiple steps of a compound class (e.g., \"Tyrosine metabolism\", \"Sphingolipid metabolism\").
      - Use \"X biosynthesis\" or \"X degradation\" when directionality is clear from the metabolites.
@@ -996,7 +1023,7 @@ Title rules
 Summary rules:
    - Write 4-6 sentences as a factual biochemical annotation of the module.
    - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions — as if writing an entry in a biochemical database.
-   - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and pathway evidence only to support or qualify.
+   - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and pathway evidence to support, qualify, or separate competing hypotheses.
    - Keep origin/scope interpretation in the type field; in the summary, mention source or host/microbial
      processing only when it is necessary to explain the biochemical mechanism.
    - Do NOT comment on the study phenotype or disease relevance.
@@ -1063,6 +1090,11 @@ metabolite-to-pathway fit, mechanism specificity, and whether the proposed ancho
 support the claim. You are explicitly allowed to use general external biochemical knowledge
 about pathways, metabolites, enzyme logic, pathway crosstalk, biospecimen detectability, and
 species plausibility.
+
+Your role is evidence audit, not re-annotation from scratch. Pay special attention to
+whether the current hypothesis relies on generic cofactors or isolated outlier metabolites
+as primary anchors, ignores coherent pathway/class context, or collapses conflicting
+evidence into an overbroad title.
 {round2_addon}
 
 For each hypothesis generate 0-3 specific biochemical challenges.
@@ -1076,17 +1108,20 @@ Challenge types (use exactly one per challenge):
 - weak_evidence         : anchor metabolites do not strongly support the claimed pathway
 - tension_unresolved    : the hypothesis lists tension metabolites but the summary does not
                            explain why they are difficult to reconcile with the mechanism
-- origin_inconsistency  : the current origin profile does not support the hypothesis and its type
 - species_biospecimen   : the claimed pathway is implausible for the stated species or biospecimen
 - generic_hub_bias      : the core claim is driven mainly by generic cofactors, currency
                           metabolites, salts, gases, or ubiquitous intermediates rather
                           than pathway-specific evidence
+- isolated_outlier_bias : the core claim is driven mainly by limited-context top metabolites
+                          that lack corroboration from related metabolites, class structure,
+                          pathway evidence, or biochemical plausibility
 - pathway_conflict      : the title or mechanism conflicts with stronger pathway coverage,
                           class-level coherence, or multiple pathway-specific metabolites
 - overbroad_annotation  : the hypothesis uses a broad parent process when the evidence
                           supports a more specific pathway, reaction family, or substrate class
-- origin_type_mismatch  : the hypothesis type appears to conflate biological source with
-                          downstream host processing, or otherwise conflicts with source/type evidence
+- origin_type_mismatch  : the hypothesis type or origin interpretation conflicts with the
+                          origin profile, source evidence, dominant substrate/source, or
+                          conflates biological source with downstream host processing
 - inadequate_revision   : round 2 only; a Round 1 revision failed to adequately address a
                            major Skeptic challenge
 
@@ -1100,6 +1135,15 @@ Severity rules:
 Anchor each challenge to specific metabolites, pathway names, origin/type evidence, species,
 biospecimen, or biochemical mechanisms.
 
+Audit rules:
+- If generic cofactor metabolites are used as primary anchors, raise generic_hub_bias unless
+  non-generic context also supports the same title.
+- If isolated outlier metabolites are used as primary anchors, raise isolated_outlier_bias
+  unless they are corroborated by related metabolites, class coherence, pathway evidence, or
+  a clearly justified biochemical mechanism.
+- If a hypothesis ignores a more coherent pathway/class context, raise pathway_conflict or
+  overbroad_annotation as appropriate.
+
 Return STRICT JSON only. Do NOT force one challenge per hypothesis. If no substantive
 challenge exists for a hypothesis, either omit it from the challenges array or return one
 no_challenge entry for that hypothesis.
@@ -1107,7 +1151,7 @@ no_challenge entry for that hypothesis.
   \"challenges\": [
     {{
       \"target_hypothesis_id\": \"H1\",
-      \"challenge_type\": \"weak_evidence | tension_unresolved | origin_inconsistency | species_biospecimen | generic_hub_bias | pathway_conflict | overbroad_annotation | origin_type_mismatch | inadequate_revision | no_challenge\",
+      \"challenge_type\": \"weak_evidence | tension_unresolved | species_biospecimen | generic_hub_bias | isolated_outlier_bias | pathway_conflict | overbroad_annotation | origin_type_mismatch | inadequate_revision | no_challenge\",
       \"challenge\": \"2-3 sentences with specific evidence, or 'No material biochemical concern identified.' for no_challenge\",
       \"severity\": \"major | minor | no_challenge\"
     }}
@@ -1156,18 +1200,26 @@ Rules:
            You may cite the module evidence, general biochemical knowledge
            (pathway logic, metabolite roles, species or biospecimen biology), or point
            to specific weaknesses in the Skeptic's evidence.
+           If the challenge concerns generic_hub_bias or isolated_outlier_bias, explain
+           what non-generic, class-level, pathway-level, or biochemical evidence still
+           supports the current title.
 - modify : revise P0-generated content to address reasonable Skeptic challenges; provide
            updated type, title, summary, anchor_metabolites, and tension_metabolites.
            A modification must change
            either the type, title, OR the mechanism text — renaming alone is not valid.
            revised_type must be exactly one of:
            Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome.
+           revised_title MUST be 5 words or fewer. Do NOT create compound titles joined by
+           \"and\". Choose the single most specific pathway name supported by the evidence.
            Revised anchor_metabolites and revised_tension_metabolites MUST be selected only
            from the current hypotheses' top-metabolite-derived anchors/tensions or from the
            module's Top metabolites list. Do NOT promote class-level or other non-top
            metabolites into anchors or tensions.
            Remove tension_metabolites when they are merely peripheral rather than genuinely
            conflicting with the revised mechanism.
+           If a major challenge is valid, make a substantive revision: change the title,
+           summary, anchors, or tensions so the revised hypothesis no longer depends on the
+           challenged generic/outlier evidence as the primary naming basis.
 - drop   : hypothesis is fundamentally flawed; provide a clear reason.
 
 You MUST respond to every major-severity challenge explicitly.
@@ -1277,6 +1329,9 @@ Evidence hierarchy:
   subset of module evidence and explicitly acknowledge remaining ambiguity.
 - Do not accept a broad parent-process annotation when a narrower pathway or substrate-level
   interpretation is better supported by the module evidence.
+- Evaluate the debate process itself: if Skeptic raised a valid generic_hub_bias,
+  isolated_outlier_bias, pathway_conflict, or overbroad_annotation challenge and the Proposer
+  did not substantively revise or defend it, reject the hypothesis or lower confidence.
 
 Verdict options:
 - accepted  : biologically plausible and useful as the final module annotation, with
@@ -2203,10 +2258,11 @@ annotate_one_module_advanced <- function(module_obj,
   p0_sys  <- build_proposer_system_prompt()
   p0_usr  <- build_module_prompt(module_obj)   # reuse fast-mode prompt builder
 
-  # Append advanced-mode data notes (generic anchor + isolated outlier warnings).
+  # Append light advanced-mode data notes. P0 should propose plausible hypotheses;
+  # Skeptic/Arbiter receive stronger audit language in build_skeptic_module_evidence().
   # build_module_prompt() is in 44_fast_mode.R and must not be modified, so the
   # notes are appended here in the advanced pipeline only.
-  adv_notes <- build_advanced_data_notes(module_obj)
+  adv_notes <- build_advanced_data_notes(module_obj, audience = "proposer")
   if (nzchar(adv_notes)) p0_usr <- paste(p0_usr, adv_notes, sep = "\n\n")
 
   p0_res  <- adv_request_json(

@@ -384,11 +384,9 @@ compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
 #'   Defaults to the package-level .FEATUREMAP_GENERIC_ANCHOR_HMDB list.
 #' @param kegg_ids Character vector of KEGG IDs considered generic anchors.
 #'   Defaults to the package-level .FEATUREMAP_GENERIC_ANCHOR_KEGG list.
-#' @param dominance_threshold Fraction of topN metabolites that must be
-#'   generic for is_dominated to be TRUE (default 0.5).
 #'
 #' @return A named list:
-#'   \item{is_dominated}{Logical. TRUE if >= dominance_threshold of topN are generic.}
+#'   \item{has_generic}{Logical. TRUE if any topN metabolite is generic.}
 #'   \item{generic_names}{Character vector of generic metabolite names found.}
 #'   \item{generic_ids}{Character vector of matched generic Compound_IDs.}
 #'   \item{n_generic}{Integer. Count of generic metabolites in topN.}
@@ -396,11 +394,10 @@ compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
 compute_generic_anchor_flags <- function(
     topN_df,
     hmdb_ids            = .FEATUREMAP_GENERIC_ANCHOR_HMDB,
-    kegg_ids            = .FEATUREMAP_GENERIC_ANCHOR_KEGG,
-    dominance_threshold = 0.5
+    kegg_ids            = .FEATUREMAP_GENERIC_ANCHOR_KEGG
 ) {
   na_result <- list(
-    is_dominated  = FALSE,
+    has_generic   = FALSE,
     generic_names = character(0),
     generic_ids   = character(0),
     n_generic     = 0L,
@@ -422,7 +419,7 @@ compute_generic_anchor_flags <- function(
   }
 
   list(
-    is_dominated  = n_top > 0L && (n_gen / n_top) >= dominance_threshold,
+    has_generic   = n_gen > 0L,
     generic_names = generic_names,
     generic_ids   = ids[is_gen],
     n_generic     = as.integer(n_gen),
@@ -446,9 +443,9 @@ compute_generic_anchor_flags <- function(
 #'   (3) Its chemical class is not the dominant (highest-priority) class
 #'       reported in \code{other_metabolites}.
 #'
-#' Such metabolites are likely noise or chemically distinctive species that do
-#' not belong to the module's core biochemical theme.  They should be treated
-#' as tension metabolites rather than anchors during LLM annotation.
+#' Such metabolites have limited support from the current pathway/class
+#' context. They may be noise, exposure-specific signals, or cross-pathway
+#' biology, and should not dominate LLM annotation without corroboration.
 #'
 #' @param topN_df Data frame of top metabolites with at least Compound_ID,
 #'   Compound_name, and class columns.
@@ -703,7 +700,7 @@ prepare_module <- function(
   generic_flags <- compute_generic_anchor_flags(module_topN_merged)
 
   # isolation_flags: detects topN metabolites absent from top pathway hit sets
-  # and not in the dominant chemical class (likely noise / outliers)
+  # and not in the dominant chemical class (limited current context support)
   module_full_df <- pick_named_entry(module_list, lookup_keys, fallback = k)
   isolation_flags <- compute_isolated_outliers(
     topN_df           = module_topN_merged,

@@ -869,6 +869,17 @@ annotate_one_module <- function(module_obj,
     kegg_pathways <- pathway_to_text(module_obj$pathway_coverage$kegg)
     hmdb_pathways <- pathway_to_text(module_obj$pathway_coverage$hmdb)
   }
+
+  # Class names only
+  class_names <- NA_character_
+  if (!is.null(module_obj$other_metabolites) &&
+      is.data.frame(module_obj$other_metabolites) &&
+      nrow(module_obj$other_metabolites) > 0 &&
+      "class" %in% colnames(module_obj$other_metabolites)) {
+    cls <- unique(trimws(as.character(module_obj$other_metabolites$class)))
+    cls <- cls[!is.na(cls) & nzchar(cls) & toupper(cls) != "NA"]
+    if (length(cls) > 0) class_names <- paste(cls, collapse = "; ")
+  }
   
   # ==================================================================
   # Return
@@ -882,6 +893,7 @@ annotate_one_module <- function(module_obj,
     phenotype_relationship = phenotype_relationship,
     confidence_label       = confidence_label,
     rationale              = rationale,
+    class_names            = class_names,
     global_direction       = global_direction,
     core_drivers           = core_drivers,
     origin_endogenous_frac = origin_endo_frac,
@@ -892,6 +904,7 @@ annotate_one_module <- function(module_obj,
     pubmed_evidence_json   = serialize_pubmed_evidence(pubmed_context),
     raw_response_call1     = res1$raw_text  %||% NA_character_,
     raw_response_call2     = res2$raw_text  %||% NA_character_,
+    annotation_mode        = "fast",
     stringsAsFactors = FALSE
   )
 }

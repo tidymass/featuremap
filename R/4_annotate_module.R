@@ -22,28 +22,17 @@
 #'   1-3 candidate biochemical hypotheses, Skeptic challenges them (up to 2 rounds), and an
 #'   Arbiter delivers final \code{accepted / rejected} verdicts with
 #'   confidence scores.
-#' @param proposer_temperature Numeric. Sampling temperature for the Proposer's
-#'   initial hypothesis generation in advanced mode (default 0.3). Skeptic,
-#'   Proposer revision, and Arbiter always run at temperature 0.
 #' @param synthesize Logical. In advanced mode, whether to run the final
 #'   cross-module synthesis agent after module annotation. When \code{TRUE},
-#'   accepted hypotheses are integrated into
-#'   \code{res$module_synthesis}. Ignored in fast mode.
+#'   accepted hypotheses are integrated into \code{res$module_synthesis} and an
+#'   interactive synthesis network HTML is exported to the working directory.
+#'   Ignored in fast mode.
 #' @param synthesis_model Character. LLM model used by the synthesis agent.
 #'   Defaults to \code{llm_model}.
-#' @param synthesis_max_tokens Integer. Max response tokens for the synthesis
-#'   agent (default 4000).
-#' @param synthesis_html Logical. In advanced mode with \code{synthesize = TRUE},
-#'   whether to export an interactive hypothesis-level synthesis network HTML.
-#' @param synthesis_html_dir Character. Directory where the synthesis network
-#'   HTML is written when \code{synthesis_html = TRUE}. Defaults to \code{getwd()}.
-#' @param synthesis_html_file Character. Output file name for the synthesis
-#'   network HTML.
 #' @param debate_html Logical. In advanced mode, whether to export one
 #'   chat-style HTML debate trace per annotated module (default \code{FALSE}).
 #' @param debate_html_dir Character. Directory where debate HTML files are
 #'   written when \code{debate_html = TRUE}. Defaults to \code{getwd()}.
-#' @param sleep_sec Numeric. Pause in seconds between modules (default 0).
 #' @param species Character. Species context for LLM confidence scoring.
 #' @param biospecimen Character. Biospecimen type (e.g. plasma, urine, tissue).
 #' @param phenotype Character. Phenotype/disease string used in PubMed retrieval
@@ -58,20 +47,22 @@
 #' @param llm_model Character. LLM model identifier.
 #' @param NCBI_api_key Character. NCBI Entrez API key when \code{pubmed = TRUE}.
 #' @param llm_api_key Character. API key for \code{provider}.
+#' @param base_url Optional custom API base URL for compatible LLM providers.
 #'
 #' @return The input \code{res} object updated with:
 #' \itemize{
 #'   \item \code{module_function}: data frame with one row per annotated module
-#'         and columns covering all seven annotation dimensions (hypothesis_type,
-#'         title, functional_summary, phenotype_relationship, confidence_label,
-#'         rationale, global_direction, core_drivers, origin fractions,
-#'         top pathway names, and PubMed evidence columns
-#'         \code{pubmed_pmids} and \code{pubmed_evidence_json}. Advanced mode
-#'         also includes debate trace columns \code{raw_response_p0},
-#'         \code{raw_response_s1}, \code{raw_response_p1},
-#'         \code{raw_response_s2}, \code{raw_response_p2},
-#'         \code{raw_response_pubmed_relationship},
-#'         \code{raw_response_arbiter}, and \code{debate_digest}.
+#'         or accepted hypothesis, containing the compact user-facing
+#'         annotation fields. Fast mode includes \code{annotation_mode = "fast"}.
+#'         Advanced mode includes \code{anchor_metabolites} and
+#'         \code{verdict_status} when available.
+#'   \item \code{module_evidence}: compact module-level evidence table with class
+#'         names, core drivers, origin fractions, global direction, and top
+#'         pathway summaries.
+#'   \item \code{module_pubmed_evidence}: PubMed and phenotype-literature evidence
+#'         fields separated from the main annotation table.
+#'   \item \code{module_debate_trace}: raw LLM response fields separated from the
+#'         main annotation table; advanced mode also includes debate trace fields.
 #'   \item \code{module_top_metabolite_pmids}: compact PubMed evidence export
 #'         with \code{module_id}, \code{pubmed_pmids}, and
 #'         \code{pubmed_evidence_json}.
@@ -115,7 +106,8 @@
 #'         pre-computed phenotype relationship summaries.
 #'   \item Optional synthesis agent: if \code{synthesize = TRUE}, accepted
 #'         hypotheses across modules are integrated into thematic
-#'         clusters, a completed relationship table, and an overall summary.
+#'         clusters, a completed relationship table, and an overall summary;
+#'         an interactive synthesis network HTML is exported automatically.
 #' }
 #'
 #' @examples
@@ -151,16 +143,10 @@ annotate_module <- function(res                  = NULL,
                              NCBI_api_key         = "",
                              llm_api_key          = "",
                              base_url             = NULL,
-                             proposer_temperature = 0.3,
                              synthesize           = FALSE,
                              synthesis_model      = llm_model,
-                             synthesis_max_tokens = 4000L,
-                             synthesis_html       = FALSE,
-                             synthesis_html_dir   = getwd(),
-                             synthesis_html_file  = "synthesis_network.html",
                              debate_html          = FALSE,
-                             debate_html_dir      = getwd(),
-                             sleep_sec            = 0) {
+                             debate_html_dir      = getwd()) {
 
   mode <- match.arg(mode)
 
@@ -209,6 +195,75 @@ annotate_module <- function(res                  = NULL,
 
   split_modules <- function(df) {
     split(df, factor(df$Module, levels = unique(df$Module)))
+  }
+
+  tidy_module_annotation_outputs <- function(all_results) {
+    if (is.null(all_results) || nrow(all_results) == 0) {
+      empty <- tibble::tibble()
+      return(list(
+        module_function        = empty,
+        module_evidence        = empty,
+        module_pubmed_evidence = empty,
+        module_debate_trace    = empty
+      ))
+    }
+
+    select_existing <- function(df, cols) {
+      cols <- cols[cols %in% colnames(df)]
+      if (length(cols) == 0) return(tibble::tibble())
+      tibble::as_tibble(df[, cols, drop = FALSE])
+    }
+
+    main_cols <- c(
+      "module_id", "annotation_mode", "hypothesis_id", "hypothesis_type",
+      "verdict_status", "title", "functional_summary", "anchor_metabolites",
+      "class_names", "phenotype_relationship", "confidence_label", "rationale",
+      "global_direction", "core_drivers", "origin_endogenous_frac",
+      "origin_exogenous_frac", "top_kegg_pathways", "top_hmdb_pathways",
+      "pubmed_pmids"
+    )
+
+    evidence_cols <- c(
+      "module_id", "class_names", "global_direction", "core_drivers",
+      "origin_endogenous_frac", "origin_exogenous_frac",
+      "top_kegg_pathways", "top_hmdb_pathways"
+    )
+
+    pubmed_cols <- c(
+      "module_id", "hypothesis_id", "pubmed_pmids", "pubmed_evidence_json",
+      "all_pubmed_json", "phenotype_literature_support",
+      "phenotype_evidence_note"
+    )
+
+    trace_cols <- c(
+      "module_id", "hypothesis_id", "raw_response_call1",
+      "raw_response_call2", "raw_response_p0", "raw_response_s1",
+      "raw_response_p1", "raw_response_s2", "raw_response_p2",
+      "raw_response_pubmed_relationship", "raw_response_arbiter",
+      "debate_digest", "n_proposed", "n_survived_debate", "n_accepted",
+      "n_rejected", "residual_ambiguity", "all_hypotheses_json"
+    )
+
+    module_function <- select_existing(all_results, main_cols)
+    module_evidence <- select_existing(all_results, evidence_cols) %>%
+      dplyr::distinct()
+    module_pubmed_evidence <- select_existing(all_results, pubmed_cols) %>%
+      dplyr::distinct()
+
+    module_debate_trace <- select_existing(all_results, trace_cols)
+    if (!any(grepl("^raw_response_|debate_digest|all_hypotheses_json",
+                   colnames(module_debate_trace)))) {
+      module_debate_trace <- tibble::tibble()
+    } else {
+      module_debate_trace <- dplyr::distinct(module_debate_trace)
+    }
+
+    list(
+      module_function        = module_function,
+      module_evidence        = module_evidence,
+      module_pubmed_evidence = module_pubmed_evidence,
+      module_debate_trace    = module_debate_trace
+    )
   }
 
   # ---- Validate input ------------------------------------------------------
@@ -295,6 +350,9 @@ annotate_module <- function(res                  = NULL,
     )
     res$module_function            <- tibble::tibble()
     res$module_top_metabolite_pmids <- tibble::tibble()
+    res$module_evidence            <- tibble::tibble()
+    res$module_pubmed_evidence     <- tibble::tibble()
+    res$module_debate_trace        <- tibble::tibble()
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
   }
@@ -505,6 +563,9 @@ annotate_module <- function(res                  = NULL,
   if (length(all_modules_ready) == 0) {
     cli::cli_alert_warning("No modules available for LLM annotation.")
     res$module_function <- tibble::tibble()
+    res$module_evidence <- tibble::tibble()
+    res$module_pubmed_evidence <- tibble::tibble()
+    res$module_debate_trace <- tibble::tibble()
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
   }
@@ -522,9 +583,7 @@ annotate_module <- function(res                  = NULL,
       model                = llm_model,
       base_url             = base_url,
       max_tokens           = if (identical(provider, "gemini")) 4000L else 2000L,
-      proposer_temperature = proposer_temperature,
       temperature          = 0,
-      sleep_sec            = sleep_sec,
       pubmed               = pubmed,
       NCBI_api_key         = NCBI_api_key,
       years                = years,
@@ -541,14 +600,18 @@ annotate_module <- function(res                  = NULL,
       base_url          = base_url,
       max_tokens        = if (identical(provider, "gemini")) 4000L else 2000L,
       temperature       = 0,
-      sleep_sec         = sleep_sec,
       pubmed            = pubmed,
       NCBI_api_key      = NCBI_api_key,
       years             = years
     )
   }
 
-  res$module_function <- all_results
+  tidy_results <- tidy_module_annotation_outputs(all_results)
+  res$module_function        <- tidy_results$module_function
+  res$module_evidence        <- tidy_results$module_evidence
+  res$module_pubmed_evidence <- tidy_results$module_pubmed_evidence
+  res$module_debate_trace    <- tidy_results$module_debate_trace
+
   if ("pubmed_evidence_json" %in% colnames(all_results)) {
     res$module_top_metabolite_pmids <-
       all_results[, c("module_id", "pubmed_pmids", "pubmed_evidence_json"), drop = FALSE]
@@ -572,21 +635,20 @@ annotate_module <- function(res                  = NULL,
         llm_api_key   = llm_api_key,
         llm_model     = synthesis_model,
         base_url      = base_url,
-        max_tokens    = synthesis_max_tokens,
-        temperature   = 0,
-        sleep_sec     = sleep_sec
+        max_tokens    = 4000L,
+        temperature   = 0
       ),
       error = function(e) {
         cli::cli_warn("Cross-module synthesis skipped: {e$message}")
         res
       }
     )
-    if (isTRUE(synthesis_html) && !is.null(res$module_synthesis)) {
+    if (!is.null(res$module_synthesis)) {
       tryCatch(
         export_synthesis_network_html(
           res = res,
-          output_dir = synthesis_html_dir,
-          output_file = synthesis_html_file,
+          output_dir = getwd(),
+          output_file = "synthesis_network.html",
           show_same_module = FALSE
         ),
         error = function(e) cli::cli_warn("Synthesis network HTML skipped: {e$message}")

@@ -10,12 +10,14 @@ annotate_one_module_advanced(
   provider,
   llm_api_key,
   model,
+  base_url = NULL,
   max_tokens = 2000L,
-  proposer_temperature = 0.3,
   temperature = 0,
   pubmed = FALSE,
   NCBI_api_key = NULL,
-  years = 5
+  years = 5,
+  debate_html = FALSE,
+  debate_html_dir = getwd()
 )
 }
 \arguments{
@@ -25,9 +27,9 @@ annotate_one_module_advanced(
 
 \item{provider, llm_api_key, model}{LLM configuration.}
 
-\item{max_tokens}{Max tokens per LLM response (default 2000; Gemini auto-expanded).}
+\item{base_url}{Optional custom API base URL for compatible LLM providers.}
 
-\item{proposer_temperature}{Sampling temperature for Proposer P0 (default 0.3).}
+\item{max_tokens}{Max tokens per LLM response (default 2000; Gemini auto-expanded).}
 
 \item{temperature}{Temperature for Skeptic / Proposer revision / Arbiter (default 0).}
 
@@ -36,10 +38,14 @@ annotate_one_module_advanced(
 \item{NCBI_api_key}{NCBI API key.}
 
 \item{years}{PubMed look-back years.}
+
+\item{debate_html}{Logical. Whether to export a per-module HTML debate trace.}
+
+\item{debate_html_dir}{Directory for debate HTML files.}
 }
 \value{
 Data frame compatible with fast mode output plus advanced columns.
-Accepted and uncertain hypotheses are returned as separate rows; rejected
+Accepted hypotheses are returned as separate rows; rejected
 modules return one rejected summary row. PubMed evidence is exported in
 \code{pubmed_pmids} and \code{pubmed_evidence_json}. Debate trace is
 exported in \code{raw_response_p0}, \code{raw_response_s1},

@@ -449,7 +449,9 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
 
   allowed_types <- c(
     "weak_evidence", "tension_unresolved", "origin_inconsistency",
-    "species_biospecimen", "inadequate_revision", "no_challenge"
+    "species_biospecimen", "generic_hub_bias", "pathway_conflict",
+    "overbroad_annotation", "origin_type_mismatch", "inadequate_revision",
+    "no_challenge"
   )
 
   out <- lapply(chs_raw, function(c) {
@@ -895,6 +897,13 @@ Number-of-hypotheses guidance:
 - Generate 2 when there are two well-supported biochemical processes anchored by different early-ranked metabolites.
 - Generate 3 only when there are three clearly separable, well-supported processes.
 - Do NOT create extra hypotheses just to fill a count.
+- If top metabolites, class-level structure, and pathway evidence point to different
+  plausible biochemical themes, represent them as separate competing hypotheses rather
+  than forcing them into one integrated explanation.
+- When a candidate interpretation is driven mainly by generic cofactors, currency
+  metabolites, or isolated chemically distinctive outliers, keep it as a separate
+  hypothesis only if there is additional module-level support from related metabolites,
+  class structure, or pathway coverage.
 
 For each hypothesis provide:
 1. hypothesis_id : \"H1\", \"H2\", or \"H3\"
@@ -1024,6 +1033,15 @@ Challenge types (use exactly one per challenge):
                            explain why they are difficult to reconcile with the mechanism
 - origin_inconsistency  : the current origin profile does not support the hypothesis and its type
 - species_biospecimen   : the claimed pathway is implausible for the stated species or biospecimen
+- generic_hub_bias      : the core claim is driven mainly by generic cofactors, currency
+                          metabolites, salts, gases, or ubiquitous intermediates rather
+                          than pathway-specific evidence
+- pathway_conflict      : the title or mechanism conflicts with stronger pathway coverage,
+                          class-level coherence, or multiple pathway-specific metabolites
+- overbroad_annotation  : the hypothesis uses a broad parent process when the evidence
+                          supports a more specific pathway, reaction family, or substrate class
+- origin_type_mismatch  : the hypothesis type appears to conflate biological source with
+                          downstream host processing, or otherwise conflicts with source/type evidence
 - inadequate_revision   : round 2 only; a Round 1 revision failed to adequately address a
                            major Skeptic challenge
 
@@ -1044,7 +1062,7 @@ no_challenge entry for that hypothesis.
   \"challenges\": [
     {{
       \"target_hypothesis_id\": \"H1\",
-      \"challenge_type\": \"weak_evidence | tension_unresolved | origin_inconsistency | species_biospecimen | inadequate_revision | no_challenge\",
+      \"challenge_type\": \"weak_evidence | tension_unresolved | origin_inconsistency | species_biospecimen | generic_hub_bias | pathway_conflict | overbroad_annotation | origin_type_mismatch | inadequate_revision | no_challenge\",
       \"challenge\": \"2-3 sentences with specific evidence, or 'No material biochemical concern identified.' for no_challenge\",
       \"severity\": \"major | minor | no_challenge\"
     }}
@@ -1202,6 +1220,19 @@ by the complete debate record. Specifically:
 Note: global_direction is intentionally excluded — module-level direction is too complex to use
 as a mechanistic constraint.
 
+Evidence hierarchy:
+- Strong support generally requires convergence across multiple lines of evidence, such as
+  pathway-specific top metabolites, coherent chemical class structure, and pathway coverage
+  that agrees with the proposed title and mechanism.
+- Generic cofactors, currency metabolites, salts, gases, and ubiquitous central intermediates
+  are useful context but should not by themselves determine the final annotation.
+- Isolated chemically distinctive metabolites can suggest a hypothesis, but should not dominate
+  the verdict unless supported by related metabolites, class structure, or pathway evidence.
+- When evidence sources disagree, prefer the hypothesis that explains the most specific coherent
+  subset of module evidence and explicitly acknowledge remaining ambiguity.
+- Do not accept a broad parent-process annotation when a narrower pathway or substrate-level
+  interpretation is better supported by the module evidence.
+
 Verdict options:
 - accepted  : biologically plausible and useful as the final module annotation, with
               evidence strength captured by confidence_label
@@ -1235,6 +1266,9 @@ Origin rule:
   the origin profile.
 - Lower confidence or reject only when the hypothesis type or summary conflicts with the
   origin profile.
+- Distinguish biological source from downstream processing. A pathway can involve host
+  enzymes while its core substrate or exposure source supports a diet-derived, microbial,
+  xenobiotic/exogenous, or host-microbiome interpretation.
 
 Phenotype evidence rule:
 - If phenotype is provided but PubMed phenotype summaries state insufficient evidence,
@@ -1883,6 +1917,17 @@ assemble_advanced_output_row <- function(module_obj,
     hmdb_pw <- fmt_pw(pc$hmdb)
   }
 
+  # Class names only
+  class_names <- NA_character_
+  if (!is.null(module_obj$other_metabolites) &&
+      is.data.frame(module_obj$other_metabolites) &&
+      nrow(module_obj$other_metabolites) > 0 &&
+      "class" %in% colnames(module_obj$other_metabolites)) {
+    cls <- unique(trimws(as.character(module_obj$other_metabolites$class)))
+    cls <- cls[!is.na(cls) & nzchar(cls) & toupper(cls) != "NA"]
+    if (length(cls) > 0) class_names <- paste(cls, collapse = "; ")
+  }
+
   # Full hypothesis JSON (all verdicts, for archival)
   all_hyp_json <- tryCatch(
     as.character(jsonlite::toJSON(lapply(verdicts, function(v) {
@@ -1922,6 +1967,9 @@ assemble_advanced_output_row <- function(module_obj,
     hobj     <- hyp_lookup[[hid]]
     hyp_pub  <- if (!is.null(pubmed_per_hyp)) pubmed_per_hyp[[hid]] else NULL
     hyp_rel  <- if (!is.null(phenotype_relationships)) phenotype_relationships[[hid]] else NULL
+    anchors  <- hobj$anchor_metabolites %||% character(0)
+    anchors  <- unique(trimws(as.character(anchors)))
+    anchors  <- anchors[!is.na(anchors) & nzchar(anchors)]
     data.frame(
       module_id                  = mid,
       hypothesis_id              = hid,
@@ -1929,12 +1977,14 @@ assemble_advanced_output_row <- function(module_obj,
       verdict_status             = v$status %||% NA_character_,
       title                      = hobj$title   %||% NA_character_,
       functional_summary         = hobj$summary %||% NA_character_,
+      anchor_metabolites         = if (length(anchors) > 0) paste(anchors, collapse = "; ") else NA_character_,
       phenotype_relationship     = hyp_rel$phenotype_relationship %||%
         v$phenotype_relationship %||% NA_character_,
       phenotype_literature_support = hyp_rel$literature_support %||% NA_character_,
       phenotype_evidence_note    = hyp_rel$evidence_note %||% NA_character_,
       confidence_label           = v$confidence_label       %||% NA_character_,
       rationale                  = v$confidence_rationale   %||% NA_character_,
+      class_names                = class_names,
       global_direction           = global_direction,
       core_drivers               = core_drivers,
       origin_endogenous_frac     = origin_endo,
@@ -2004,11 +2054,13 @@ assemble_advanced_output_row <- function(module_obj,
       verdict_status             = "rejected",
       title                      = NA_character_,
       functional_summary         = NA_character_,
+      anchor_metabolites         = NA_character_,
       phenotype_relationship     = module_rel$phenotype_relationship %||% NA_character_,
       phenotype_literature_support = module_rel$literature_support %||% NA_character_,
       phenotype_evidence_note    = module_rel$evidence_note %||% NA_character_,
       confidence_label           = NA_character_,
       rationale                  = NA_character_,
+      class_names                = class_names,
       global_direction           = global_direction,
       core_drivers               = core_drivers,
       origin_endogenous_frac     = origin_endo,
@@ -2051,7 +2103,6 @@ assemble_advanced_output_row <- function(module_obj,
 #' @param study_context List with \code{species}, \code{biospecimen}, \code{phenotype}.
 #' @param provider,llm_api_key,model  LLM configuration.
 #' @param max_tokens  Max tokens per LLM response (default 2000; Gemini auto-expanded).
-#' @param proposer_temperature  Sampling temperature for Proposer P0 (default 0.3).
 #' @param temperature  Temperature for Skeptic / Proposer revision / Arbiter (default 0).
 #' @param pubmed  Logical. Whether to search PubMed before Arbiter.
 #' @param NCBI_api_key  NCBI API key.
@@ -2073,7 +2124,6 @@ annotate_one_module_advanced <- function(module_obj,
                                           model,
                                           base_url             = NULL,
                                           max_tokens           = 2000L,
-                                          proposer_temperature = 0.3,
                                           temperature          = 0,
                                           pubmed               = FALSE,
                                           NCBI_api_key         = NULL,
@@ -2115,7 +2165,7 @@ annotate_one_module_advanced <- function(module_obj,
     schema      = sch_proposer,
     retry_instr = "Return only valid JSON with key \"hypotheses\" (array of hypothesis objects).",
     provider    = provider, llm_api_key = llm_api_key, model = model, base_url = base_url,
-    max_tokens  = max_tokens, temperature = proposer_temperature
+    max_tokens  = max_tokens, temperature = 0
   )
   raw_texts$p0 <- p0_res$raw_text
 
@@ -2481,9 +2531,7 @@ annotate_one_module_advanced <- function(module_obj,
 #' @param study_context  List with \code{species}, \code{biospecimen}, \code{phenotype}.
 #' @param provider,llm_api_key,model  LLM configuration.
 #' @param max_tokens  Default 2000.
-#' @param proposer_temperature  Default 0.3.
 #' @param temperature  Default 0.
-#' @param sleep_sec  Pause between modules (default 0).
 #' @param pubmed  Logical.
 #' @param NCBI_api_key  NCBI API key.
 #' @param years  PubMed look-back years.
@@ -2497,9 +2545,7 @@ annotate_all_modules_advanced <- function(all_modules_ready,
                                            model,
                                            base_url             = NULL,
                                            max_tokens           = 2000L,
-                                           proposer_temperature = 0.3,
                                            temperature          = 0,
-                                           sleep_sec            = 0,
                                            pubmed               = FALSE,
                                            NCBI_api_key         = NULL,
                                            years                = 5,
@@ -2521,7 +2567,6 @@ annotate_all_modules_advanced <- function(all_modules_ready,
         model                = model,
         base_url             = base_url,
         max_tokens           = max_tokens,
-        proposer_temperature = proposer_temperature,
         temperature          = temperature,
         pubmed               = pubmed,
         NCBI_api_key         = NCBI_api_key,
@@ -2536,7 +2581,6 @@ annotate_all_modules_advanced <- function(all_modules_ready,
       }
     )
 
-    if (sleep_sec > 0) Sys.sleep(sleep_sec)
     out
   })
 

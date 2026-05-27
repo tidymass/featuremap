@@ -19,11 +19,11 @@ annotate_module(
   llm_model = "gpt-4.1-mini",
   NCBI_api_key = "",
   llm_api_key = "",
-  proposer_temperature = 0.3,
+  base_url = NULL,
   synthesize = FALSE,
   synthesis_model = llm_model,
-  synthesis_max_tokens = 4000L,
-  sleep_sec = 0
+  debate_html = FALSE,
+  debate_html_dir = getwd()
 )
 }
 \arguments{
@@ -47,8 +47,7 @@ significance filtering (e.g. \code{"p"} or \code{"fdr"}).}
 with pathway coverage, origin profiling, and directed confidence scoring.
 \code{"advanced"} runs the multi-agent debate pipeline: Proposer generates
 1-3 candidate biochemical hypotheses, Skeptic challenges them (up to 2 rounds), and an
-Arbiter delivers final \code{accepted / uncertain / rejected} verdicts with
-confidence scores.}
+Arbiter delivers final \code{accepted / rejected} verdicts with confidence scores.}
 
 \item{species}{Character. Species context for LLM confidence scoring.}
 
@@ -73,37 +72,37 @@ PMID before LLM Call 2.}
 
 \item{llm_api_key}{Character. API key for \code{provider}.}
 
-\item{proposer_temperature}{Numeric. Sampling temperature for the Proposer's
-initial hypothesis generation in advanced mode (default 0.3). Skeptic,
-Proposer revision, and Arbiter always run at temperature 0.}
+\item{base_url}{Optional custom API base URL for compatible LLM providers.}
 
 \item{synthesize}{Logical. In advanced mode, whether to run the final
 cross-module synthesis agent after module annotation. When \code{TRUE},
-accepted and uncertain hypotheses are integrated into
-\code{res$module_synthesis}. Ignored in fast mode.}
+accepted hypotheses are integrated into \code{res$module_synthesis} and an
+interactive synthesis network HTML is exported to the working directory.
+Ignored in fast mode.}
 
 \item{synthesis_model}{Character. LLM model used by the synthesis agent.
 Defaults to \code{llm_model}.}
 
-\item{synthesis_max_tokens}{Integer. Max response tokens for the synthesis
-agent (default 4000).}
+\item{debate_html}{Logical. In advanced mode, whether to export one
+chat-style HTML debate trace per annotated module (default \code{FALSE}).}
 
-\item{sleep_sec}{Numeric. Pause in seconds between modules (default 0).}
+\item{debate_html_dir}{Character. Directory where debate HTML files are
+written when \code{debate_html = TRUE}. Defaults to \code{getwd()}.}
 }
 \value{
 The input \code{res} object updated with:
 \itemize{
 \item \code{module_function}: data frame with one row per annotated module
-and columns covering all seven annotation dimensions (title,
-functional_summary, phenotype_relationship, confidence_label,
-rationale, global_direction, core_drivers, origin fractions,
-top pathway names, and PubMed evidence columns
-\code{pubmed_pmids} and \code{pubmed_evidence_json}. Advanced mode
-also includes debate trace columns \code{raw_response_p0},
-\code{raw_response_s1}, \code{raw_response_p1},
-\code{raw_response_s2}, \code{raw_response_p2},
-\code{raw_response_pubmed_relationship},
-\code{raw_response_arbiter}, and \code{debate_digest}.
+or accepted hypothesis, containing the compact user-facing annotation fields.
+Fast mode includes \code{annotation_mode = "fast"}. Advanced mode includes
+\code{anchor_metabolites} and \code{verdict_status} when available.
+\item \code{module_evidence}: compact module-level evidence table with class
+names, core drivers, origin fractions, global direction, and top pathway
+summaries.
+\item \code{module_pubmed_evidence}: PubMed and phenotype-literature evidence
+fields separated from the main annotation table.
+\item \code{module_debate_trace}: raw LLM response fields separated from the
+main annotation table; advanced mode also includes debate trace fields.
 \item \code{module_top_metabolite_pmids}: compact PubMed evidence export
 with \code{module_id}, \code{pubmed_pmids}, and
 \code{pubmed_evidence_json}.
@@ -147,12 +146,13 @@ or major challenges were kept without revision.
 search, results held for Arbiter only.
 \item Optional PubMed: phenotype relationships are summarized per
 hypothesis before Arbiter.
-\item A0 Arbiter: final accepted / uncertain / rejected verdicts using
+\item A0 Arbiter: final accepted / rejected verdicts using
 the surviving hypotheses, debate digest, study context, and
 pre-computed phenotype relationship summaries.
-\item Optional synthesis agent: if \code{synthesize = TRUE}, accepted and
-uncertain hypotheses across modules are integrated into thematic
-clusters, a completed relationship table, and an overall summary.
+\item Optional synthesis agent: if \code{synthesize = TRUE}, accepted
+hypotheses across modules are integrated into thematic clusters, a completed
+relationship table, and an overall summary; an interactive synthesis network
+HTML is exported automatically.
 }
 }
 \examples{

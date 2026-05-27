@@ -598,8 +598,28 @@ synthesize_modules <- function(res,
     study_context <- res$study_context
 
   # ---- Prepare nodes ----
+  module_function_for_synthesis <- res$module_function
+  if (!is.null(res$module_pubmed_evidence) &&
+      is.data.frame(res$module_pubmed_evidence) &&
+      nrow(res$module_pubmed_evidence) > 0) {
+    pub_cols <- c(
+      "module_id", "hypothesis_id",
+      "phenotype_literature_support", "phenotype_evidence_note"
+    )
+    pub_cols <- pub_cols[pub_cols %in% colnames(res$module_pubmed_evidence)]
+    join_by <- intersect(c("module_id", "hypothesis_id"), pub_cols)
+    if (length(join_by) > 0 &&
+        any(c("phenotype_literature_support", "phenotype_evidence_note") %in% pub_cols)) {
+      module_function_for_synthesis <- dplyr::left_join(
+        module_function_for_synthesis,
+        dplyr::distinct(res$module_pubmed_evidence[, pub_cols, drop = FALSE]),
+        by = join_by
+      )
+    }
+  }
+
   nodes_df <- tryCatch(
-    prepare_synthesis_nodes(res$module_function),
+    prepare_synthesis_nodes(module_function_for_synthesis),
     error = function(e) {
       cli::cli_abort("synthesize_modules: failed to prepare nodes — {e$message}")
     }

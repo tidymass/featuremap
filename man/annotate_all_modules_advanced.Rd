@@ -10,13 +10,14 @@ annotate_all_modules_advanced(
   provider,
   llm_api_key,
   model,
+  base_url = NULL,
   max_tokens = 2000L,
-  proposer_temperature = 0.3,
   temperature = 0,
-  sleep_sec = 0,
   pubmed = FALSE,
   NCBI_api_key = NULL,
-  years = 5
+  years = 5,
+  debate_html = FALSE,
+  debate_html_dir = getwd()
 )
 }
 \arguments{
@@ -26,19 +27,21 @@ annotate_all_modules_advanced(
 
 \item{provider, llm_api_key, model}{LLM configuration.}
 
+\item{base_url}{Optional custom API base URL for compatible LLM providers.}
+
 \item{max_tokens}{Default 2000.}
 
-\item{proposer_temperature}{Default 0.3.}
-
 \item{temperature}{Default 0.}
-
-\item{sleep_sec}{Pause between modules (default 0).}
 
 \item{pubmed}{Logical.}
 
 \item{NCBI_api_key}{NCBI API key.}
 
 \item{years}{PubMed look-back years.}
+
+\item{debate_html}{Logical. Whether to export per-module HTML debate traces.}
+
+\item{debate_html_dir}{Directory for debate HTML files.}
 }
 \value{
 Data frame with one row per module.

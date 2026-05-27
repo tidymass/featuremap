@@ -537,7 +537,9 @@ annotate_module <- function(res                  = NULL,
         pathway_coverage_list = pathway_coverage_list,
         direction_list        = direction_list,
         origin_profile_list   = origin_profile_list,
-        pubmed                = FALSE         # pubmed handled inside annotate_one_module
+        pubmed                = FALSE,        # pubmed handled inside annotate_one_module
+        pathway_hmdb          = pathway_hmdb,
+        pathway_kegg          = pathway_kegg
       )
     }
   )

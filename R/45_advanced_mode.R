@@ -219,6 +219,10 @@ build_skeptic_module_evidence <- function(module_obj) {
     sep = "\n"
   )
 
+  # Data-layer annotation notes (generic anchor + isolated outlier warnings)
+  data_notes    <- build_advanced_data_notes(module_obj)
+  notes_section <- if (nzchar(data_notes)) paste0("\n\n", data_notes) else ""
+
   glue::glue(
     "--- Module evidence for biochemical review ---
 Top metabolites (rank, name, priority):
@@ -228,7 +232,7 @@ Chemical class structure:
 {cls_text}
 
 Pathway coverage:
-{pw_text}"
+{pw_text}{notes_section}"
   )
 }
 
@@ -270,6 +274,47 @@ build_context_block <- function(module_obj, study_context) {
 Species: {sp}
 Biospecimen: {bio}"
   )
+}
+
+
+# Build [DATA NOTE] warning text from the data-layer flags embedded in
+# module_obj by prepare_module().  Returns "" when no flags are set.
+# Used by:
+#   • annotate_one_module_advanced() — appended to P0's user prompt
+#   • build_skeptic_module_evidence() — appended to the evidence block
+#     shown to S1/S2/P1/P2 and the Arbiter
+build_advanced_data_notes <- function(module_obj) {
+  notes <- character(0)
+
+  # ---- Generic cofactor dominance ----
+  gf <- module_obj$generic_anchor_flags
+  if (!is.null(gf) && isTRUE(gf$is_dominated) && length(gf$generic_names) > 0) {
+    names_str <- paste(gf$generic_names, collapse = ", ")
+    notes <- c(notes, glue::glue(
+      "[DATA NOTE — Generic cofactor dominance]
+The following top metabolites are ubiquitous energy/redox cofactors: {names_str}.
+These metabolites appear across virtually all metabolic pathways and MUST NOT serve
+as primary anchor metabolites. They may appear in the biochemical summary as supporting
+context only. The annotation must be grounded in pathway-specific metabolites."
+    ))
+  }
+
+  # ---- Isolated outlier metabolites ----
+  iso <- module_obj$isolation_flags
+  if (!is.null(iso) && isTRUE(iso$n_outliers > 0L) && length(iso$outlier_names) > 0) {
+    names_str <- paste(iso$outlier_names, collapse = ", ")
+    notes <- c(notes, glue::glue(
+      "[DATA NOTE — Isolated outlier metabolites]
+The following top metabolites are absent from the top pathway hit sets and do not
+belong to the dominant chemical class: {names_str}.
+These metabolites are likely noise or non-pathway members. If a hypothesis is driven
+primarily by these metabolites without corroborating pathway or class evidence,
+list them as tension_metabolites rather than anchor_metabolites."
+    ))
+  }
+
+  if (length(notes) == 0L) return("")
+  paste(notes, collapse = "\n\n")
 }
 
 
@@ -2157,6 +2202,12 @@ annotate_one_module_advanced <- function(module_obj,
 
   p0_sys  <- build_proposer_system_prompt()
   p0_usr  <- build_module_prompt(module_obj)   # reuse fast-mode prompt builder
+
+  # Append advanced-mode data notes (generic anchor + isolated outlier warnings).
+  # build_module_prompt() is in 44_fast_mode.R and must not be modified, so the
+  # notes are appended here in the advanced pipeline only.
+  adv_notes <- build_advanced_data_notes(module_obj)
+  if (nzchar(adv_notes)) p0_usr <- paste(p0_usr, adv_notes, sep = "\n\n")
 
   p0_res  <- adv_request_json(
     messages    = list(list(role = "system", content = p0_sys),

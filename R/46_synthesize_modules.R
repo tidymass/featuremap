@@ -43,7 +43,7 @@
 #' @param module_df  Data frame from \code{res$module_function}.
 #' @return Data frame with columns: node_id, module_id, hypothesis_id,
 #'   verdict_status, title, functional_summary, phenotype_relationship,
-#'   confidence_label, rationale, core_drivers, pathway summaries, and
+#'   confidence_label, rationale, anchor_metabolites, pathway summaries, and
 #'   phenotype literature support fields when available.
 prepare_synthesis_nodes <- function(module_df) {
   if (is.null(module_df) || nrow(module_df) == 0)
@@ -77,7 +77,7 @@ prepare_synthesis_nodes <- function(module_df) {
   df <- df[!duplicated(df$node_id), , drop = FALSE]
 
   optional_cols <- c(
-    "hypothesis_type", "confidence_label", "rationale", "core_drivers",
+    "hypothesis_type", "confidence_label", "rationale", "anchor_metabolites",
     "top_kegg_pathways", "top_hmdb_pathways",
     "phenotype_literature_support", "phenotype_evidence_note"
   )
@@ -234,7 +234,7 @@ build_synthesis_user_prompt <- function(nodes_df, study_context = NULL) {
   Title: {scalar(r$title)}
   Confidence: {scalar(r$confidence_label)}
   Confidence rationale: {rat}
-  Core drivers: {scalar(r$core_drivers)}
+  Anchor metabolites: {scalar(r$anchor_metabolites)}
   Top KEGG pathways: {scalar(r$top_kegg_pathways)}
   Top HMDB pathways: {scalar(r$top_hmdb_pathways)}
   Functional summary: {fs}

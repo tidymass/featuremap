@@ -218,13 +218,13 @@ annotate_module <- function(res                  = NULL,
       "module_id", "annotation_mode", "hypothesis_id", "hypothesis_type",
       "verdict_status", "title", "functional_summary", "anchor_metabolites",
       "class_names", "phenotype_relationship", "confidence_label", "rationale",
-      "global_direction", "core_drivers", "origin_endogenous_frac",
+      "global_direction", "origin_endogenous_frac",
       "origin_exogenous_frac", "top_kegg_pathways", "top_hmdb_pathways",
       "pubmed_pmids"
     )
 
     evidence_cols <- c(
-      "module_id", "class_names", "global_direction", "core_drivers",
+      "module_id", "class_names", "global_direction",
       "origin_endogenous_frac", "origin_exogenous_frac",
       "top_kegg_pathways", "top_hmdb_pathways"
     )

@@ -455,7 +455,7 @@ Functional summary: {summary_str}
 #' @return A one-row data frame with columns:
 #'   \code{module_id}, \code{hypothesis_type}, \code{title}, \code{functional_summary},
 #'   \code{phenotype_relationship}, \code{confidence_label}, \code{rationale},
-#'   \code{global_direction}, \code{core_drivers},
+#'   \code{global_direction},
 #'   \code{origin_endogenous_frac}, \code{origin_exogenous_frac},
 #'   \code{top_kegg_pathways}, \code{top_hmdb_pathways},
 #'   \code{pubmed_pmids}, \code{pubmed_evidence_json},
@@ -834,26 +834,6 @@ annotate_one_module <- function(module_obj,
     global_direction <- module_obj$global_direction$direction_label %||% NA_character_
   }
   
-  # Core drivers (high-priority top metabolites)
-  core_drivers <- NA_character_
-  if (!is.null(module_obj$topN_metabolites) &&
-      is.data.frame(module_obj$topN_metabolites) &&
-      nrow(module_obj$topN_metabolites) > 0 &&
-      "Compound_name" %in% colnames(module_obj$topN_metabolites)) {
-    
-    tdf <- module_obj$topN_metabolites
-    if ("priority_level" %in% colnames(tdf)) {
-      drivers <- tdf[tdf$priority_level == "high", , drop = FALSE]
-      if ("top_rank" %in% colnames(drivers))
-        drivers <- drivers[order(as.integer(drivers$top_rank)), , drop = FALSE]
-    } else {
-      drivers <- tdf
-    }
-    if (nrow(drivers) == 0)
-      drivers <- head(tdf[order(as.integer(tdf$top_rank %||% seq_len(nrow(tdf)))), ], 3)
-    core_drivers <- paste(drivers$Compound_name, collapse = "; ")
-  }
-  
   # Origin fractions
   origin_endo_frac <- NA_real_
   origin_exo_frac  <- NA_real_
@@ -895,7 +875,6 @@ annotate_one_module <- function(module_obj,
     rationale              = rationale,
     class_names            = class_names,
     global_direction       = global_direction,
-    core_drivers           = core_drivers,
     origin_endogenous_frac = origin_endo_frac,
     origin_exogenous_frac  = origin_exo_frac,
     top_kegg_pathways      = kegg_pathways,

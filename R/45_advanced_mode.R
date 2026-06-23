@@ -517,7 +517,7 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
 
   allowed_types <- c(
     "weak_evidence", "tension_unresolved", "species_biospecimen",
-    "generic_hub_bias", "pathway_conflict", "isolated_outlier_bias",
+    "generic_hub_bias", "biochemical_conflict", "isolated_outlier_bias",
     "overbroad_annotation", "inadequate_revision", "no_challenge"
   )
 
@@ -1119,7 +1119,7 @@ Challenge types (use exactly one per challenge):
 - isolated_outlier_bias : the core claim is driven mainly by limited-context top metabolites
                           that lack corroboration from related metabolites, class structure,
                           pathway evidence, or biochemical plausibility
-- pathway_conflict      : the title or mechanism conflicts with stronger pathway coverage,
+- biochemical_conflict  : the title or mechanism conflicts with stronger pathway coverage,
                           class-level coherence, or multiple pathway-specific metabolites
 - overbroad_annotation  : the hypothesis uses a broad parent process when the evidence
                           supports a more specific pathway, reaction family, or substrate class
@@ -1134,7 +1134,7 @@ Severity rules:
                  you explicitly reviewed this hypothesis and found no issue.
 
 Severity calibration:
-- Mark pathway_conflict as major when a specific pathway-supported or class-supported
+- Mark biochemical_conflict as major when a specific pathway-supported or class-supported
   biochemical interpretation is corroborated by non-generic metabolites, but the hypothesis
   title points to a different, adjacent, generic, or top-metabolite-driven process.
 - Mark overbroad_annotation as major when the current title is a broad parent process and
@@ -1153,7 +1153,7 @@ Audit rules:
   a clearly justified biochemical mechanism.
 - If pathway coverage points to a specific pathway but the hypothesis title uses a broader,
   adjacent, or top-metabolite-driven process, compare this pathway-supported interpretation
-  against the metabolite/class-supported interpretation. Raise pathway_conflict or
+  against the metabolite/class-supported interpretation. Raise biochemical_conflict or
   overbroad_annotation only when the narrower interpretation is corroborated by non-generic
   metabolites, class coherence, or biochemical plausibility.
 - When the current title differs from the strongest specific pathway evidence, explicitly
@@ -1168,7 +1168,7 @@ no_challenge entry for that hypothesis.
   \"challenges\": [
     {{
       \"target_hypothesis_id\": \"H1\",
-      \"challenge_type\": \"weak_evidence | tension_unresolved | species_biospecimen | generic_hub_bias | isolated_outlier_bias | pathway_conflict | overbroad_annotation | inadequate_revision | no_challenge\",
+      \"challenge_type\": \"weak_evidence | tension_unresolved | species_biospecimen | generic_hub_bias | isolated_outlier_bias | biochemical_conflict | overbroad_annotation | inadequate_revision | no_challenge\",
       \"challenge\": \"2-3 sentences with specific evidence, or 'No material biochemical concern identified.' for no_challenge\",
       \"severity\": \"major | minor | no_challenge\"
     }}
@@ -1215,7 +1215,7 @@ For each hypothesis, decide: keep | modify | drop
 Rules:
 - keep   : use only when the hypothesis remains valid AS WRITTEN and the Skeptic challenge
            is minor or factually mistaken. Keeping a hypothesis after a major challenge is
-           exceptional. For major generic_hub_bias, isolated_outlier_bias, pathway_conflict,
+           exceptional. For major generic_hub_bias, isolated_outlier_bias, biochemical_conflict,
            or overbroad_annotation challenges, do NOT keep unless the Skeptic clearly
            misread the module evidence; in that case, cite the specific metabolite, class,
            or pathway evidence that makes the challenge invalid.
@@ -1242,7 +1242,7 @@ Rules:
            challenged generic/outlier evidence as the primary naming basis, no longer ignores
            the stronger pathway/class context, and is no longer broader than the evidence
            supports.
-           For major pathway_conflict or overbroad_annotation, compare the pathway-supported
+           For major biochemical_conflict or overbroad_annotation, compare the pathway-supported
            interpretation with the metabolite/class-supported interpretation, then revise
            toward the most specific coherent biochemical explanation. Do not automatically
            copy the top pathway if metabolite or class evidence supports a better cross-pathway
@@ -1362,9 +1362,9 @@ Evidence hierarchy:
 - Do not accept a broad parent-process annotation when a narrower pathway or substrate-level
   interpretation is better supported by the module evidence.
 - Evaluate the debate process itself: if Skeptic raised a valid generic_hub_bias,
-  isolated_outlier_bias, pathway_conflict, or overbroad_annotation challenge and the Proposer
+  isolated_outlier_bias, biochemical_conflict, or overbroad_annotation challenge and the Proposer
   did not substantively revise or defend it, reject the hypothesis or lower confidence.
-- A keep decision after a major generic_hub_bias, isolated_outlier_bias, pathway_conflict,
+- A keep decision after a major generic_hub_bias, isolated_outlier_bias, biochemical_conflict,
   or overbroad_annotation challenge is acceptable only when the Skeptic challenge was clearly
   factually mistaken. Otherwise, unresolved keep decisions should be penalized.
 
@@ -2008,19 +2008,6 @@ assemble_advanced_output_row <- function(module_obj,
   if (!is.null(module_obj$global_direction))
     global_direction <- module_obj$global_direction$direction_label %||% NA_character_
 
-  # Core drivers (high-priority metabolites)
-  core_drivers <- NA_character_
-  top_df <- module_obj$topN_metabolites
-  if (!is.null(top_df) && nrow(top_df) > 0 && "Compound_name" %in% colnames(top_df)) {
-    if ("priority_level" %in% colnames(top_df)) {
-      hi <- top_df[top_df$priority_level == "high", , drop = FALSE]
-      if (nrow(hi) == 0) hi <- head(top_df, 3)
-    } else {
-      hi <- head(top_df, 3)
-    }
-    core_drivers <- paste(hi$Compound_name, collapse = "; ")
-  }
-
   # Origin fractions
   op <- module_obj$origin_profile
   origin_endo <- op$endogenous_frac %||% NA_real_
@@ -2111,7 +2098,6 @@ assemble_advanced_output_row <- function(module_obj,
       rationale                  = v$confidence_rationale   %||% NA_character_,
       class_names                = class_names,
       global_direction           = global_direction,
-      core_drivers               = core_drivers,
       origin_endogenous_frac     = origin_endo,
       origin_exogenous_frac      = origin_exo,
       top_kegg_pathways          = kegg_pw,
@@ -2187,7 +2173,6 @@ assemble_advanced_output_row <- function(module_obj,
       rationale                  = NA_character_,
       class_names                = class_names,
       global_direction           = global_direction,
-      core_drivers               = core_drivers,
       origin_endogenous_frac     = origin_endo,
       origin_exogenous_frac      = origin_exo,
       top_kegg_pathways          = kegg_pw,

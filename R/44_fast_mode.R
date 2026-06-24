@@ -68,6 +68,7 @@ Using only the provided information, return three fields:
      - Use a physiological or system-level name when appropriate.
    - Choose the most specific level of granularity supported by the early-ranked high-priority metabolites.
    - If top metabolites point to a specific sub-pathway, reflect that specificity rather than defaulting to the parent pathway name.
+   - Do NOT use broad chemical class titles such as \"Amino acid metabolism\", \"Lipid metabolism\", or \"Carbohydrate metabolism\" without a specific qualifier. Instead, identify the dominant sub-class or substrate (e.g., \"Branched-chain amino acid catabolism\", \"Aromatic amino acid metabolism\", \"Lysine degradation\"). If the metabolites genuinely span multiple unrelated sub-pathways with no dominant theme, choose the single best-supported sub-pathway and move the rest to the summary.
    - Use pathway evidence (KEGG/HMDB) to support or refine the title when it aligns with the metabolite evidence.
    - If no canonical pathway fits, use the most specific neutral description of the dominant chemical transformation.
 

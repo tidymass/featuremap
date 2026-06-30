@@ -83,9 +83,16 @@ Using only the provided information, return four fields:
    - Mention secondary signals only briefly at the end if needed.
 
 4) ANCHOR_TOP_IDS
-   - List 2-5 Top_ID values for metabolites that most strongly anchor the module interpretation.
-   - Choose only from the Top_ID values shown in the provided top metabolites list,
-     prioritising early-ranked high-priority metabolites.
+   - Select 2-5 Top_ID values for metabolites that are most central to the biochemical
+     pathway/process described by the title and functional_summary.
+   - Use metabolite Name, Class, Top_rank, Priority_level, and pathway evidence to decide
+     which metabolites are true anchors.
+   - Prefer early-ranked high-priority metabolites, but do not choose a metabolite solely
+     because it is highly ranked if it is generic or weakly related to the central
+     interpretation.
+   - Choose metabolites that directly define the pathway, substrate class, enzymatic step,
+     chemical transformation, or biological source/theme of the module.
+   - Choose only from the Top_ID values shown in the provided top metabolites list.
    - Return exact Top_ID strings such as \"T1\"; do not return metabolite names in this field.
 
 Return STRICT JSON only:

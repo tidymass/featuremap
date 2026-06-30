@@ -1055,7 +1055,15 @@ Summary rules:
    - Mention secondary signals only briefly at the end if needed.
 
 Rules:
-- Every hypothesis must be anchored by at least one high-priority metabolite
+- Every hypothesis must be anchored by at least one metabolite that is central to the
+  proposed biochemical pathway/process.
+- Use metabolite Name, Class, Top_rank, Priority_level, and pathway evidence to decide
+  which metabolites are true anchors.
+- Prefer early-ranked high-priority metabolites, but do not choose a metabolite solely
+  because it is highly ranked if it is generic or weakly related to the central
+  interpretation.
+- Choose anchors that directly define the pathway, substrate class, enzymatic step,
+  chemical transformation, or biological source/theme of the hypothesis.
 - anchor_top_ids and tension_top_ids MUST be selected only from the Top_ID values in the
   provided Top metabolites list. Return exact Top_ID strings such as \"T1\"; do not return
   metabolite names in these fields. Class-level metabolites, pathway members, or other
@@ -1251,6 +1259,13 @@ Rules:
            NOT shorten a well-supported specific pathway name into a broader parent process
            solely for brevity. Avoid compound titles that simply join unrelated pathway names
            with \"and\".
+           Revised anchor_top_ids should identify metabolites that are central to the
+           revised biochemical pathway/process. Use metabolite Name, Class, Top_rank,
+           Priority_level, and pathway evidence to decide true anchors. Prefer early-ranked
+           high-priority metabolites, but do not choose a metabolite solely because it is
+           highly ranked if it is generic or weakly related to the revised interpretation.
+           Choose anchors that directly define the pathway, substrate class, enzymatic step,
+           chemical transformation, or biological source/theme of the revised hypothesis.
            Revised anchor_top_ids and revised_tension_top_ids MUST be selected only
            from the Top_ID values in the module's Top metabolites list. Return exact
            Top_ID strings such as \"T1\"; do not return metabolite names in these fields.

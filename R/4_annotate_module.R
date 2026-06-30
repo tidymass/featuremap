@@ -56,6 +56,11 @@
 #'         annotation fields. Fast mode includes \code{annotation_mode = "fast"}.
 #'         Advanced mode includes \code{anchor_metabolites} and
 #'         \code{verdict_status} when available.
+#'   \item \code{module_top_metabolites}: data frame with one row per selected
+#'         top metabolite used as LLM annotation input, including
+#'         \code{Compound_ID} (InChI identifier), \code{HMDB_ID},
+#'         \code{KEGG_ID}, \code{top_rank}, \code{priority_level},
+#'         \code{weighted_score}, \code{Importance}, and \code{Robustness}.
 #'   \item \code{module_evidence}: compact module-level evidence table with class
 #'         names, core drivers, origin fractions, global direction, and top
 #'         pathway summaries.
@@ -63,9 +68,6 @@
 #'         fields separated from the main annotation table.
 #'   \item \code{module_debate_trace}: raw LLM response fields separated from the
 #'         main annotation table; advanced mode also includes debate trace fields.
-#'   \item \code{module_top_metabolite_pmids}: compact PubMed evidence export
-#'         with \code{module_id}, \code{pubmed_pmids}, and
-#'         \code{pubmed_evidence_json}.
 #'   \item \code{module_synthesis}: optional list created when
 #'         \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
 #'         hypothesis nodes, thematic clusters, sparse and completed
@@ -183,7 +185,7 @@ annotate_module <- function(res                  = NULL,
       out[[nm]] <- out[[paste0(nm, ".kegg")]]
     out %>%
       dplyr::mutate(
-        Compound_ID   = dplyr::coalesce(HMDB_ID, KEGG_ID),
+        Compound_ID   = INCHI_ID,
         Compound_name = dplyr::coalesce(Compound_name, name)
       ) %>%
       dplyr::select(-dplyr::matches("\\.(hmdb|kegg)$"))
@@ -217,7 +219,8 @@ annotate_module <- function(res                  = NULL,
     main_cols <- c(
       "module_id", "annotation_mode", "hypothesis_id", "hypothesis_type",
       "verdict_status", "title", "functional_summary", "anchor_metabolites",
-      "class_names", "phenotype_relationship", "confidence_label", "rationale",
+      "top_metabolites", "class_names", "phenotype_relationship",
+      "confidence_label", "rationale",
       "global_direction", "origin_endogenous_frac",
       "origin_exogenous_frac", "top_kegg_pathways", "top_hmdb_pathways",
       "pubmed_pmids"
@@ -264,6 +267,61 @@ annotate_module <- function(res                  = NULL,
       module_pubmed_evidence = module_pubmed_evidence,
       module_debate_trace    = module_debate_trace
     )
+  }
+
+  build_module_top_metabolites <- function(module_list_top) {
+    if (is.null(module_list_top) || length(module_list_top) == 0) {
+      return(tibble::tibble())
+    }
+
+    out <- purrr::imap_dfr(module_list_top, function(df, module_key) {
+      if (is.null(df) || !is.data.frame(df) || nrow(df) == 0) {
+        return(tibble::tibble())
+      }
+
+      df <- tibble::as_tibble(df)
+      if (!"Compound_ID" %in% colnames(df)) {
+        if ("INCHI_ID" %in% colnames(df)) {
+          df <- dplyr::mutate(df, Compound_ID = INCHI_ID)
+        } else {
+          df$Compound_ID <- NA_character_
+        }
+      }
+      if (!"Module" %in% colnames(df)) df$Module <- module_key
+
+      keep_cols <- c(
+        "Module", "top_rank", "Compound_ID", "Compound_name", "class",
+        "priority_level", "weighted_score", "Importance", "Robustness",
+        "INCHI_ID", "HMDB_ID", "KEGG_ID", "Type", "Node_freq"
+      )
+      dplyr::select(df, dplyr::any_of(keep_cols))
+    })
+
+    if (nrow(out) == 0) {
+      return(out)
+    }
+
+    out %>%
+      dplyr::rename(module_id = Module) %>%
+      dplyr::arrange(module_id, top_rank)
+  }
+
+  summarize_top_metabolites <- function(module_top_metabolites) {
+    if (is.null(module_top_metabolites) ||
+        !is.data.frame(module_top_metabolites) ||
+        nrow(module_top_metabolites) == 0) {
+      return(tibble::tibble(module_id = character(), top_metabolites = character()))
+    }
+
+    module_top_metabolites %>%
+      dplyr::mutate(
+        top_label = dplyr::coalesce(as.character(Compound_name), "NA")
+      ) %>%
+      dplyr::group_by(module_id) %>%
+      dplyr::summarise(
+        top_metabolites = paste(top_label, collapse = "; "),
+        .groups = "drop"
+      )
   }
 
   # ---- Validate input ------------------------------------------------------
@@ -337,7 +395,7 @@ annotate_module <- function(res                  = NULL,
     dplyr::mutate(
       .module_order = match(Module, module_levels),
       Robustness    = Node_freq,
-      Compound_ID   = dplyr::coalesce(HMDB_ID, KEGG_ID)
+      Compound_ID   = INCHI_ID
     ) %>%
     dplyr::filter(Module %in% sig_modules, Use_for_annotation) %>%
     dplyr::arrange(.module_order, desc(Importance), desc(Robustness), Type) %>%
@@ -349,7 +407,7 @@ annotate_module <- function(res                  = NULL,
       "No modules passed the {.val {p}} < {.val {pcutoff}} threshold."
     )
     res$module_function            <- tibble::tibble()
-    res$module_top_metabolite_pmids <- tibble::tibble()
+    res$module_top_metabolites     <- tibble::tibble()
     res$module_evidence            <- tibble::tibble()
     res$module_pubmed_evidence     <- tibble::tibble()
     res$module_debate_trace        <- tibble::tibble()
@@ -410,6 +468,8 @@ annotate_module <- function(res                  = NULL,
 
     dplyr::slice_head(module2, n = topN)
   })
+  module_top_metabolites <- build_module_top_metabolites(module_list_top)
+  top_metabolite_summary <- summarize_top_metabolites(module_top_metabolites)
 
   # ---- Class-level structure (all metabolites, for prompt) -----------------
   module_class <- purrr::imap(module_list, ~ {
@@ -520,9 +580,6 @@ annotate_module <- function(res                  = NULL,
     "Pathway coverage computed; {.val {n_pathways_found}} pathway hits across all modules."
   )
 
-  # ---- PubMed info (per-module search is deferred to LLM annotation) -------
-  res$module_top_metabolite_pmids <- tibble::tibble()
-
   # ---- Prepare module objects for LLM annotation ---------------------------
   all_modules_ready <- lapply(
     seq_along(module_list_top),
@@ -565,6 +622,7 @@ annotate_module <- function(res                  = NULL,
   if (length(all_modules_ready) == 0) {
     cli::cli_alert_warning("No modules available for LLM annotation.")
     res$module_function <- tibble::tibble()
+    res$module_top_metabolites <- module_top_metabolites
     res$module_evidence <- tibble::tibble()
     res$module_pubmed_evidence <- tibble::tibble()
     res$module_debate_trace <- tibble::tibble()
@@ -609,15 +667,22 @@ annotate_module <- function(res                  = NULL,
   }
 
   tidy_results <- tidy_module_annotation_outputs(all_results)
+  res$module_top_metabolites <- module_top_metabolites
   res$module_function        <- tidy_results$module_function
-  res$module_evidence        <- tidy_results$module_evidence
+  if (nrow(res$module_function) > 0 &&
+      nrow(top_metabolite_summary) > 0 &&
+      "module_id" %in% colnames(res$module_function)) {
+    res$module_function <- res$module_function %>%
+      dplyr::select(-dplyr::any_of("top_metabolites")) %>%
+      dplyr::left_join(top_metabolite_summary, by = "module_id") %>%
+      dplyr::relocate(
+        dplyr::any_of("top_metabolites"),
+        .after = dplyr::any_of("anchor_metabolites")
+      )
+  }
   res$module_pubmed_evidence <- tidy_results$module_pubmed_evidence
   res$module_debate_trace    <- tidy_results$module_debate_trace
-
-  if ("pubmed_evidence_json" %in% colnames(all_results)) {
-    res$module_top_metabolite_pmids <-
-      all_results[, c("module_id", "pubmed_pmids", "pubmed_evidence_json"), drop = FALSE]
-  }
+  res$module_evidence        <- tidy_results$module_evidence
 
   if (isTRUE(synthesize) && !identical(mode, "advanced")) {
     cli::cli_alert_warning(

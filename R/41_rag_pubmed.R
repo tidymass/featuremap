@@ -722,6 +722,35 @@ build_module_phenotype_query <- function(module_title,
   paste(query_parts, collapse = " AND ")
 }
 
+build_module_biochemical_context_query <- function(module_title,
+                                                   years = 5) {
+  title_term <- sprintf('"%s"[Title/Abstract]', trimws(module_title))
+
+  context_part <- paste(
+    c(
+      '"Metabolism"[MeSH Terms]',
+      '"Metabolic Networks and Pathways"[MeSH Terms]',
+      '"metabolism"[Title/Abstract]',
+      '"metabolic"[Title/Abstract]',
+      '"pathway"[Title/Abstract]',
+      '"biosynthesis"[Title/Abstract]',
+      '"catabolism"[Title/Abstract]',
+      '"enzyme"[Title/Abstract]',
+      '"biochemical"[Title/Abstract]'
+    ),
+    collapse = " OR "
+  )
+
+  start_year <- as.numeric(format(Sys.Date(), "%Y")) - years
+  year_part  <- sprintf("(%d:%d[pdat])",
+                        start_year, as.numeric(format(Sys.Date(), "%Y")))
+
+  paste(sprintf("(%s)", title_term),
+        sprintf("(%s)", context_part),
+        year_part,
+        sep = " AND ")
+}
+
 
 #' Search PubMed for Module-Level Phenotype Evidence (Fast Mode)
 #'
@@ -785,11 +814,13 @@ search_pubmed_for_module <- function(module_title,
 }
 
 
-#' Search PubMed Evidence for a Module and All Top Metabolites
+#' Search PubMed Evidence for Module Annotation
 #'
-#' Searches the module title and every top metabolite name separately, keeping
-#' up to \code{retmax_per_query} articles per search term. Results are merged
-#' and deduplicated by PMID before being passed to LLM Call 2.
+#' First searches the module title and top metabolite names with the study
+#' phenotype. If that phenotype-specific search retrieves no PMID, it falls
+#' back to a module-title-only biochemical context query with metabolism and
+#' pathway constraints. Results are deduplicated by PMID before being passed to
+#' LLM Call 2.
 #'
 #' @param module_title Character or NULL. Module or hypothesis title.
 #' @param top_metabolite_names Character vector or NULL. Top metabolite names.
@@ -798,8 +829,9 @@ search_pubmed_for_module <- function(module_title,
 #' @param retmax_per_query Integer. Maximum records to retrieve for each query.
 #' @param years Numeric. Publication year look-back window.
 #'
-#' @return A list with query, pmids, titles, abstracts, source_type, and
-#'   source_term vectors.
+#' @return A list with query, pmids, titles, abstracts, source_type,
+#'   source_term, and evidence_scope vectors. \code{evidence_scope} is either
+#'   \code{"phenotype_evidence"} or \code{"biochemical_context"}.
 search_pubmed_for_annotation_evidence <- function(module_title,
                                                   top_metabolite_names = NULL,
                                                   phenotype            = NULL,
@@ -816,6 +848,7 @@ search_pubmed_for_annotation_evidence <- function(module_title,
   module_terms <- clean_terms(module_title)
   if (length(module_terms) > 1) module_terms <- module_terms[1]
   metabolite_terms <- clean_terms(top_metabolite_names)
+  has_phenotype <- length(clean_terms(phenotype)) > 0
 
   source_parts <- list()
   if (length(module_terms) > 0) {
@@ -840,10 +873,36 @@ search_pubmed_for_annotation_evidence <- function(module_title,
   if (nrow(sources) == 0) {
     return(list(query = character(0), pmids = character(0),
                 titles = character(0), abstracts = character(0),
-                source_type = character(0), source_term = character(0)))
+                source_type = character(0), source_term = character(0),
+                evidence_scope = character(0)))
   }
 
-  hits <- lapply(seq_len(nrow(sources)), function(i) {
+  empty_hit_df <- function() {
+    data.frame(
+      query = character(0), pmid = character(0), title = character(0),
+      abstract = character(0), source_type = character(0),
+      source_term = character(0), evidence_scope = character(0),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  result_to_df <- function(res, src, evidence_scope) {
+    n <- min(length(res$pmids), length(res$titles), length(res$abstracts))
+    if (n == 0) return(empty_hit_df())
+
+    data.frame(
+      query          = rep(res$query %||% NA_character_, n),
+      pmid           = as.character(res$pmids[seq_len(n)]),
+      title          = as.character(res$titles[seq_len(n)]),
+      abstract       = as.character(res$abstracts[seq_len(n)]),
+      source_type    = rep(src$source_type, n),
+      source_term    = rep(src$source_term, n),
+      evidence_scope = rep(evidence_scope, n),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  strict_hits <- if (has_phenotype) lapply(seq_len(nrow(sources)), function(i) {
     src <- sources[i, , drop = FALSE]
     res <- search_pubmed_for_module(
       module_title         = src$source_term,
@@ -854,43 +913,64 @@ search_pubmed_for_annotation_evidence <- function(module_title,
       years                = years
     )
 
-    n <- min(length(res$pmids), length(res$titles), length(res$abstracts))
-    if (n == 0) {
-      return(data.frame(
-        query = character(0), pmid = character(0), title = character(0),
-        abstract = character(0), source_type = character(0),
-        source_term = character(0), stringsAsFactors = FALSE
-      ))
+    result_to_df(res, src, "phenotype_evidence")
+  }) else list()
+
+  hit_df <- if (length(strict_hits) > 0) do.call(rbind, strict_hits) else empty_hit_df()
+
+  if (is.null(hit_df) || nrow(hit_df) == 0) {
+    if (length(module_terms) > 0) {
+      query <- build_module_biochemical_context_query(module_terms[1], years = years)
+      pmids <- search_pubmed(query, retmax = retmax_per_query, NCBI_api_key = NCBI_api_key)
+      recs <- if (length(pmids) > 0) {
+        tryCatch(
+          fetch_pubmed_records(pmids, NCBI_api_key = NCBI_api_key),
+          error = function(e) list(titles = character(0), abstracts = character(0))
+        )
+      } else {
+        list(titles = character(0), abstracts = character(0))
+      }
+      fallback_res <- list(
+        query = query,
+        pmids = pmids,
+        titles = recs$titles %||% character(0),
+        abstracts = recs$abstracts %||% character(0)
+      )
+      hit_df <- result_to_df(
+        fallback_res,
+        data.frame(source_type = "module_title",
+                   source_term = module_terms[1],
+                   stringsAsFactors = FALSE),
+        "biochemical_context"
+      )
     }
+  }
 
-    data.frame(
-      query       = rep(res$query %||% NA_character_, n),
-      pmid        = as.character(res$pmids[seq_len(n)]),
-      title       = as.character(res$titles[seq_len(n)]),
-      abstract    = as.character(res$abstracts[seq_len(n)]),
-      source_type = rep(src$source_type, n),
-      source_term = rep(src$source_term, n),
-      stringsAsFactors = FALSE
-    )
-  })
-
-  hit_df <- do.call(rbind, hits)
   if (is.null(hit_df) || nrow(hit_df) == 0) {
     return(list(query = character(0), pmids = character(0),
                 titles = character(0), abstracts = character(0),
-                source_type = character(0), source_term = character(0)))
+                source_type = character(0), source_term = character(0),
+                evidence_scope = character(0)))
   }
 
   hit_df <- hit_df[!is.na(hit_df$pmid) & nzchar(hit_df$pmid), , drop = FALSE]
   hit_df <- hit_df[!duplicated(hit_df$pmid), , drop = FALSE]
 
+  if (nrow(hit_df) == 0) {
+    return(list(query = character(0), pmids = character(0),
+                titles = character(0), abstracts = character(0),
+                source_type = character(0), source_term = character(0),
+                evidence_scope = character(0)))
+  }
+
   list(
-    query       = hit_df$query,
-    pmids       = hit_df$pmid,
-    titles      = hit_df$title,
-    abstracts   = hit_df$abstract,
-    source_type = hit_df$source_type,
-    source_term = hit_df$source_term
+    query          = hit_df$query,
+    pmids          = hit_df$pmid,
+    titles         = hit_df$title,
+    abstracts      = hit_df$abstract,
+    source_type    = hit_df$source_type,
+    source_term    = hit_df$source_term,
+    evidence_scope = hit_df$evidence_scope
   )
 }
 
@@ -905,6 +985,7 @@ pubmed_evidence_to_df <- function(pubmed_context, hypothesis_id = NA_character_)
       source_type = character(0),
       source_term = character(0),
       query = character(0),
+      evidence_scope = character(0),
       stringsAsFactors = FALSE
     )
 
@@ -926,6 +1007,7 @@ pubmed_evidence_to_df <- function(pubmed_context, hypothesis_id = NA_character_)
       source_type   = get_field("source_type", NA_character_),
       source_term   = get_field("source_term", NA_character_),
       query         = get_field("query", NA_character_),
+      evidence_scope = get_field("evidence_scope", NA_character_),
       stringsAsFactors = FALSE
     )
   }

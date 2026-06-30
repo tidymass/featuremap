@@ -37,12 +37,13 @@ flatten_pubmed_for_one_module <- function(pubmed_list_for_module) {
 #' PubMed functional summaries, then selects and orders relevant columns.
 #'
 #' @param module_top_df A data frame containing the top metabolites with columns:
-#'   top_rank, Compound_ID, Compound_name, class, priority_level
+#'   top_rank, Compound_ID, Compound_name, class, priority_level, and optional
+#'   INCHI_ID, HMDB_ID, KEGG_ID
 #' @param pubmed_top_df A data frame containing PubMed data with columns:
 #'   HMDB_ID, functional_summary
 #'
 #' @return A tibble with columns ordered as: top_rank, Compound_ID, Compound_name,
-#'   class, priority_level, functional_summary
+#'   class, priority_level, optional identifier columns, and functional_summary
 #'
 #' @details The left join ensures all metabolites from module_top_df are retained,
 #'   even if they don't have corresponding PubMed data.
@@ -50,12 +51,10 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
   module_top_df %>%
     left_join(pubmed_top_df, by = "Compound_ID") %>%
     dplyr::select(
-      top_rank,
-      Compound_ID,
-      Compound_name,
-      class,
-      priority_level,
-      functional_summary
+      dplyr::any_of(c(
+        "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
+        "Compound_name", "class", "priority_level", "functional_summary"
+      ))
     )
 }
 
@@ -374,12 +373,12 @@ compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
 
 #' Check Whether Top Metabolites Are Dominated by Generic Cofactors
 #'
-#' Matches the topN metabolite Compound_IDs against a predefined list of
+#' Matches the topN metabolite HMDB/KEGG IDs against a predefined list of
 #' ubiquitous energy/redox cofactors (ATP, ADP, NAD+, CoA, etc.) that should
 #' not serve as primary annotation anchors.
 #'
 #' @param topN_df Data frame of top metabolites from prepare_module(). Must
-#'   contain a Compound_ID column.
+#'   contain HMDB_ID/KEGG_ID columns for database-ID matching.
 #' @param hmdb_ids Character vector of HMDB IDs considered generic anchors.
 #'   Defaults to the package-level .FEATUREMAP_GENERIC_ANCHOR_HMDB list.
 #' @param kegg_ids Character vector of KEGG IDs considered generic anchors.
@@ -388,7 +387,7 @@ compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
 #' @return A named list:
 #'   \item{has_generic}{Logical. TRUE if any topN metabolite is generic.}
 #'   \item{generic_names}{Character vector of generic metabolite names found.}
-#'   \item{generic_ids}{Character vector of matched generic Compound_IDs.}
+#'   \item{generic_ids}{Character vector of matched generic HMDB/KEGG IDs.}
 #'   \item{n_generic}{Integer. Count of generic metabolites in topN.}
 #'   \item{n_top}{Integer. Total size of topN.}
 compute_generic_anchor_flags <- function(
@@ -405,11 +404,26 @@ compute_generic_anchor_flags <- function(
   )
 
   if (is.null(topN_df) || !is.data.frame(topN_df) || nrow(topN_df) == 0) return(na_result)
-  if (!"Compound_ID" %in% colnames(topN_df)) return(na_result)
+  if (!any(c("Compound_ID", "HMDB_ID", "KEGG_ID") %in% colnames(topN_df))) return(na_result)
 
-  ids   <- trimws(as.character(topN_df$Compound_ID))
-  n_top <- length(ids)
-  is_gen <- ids %in% hmdb_ids | ids %in% kegg_ids
+  clean_ids <- function(x) {
+    x <- trimws(as.character(x))
+    x[is.na(x)] <- ""
+    x
+  }
+
+  n_top <- nrow(topN_df)
+  hmdb <- if ("HMDB_ID" %in% colnames(topN_df)) {
+    clean_ids(topN_df$HMDB_ID)
+  } else {
+    rep("", n_top)
+  }
+  kegg <- if ("KEGG_ID" %in% colnames(topN_df)) {
+    clean_ids(topN_df$KEGG_ID)
+  } else {
+    rep("", n_top)
+  }
+  is_gen <- hmdb %in% hmdb_ids | kegg %in% kegg_ids
   n_gen  <- sum(is_gen)
 
   generic_names <- character(0)
@@ -421,7 +435,7 @@ compute_generic_anchor_flags <- function(
   list(
     has_generic   = n_gen > 0L,
     generic_names = generic_names,
-    generic_ids   = ids[is_gen],
+    generic_ids   = unique(c(hmdb[hmdb %in% hmdb_ids], kegg[kegg %in% kegg_ids])),
     n_generic     = as.integer(n_gen),
     n_top         = as.integer(n_top)
   )
@@ -436,7 +450,7 @@ compute_generic_anchor_flags <- function(
 #'
 #' A top metabolite is classified as an isolated outlier when it satisfies
 #' ALL three conditions simultaneously:
-#'   (1) Its Compound_ID is absent from the member set of the top
+#'   (1) Its HMDB_ID is absent from the member set of the top
 #'       \code{top_n_pathways} HMDB pathways (by hit count) for this module.
 #'   (2) It cannot be mapped via \code{module_df} to a KEGG ID present in
 #'       the top \code{top_n_pathways} KEGG pathways.
@@ -448,7 +462,7 @@ compute_generic_anchor_flags <- function(
 #' biology, and should not dominate LLM annotation without corroboration.
 #'
 #' @param topN_df Data frame of top metabolites with at least Compound_ID,
-#'   Compound_name, and class columns.
+#'   HMDB_ID, KEGG_ID, Compound_name, and class columns when available.
 #' @param module_df Data frame of the full module containing HMDB_ID and
 #'   KEGG_ID columns.  Used to look up KEGG IDs for topN members and to
 #'   supply the full KEGG ID set for pathway ranking.  Pass NULL to skip
@@ -487,10 +501,30 @@ compute_isolated_outliers <- function(
   )
 
   if (is.null(topN_df) || !is.data.frame(topN_df) || nrow(topN_df) == 0) return(na_result)
-  if (!"Compound_ID" %in% colnames(topN_df)) return(na_result)
+  if (!any(c("Compound_ID", "HMDB_ID", "KEGG_ID") %in% colnames(topN_df))) return(na_result)
 
-  top_ids <- trimws(as.character(topN_df$Compound_ID))
-  n_top   <- length(top_ids)
+  clean_ids <- function(x) {
+    x <- trimws(as.character(x))
+    x[is.na(x)] <- ""
+    x
+  }
+
+  n_top <- nrow(topN_df)
+  top_ids <- if ("Compound_ID" %in% colnames(topN_df)) {
+    clean_ids(topN_df$Compound_ID)
+  } else {
+    rep("", n_top)
+  }
+  top_hmdb_ids <- if ("HMDB_ID" %in% colnames(topN_df)) {
+    clean_ids(topN_df$HMDB_ID)
+  } else {
+    rep("", n_top)
+  }
+  top_kegg_ids <- if ("KEGG_ID" %in% colnames(topN_df)) {
+    clean_ids(topN_df$KEGG_ID)
+  } else {
+    rep("", n_top)
+  }
 
   # ---- Inner helper: IDs that appear in the top-N hit pathways ----
   get_top_pathway_members <- function(pathway_db, query_ids, id_col) {
@@ -515,13 +549,14 @@ compute_isolated_outliers <- function(
     unique(as.character(mem[!is.na(mem) & nzchar(as.character(mem))]))
   }
 
-  # ---- HMDB membership (Compound_IDs are HMDB IDs in the standard setup) ----
-  top_hmdb_members <- get_top_pathway_members(pathway_hmdb, top_ids, "HMDB_ID")
+  # ---- HMDB membership ----
+  top_hmdb_members <- get_top_pathway_members(pathway_hmdb, top_hmdb_ids, "HMDB_ID")
 
   # ---- KEGG membership ----
-  # Map topN HMDB IDs → KEGG IDs via module_df for per-metabolite check.
+  # Map topN HMDB IDs → KEGG IDs via module_df for per-metabolite check when
+  # topN_df does not already carry KEGG_ID.
   # Use the full module KEGG ID set to rank which KEGG pathways are "top".
-  top_kegg_for_top <- rep("", n_top)
+  top_kegg_for_top <- top_kegg_ids
   kegg_module_ids  <- character(0)
 
   if (!is.null(module_df) && is.data.frame(module_df) &&
@@ -531,9 +566,11 @@ compute_isolated_outliers <- function(
       as.character(module_df$KEGG_ID),
       as.character(module_df$HMDB_ID)
     )
-    mapped <- hmdb2kegg[top_ids]
-    mapped[is.na(mapped)] <- ""
-    top_kegg_for_top <- as.character(mapped)
+    if (!any(nzchar(top_kegg_for_top))) {
+      mapped <- hmdb2kegg[top_hmdb_ids]
+      mapped[is.na(mapped)] <- ""
+      top_kegg_for_top <- as.character(mapped)
+    }
 
     kegg_module_ids <- unique(as.character(module_df$KEGG_ID[
       !is.na(module_df$KEGG_ID) & nzchar(as.character(module_df$KEGG_ID))]))
@@ -634,12 +671,10 @@ prepare_module <- function(
 
   module_topN <- module_list_top[[k]]
   if (!"Compound_ID" %in% colnames(module_topN)) {
-    if ("HMDB_ID" %in% colnames(module_topN)) {
-      module_topN <- module_topN %>% dplyr::rename(Compound_ID = HMDB_ID)
-    } else if ("KEGG_ID" %in% colnames(module_topN)) {
-      module_topN <- module_topN %>% dplyr::rename(Compound_ID = KEGG_ID)
+    if ("INCHI_ID" %in% colnames(module_topN)) {
+      module_topN <- module_topN %>% dplyr::mutate(Compound_ID = INCHI_ID)
     } else {
-      colnames(module_topN)[3] = "Compound_ID"
+      module_topN$Compound_ID <- NA_character_
     }
   }
   module_id <- unique(module_topN$Module)
@@ -661,11 +696,10 @@ prepare_module <- function(
 
       module_topN_merged <- module_topN %>%
         dplyr::select(
-          top_rank,
-          Compound_ID,
-          Compound_name,
-          class,
-          priority_level
+          dplyr::any_of(c(
+            "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
+            "Compound_name", "class", "priority_level"
+          ))
         ) %>%
         mutate(functional_summary = NA_character_)
     }
@@ -673,11 +707,10 @@ prepare_module <- function(
   } else {
     module_topN_merged <- module_topN %>%
       dplyr::select(
-        top_rank,
-        Compound_ID,
-        Compound_name,
-        class,
-        priority_level
+        dplyr::any_of(c(
+          "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
+          "Compound_name", "class", "priority_level"
+        ))
       ) %>%
       mutate(functional_summary = NA_character_)
   }

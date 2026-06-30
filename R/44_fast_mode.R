@@ -244,9 +244,11 @@ You will receive:
 - Module type, title, and functional summary from prior biochemical analysis
 - Origin profile: proportions of endogenous, exogenous, and unknown-origin metabolites
 - Study context: species, biospecimen, phenotype
-- Literature evidence: PubMed abstracts retrieved by searching the module title,
-  anchor metabolites (key metabolites identified in Call 1), and phenotype
-  (may be absent if pubmed = FALSE or no papers were found)
+- Literature evidence: PubMed abstracts retrieved in two scopes:
+  phenotype_evidence is retrieved using the study phenotype and may support
+  phenotype_relationship; biochemical_context is retrieved using the module title
+  with metabolism/pathway constraints and supports biochemical plausibility only.
+  Evidence may be absent if pubmed = FALSE or no papers were found.
 
 Definitions:
 - Endogenous: metabolites documented as produced by the host organism.
@@ -257,7 +259,12 @@ Return three fields:
 
 1) PHENOTYPE_RELATIONSHIP
    - Write 2-4 sentences summarizing how the module's metabolites relate to the study phenotype,
-     based on the provided PubMed evidence when available.
+     based primarily on phenotype_evidence when available.
+   - Use biochemical_context evidence only to judge whether the biochemical annotation is
+     plausible. Do NOT treat biochemical_context evidence as direct phenotype support.
+   - If only biochemical_context evidence is available, explicitly state that direct
+     phenotype-specific PubMed evidence is lacking; any phenotype relationship must be
+     cautious, mechanistic, and labeled as inferred.
    - If phenotype is provided but PubMed evidence is absent or insufficient, you MAY infer a
      cautious phenotype relationship from general biochemical knowledge. When doing so,
      explicitly state that the relationship is inferred and lacks sufficient direct literature support.
@@ -271,9 +278,9 @@ Return three fields:
    Scoring rules:
    - High: Strong module evidence AND adequate phenotype/literature support. Top metabolites,
      annotation type, class/pathway evidence, species, biospecimen, and available
-     phenotype/literature evidence are coherent. High confidence requires at least indirect
-     PubMed support; if no PubMed evidence is retrieved or the evidence is insufficient,
-     confidence_label must not be high.
+     phenotype/literature evidence are coherent. High confidence requires phenotype_evidence
+     support; if no phenotype_evidence is retrieved or the evidence is insufficient,
+     confidence_label must not be high solely because biochemical_context evidence exists.
    - Medium: Reasonable module interpretation, but with partial evidence, indirect pathway
      support, incomplete explanation, limited literature support, or minor limitations.
    - Low: Weak but still useful interpretation. Evidence is sparse, indirect, partly unresolved,
@@ -298,7 +305,8 @@ Return STRICT JSON only:
   \"rationale\": \"2-3 sentences.\"
 }}
 
-Do not invent PubMed support or claim direct literature evidence when it is not provided."
+Do not invent PubMed support or claim direct phenotype evidence when only biochemical_context
+evidence is provided."
   )
 }
 
@@ -384,17 +392,18 @@ build_phenotype_confidence_prompt <- function(module_obj,
       pmid <- trimws(as.character(ctx_value("pmids", i, "NA")))
       src_type <- trimws(as.character(ctx_value("source_type", i, "unknown")))
       src_term <- trimws(as.character(ctx_value("source_term", i, "NA")))
+      ev_scope <- trimws(as.character(ctx_value("evidence_scope", i, "unknown")))
       # Truncate abstract to 800 chars to keep prompt manageable
       if (nchar(abs) > 800) abs <- paste0(substr(abs, 1, 800), "...")
       if (!nzchar(ttl) && !nzchar(abs)) return(NA_character_)
-      sprintf("[%d] PMID: %s\n    Source: %s (%s)\n    Title: %s\n    Abstract excerpt: %s",
-              i, pmid, src_type, src_term, ttl, abs)
+      sprintf("[%d] PMID: %s\n    Evidence scope: %s\n    Source: %s (%s)\n    Title: %s\n    Abstract excerpt: %s",
+              i, pmid, ev_scope, src_type, src_term, ttl, abs)
     }, character(1))
     paper_blocks <- paper_blocks[!is.na(paper_blocks)]
 
     if (length(paper_blocks) > 0) {
       lit_text <- paste0(
-        "Literature evidence (PubMed, deduplicated by PMID after module title and top metabolite searches):\n",
+        "Literature evidence (PubMed, deduplicated by PMID; evidence_scope distinguishes phenotype_evidence from biochemical_context):\n",
         paste(paper_blocks, collapse = "\n\n")
       )
     } else {

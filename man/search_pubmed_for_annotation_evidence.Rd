@@ -2,7 +2,7 @@
 % Please edit documentation in R/41_rag_pubmed.R
 \name{search_pubmed_for_annotation_evidence}
 \alias{search_pubmed_for_annotation_evidence}
-\title{Search PubMed Evidence for a Module and All Top Metabolites}
+\title{Search PubMed Evidence for Module Annotation}
 \usage{
 search_pubmed_for_annotation_evidence(
   module_title,
@@ -27,11 +27,14 @@ search_pubmed_for_annotation_evidence(
 \item{years}{Numeric. Publication year look-back window.}
 }
 \value{
-A list with query, pmids, titles, abstracts, source_type, and
-source_term vectors.
+A list with query, pmids, titles, abstracts, source_type,
+source_term, and evidence_scope vectors. \code{evidence_scope} is either
+\code{"phenotype_evidence"} or \code{"biochemical_context"}.
 }
 \description{
-Searches the module title and every top metabolite name separately, keeping
-up to \code{retmax_per_query} articles per search term. Results are merged
-and deduplicated by PMID before being passed to LLM Call 2.
+First searches the module title and top metabolite names with the study
+phenotype. If that phenotype-specific search retrieves no PMID, it falls
+back to a module-title-only biochemical context query with metabolism and
+pathway constraints. Results are deduplicated by PMID before being passed to
+LLM Call 2.
 }

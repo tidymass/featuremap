@@ -1401,6 +1401,9 @@ Phenotype evidence rule:
   you MAY infer a cautious phenotype relationship from general biochemical knowledge.
   When doing so, explicitly state that the relationship is inferred and lacks sufficient
   direct literature support.
+- Phenotype summaries based only on biochemical_context evidence are not direct phenotype
+  support. They may support biochemical plausibility, but should not by themselves raise
+  phenotype confidence or justify high confidence.
 - If phenotype is not provided, do NOT infer a phenotype relationship.
 
 Recovery rule (when all hypotheses were dropped in debate):
@@ -1504,11 +1507,10 @@ The following are the ORIGINAL proposed hypotheses for your consideration:
 # SECTION 7 – PubMed orchestration for advanced mode
 # ============================================================
 
-# Two-layer PubMed search strategy:
-#   Layer 1 (shared): all unique anchor metabolites + phenotype — called ONCE.
-#   Layer 2 (per-hypothesis): hypothesis title + phenotype — one call per hypothesis.
-#   Anchor records are assigned only to hypotheses that use the matching anchors, then
-#   merged with per-hypothesis title evidence and deduplicated by PMID.
+# Two-scope PubMed search strategy:
+#   First, search hypothesis title + anchor metabolites with the study phenotype.
+#   If no phenotype evidence is found, search the hypothesis title only with
+#   metabolism/pathway constraints for biochemical context.
 #
 # Searching and summarizing are kept separate:
 #   search_pubmed_advanced()              → fetches raw PubMed evidence per hypothesis
@@ -1521,83 +1523,30 @@ search_pubmed_advanced <- function(hypotheses_final,
 
   if (length(hypotheses_final) == 0) return(list())
 
-  clean_terms <- function(x) {
-    if (is.null(x) || length(x) == 0) return(character(0))
-    x <- unique(trimws(as.character(unlist(x, use.names = FALSE))))
-    x[!is.na(x) & nzchar(x) & x != "NA"]
-  }
-
-  # Layer 1: search all unique anchors once, then assign matching source_terms
-  # back to each hypothesis below.
-  all_anchor_names <- clean_terms(lapply(hypotheses_final, function(h) h$anchor_metabolites))
-  shared_anchors <- tryCatch(
-    search_pubmed_for_annotation_evidence(
-      module_title         = NULL,
-      top_metabolite_names = all_anchor_names,
-      phenotype            = phenotype,
-      NCBI_api_key         = NCBI_api_key,
-      retmax_per_query     = retmax_per_query,
-      years                = years
-    ),
-    error = function(e) NULL
-  )
-
-  filter_pubmed_by_source_term <- function(evidence, terms) {
-    terms <- clean_terms(terms)
-    if (is.null(evidence) || length(evidence$pmids) == 0 || length(terms) == 0) {
-      return(list(pmids = character(0), titles = character(0),
-                  abstracts = character(0), source_type = character(0),
-                  source_term = character(0)))
-    }
-    n <- min(length(evidence$pmids), length(evidence$titles), length(evidence$abstracts))
-    if (n == 0) {
-      return(list(pmids = character(0), titles = character(0),
-                  abstracts = character(0), source_type = character(0),
-                  source_term = character(0)))
-    }
-    source_term <- if (!is.null(evidence$source_term)) {
-      as.character(evidence$source_term[seq_len(n)])
-    } else {
-      rep("", n)
-    }
-    keep <- tolower(trimws(source_term)) %in% tolower(terms)
-    if (!any(keep, na.rm = TRUE)) {
-      return(list(pmids = character(0), titles = character(0),
-                  abstracts = character(0), source_type = character(0),
-                  source_term = character(0)))
-    }
-    list(
-      pmids       = as.character(evidence$pmids[seq_len(n)][keep]),
-      titles      = as.character(evidence$titles[seq_len(n)][keep]),
-      abstracts   = as.character(evidence$abstracts[seq_len(n)][keep]),
-      source_type = if (!is.null(evidence$source_type)) {
-        as.character(evidence$source_type[seq_len(n)][keep])
-      } else {
-        rep("unknown", sum(keep))
-      },
-      source_term = source_term[keep]
-    )
-  }
-
-  # Layer 2: per-hypothesis title search + merge with that hypothesis's anchor records.
   per_hyp <- lapply(hypotheses_final, function(h) {
     title <- if (!is.null(h$title) && nzchar(h$title)) h$title else NULL
-    hyp_specific <- if (!is.null(title)) {
-      tryCatch(
-        search_pubmed_for_annotation_evidence(
-          module_title         = title,
-          top_metabolite_names = NULL,
-          phenotype            = phenotype,
-          NCBI_api_key         = NCBI_api_key,
-          retmax_per_query     = retmax_per_query,
-          years                = years
-        ),
-        error = function(e) NULL
-      )
-    } else NULL
-
-    hyp_anchor_evidence <- filter_pubmed_by_source_term(shared_anchors, h$anchor_metabolites)
-    adv_merge_pubmed(hyp_specific, hyp_anchor_evidence)
+    if (is.null(title)) {
+      return(list(pmids = character(0), titles = character(0),
+                  abstracts = character(0), source_type = character(0),
+                  source_term = character(0), query = character(0),
+                  evidence_scope = character(0)))
+    }
+    tryCatch(
+      search_pubmed_for_annotation_evidence(
+        module_title         = title,
+        top_metabolite_names = h$anchor_metabolites,
+        phenotype            = phenotype,
+        NCBI_api_key         = NCBI_api_key,
+        retmax_per_query     = retmax_per_query,
+        years                = years
+      ),
+      error = function(e) {
+        list(pmids = character(0), titles = character(0),
+             abstracts = character(0), source_type = character(0),
+             source_term = character(0), query = character(0),
+             evidence_scope = character(0))
+      }
+    )
   })
   names(per_hyp) <- sapply(hypotheses_final, `[[`, "hypothesis_id")
   per_hyp
@@ -1616,6 +1565,8 @@ adv_merge_pubmed <- function(a, b) {
       abstract    = as.character(x$abstracts[seq_len(n)]),
       source_type = if (!is.null(x$source_type)) as.character(x$source_type[seq_len(n)]) else rep("unknown", n),
       source_term = if (!is.null(x$source_term)) as.character(x$source_term[seq_len(n)]) else rep("", n),
+      query = if (!is.null(x$query)) as.character(x$query[seq_len(n)]) else rep(NA_character_, n),
+      evidence_scope = if (!is.null(x$evidence_scope)) as.character(x$evidence_scope[seq_len(n)]) else rep(NA_character_, n),
       stringsAsFactors = FALSE
     )
   }
@@ -1623,14 +1574,18 @@ adv_merge_pubmed <- function(a, b) {
   combined <- rbind(da, db)
   if (is.null(combined) || nrow(combined) == 0)
     return(list(pmids = character(0), titles = character(0),
-                abstracts = character(0), source_type = character(0), source_term = character(0)))
+                abstracts = character(0), source_type = character(0),
+                source_term = character(0), query = character(0),
+                evidence_scope = character(0)))
   combined <- combined[!duplicated(combined$pmid), , drop = FALSE]
   list(
     pmids       = combined$pmid,
     titles      = combined$title,
     abstracts   = combined$abstract,
     source_type = combined$source_type,
-    source_term = combined$source_term
+    source_term = combined$source_term,
+    query = combined$query,
+    evidence_scope = combined$evidence_scope
   )
 }
 
@@ -1641,11 +1596,20 @@ build_pubmed_relationship_system_prompt <- function() {
 Your task is to summarize how one biochemical hypothesis relates to the study phenotype,
 based ONLY on the PubMed evidence provided.
 
+Evidence scope:
+- phenotype_evidence: retrieved using the study phenotype; may support phenotype_relationship.
+- biochemical_context: retrieved without the phenotype, using the hypothesis/module title plus
+  metabolism/pathway constraints; supports biochemical plausibility only.
+
 Return one field:
 
 PHENOTYPE_RELATIONSHIP
 - Write 2-4 sentences summarizing how the hypothesis metabolites or pathway relate to the
-  study phenotype, based ONLY on the provided PubMed abstracts.
+  study phenotype, based primarily on phenotype_evidence abstracts.
+- Do NOT use biochemical_context abstracts as direct phenotype support.
+- If only biochemical_context evidence is available, state that direct phenotype-specific
+  PubMed evidence is lacking; any phenotype relationship must be cautious, mechanistic,
+  and explicitly labeled as inferred.
 - If no PubMed evidence is available or relevant, write exactly:
   \"Insufficient literature evidence to establish phenotype relationship.\"
 - Do NOT speculate beyond what is explicitly stated in the abstracts.
@@ -1678,10 +1642,31 @@ build_pubmed_relationship_user_prompt <- function(hypothesis,
              length(pubmed_evidence$abstracts))
     papers <- vapply(seq_len(n), function(i) {
       abs <- trimws(as.character(pubmed_evidence$abstracts[i]))
+      scope <- if (!is.null(pubmed_evidence$evidence_scope) &&
+                   length(pubmed_evidence$evidence_scope) >= i) {
+        pubmed_evidence$evidence_scope[i]
+      } else {
+        "unknown"
+      }
+      src_type <- if (!is.null(pubmed_evidence$source_type) &&
+                      length(pubmed_evidence$source_type) >= i) {
+        pubmed_evidence$source_type[i]
+      } else {
+        "unknown"
+      }
+      src_term <- if (!is.null(pubmed_evidence$source_term) &&
+                      length(pubmed_evidence$source_term) >= i) {
+        pubmed_evidence$source_term[i]
+      } else {
+        "NA"
+      }
       # Truncate abstract to 800 chars to keep prompt manageable
       if (nchar(abs) > 800) abs <- paste0(substr(abs, 1, 800), "...")
-      sprintf("  [PMID:%s] %s\n    %s",
+      sprintf("  [PMID:%s] Evidence scope: %s; Source: %s (%s)\n    %s\n    %s",
               pubmed_evidence$pmids[i],
+              scope,
+              src_type,
+              src_term,
               pubmed_evidence$titles[i],
               abs)
     }, character(1))

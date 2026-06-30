@@ -96,18 +96,10 @@ The input \code{res} object updated with:
 or accepted hypothesis, containing the compact user-facing annotation fields.
 Fast mode includes \code{annotation_mode = "fast"}. Advanced mode includes
 \code{anchor_metabolites} and \code{verdict_status} when available.
-\item \code{module_top_metabolites}: data frame with one row per selected
-top metabolite used as LLM annotation input, including \code{Compound_ID}
-(InChI identifier), \code{HMDB_ID}, \code{KEGG_ID}, \code{top_rank},
-\code{priority_level}, \code{weighted_score}, \code{Importance}, and
-\code{Robustness}.
-\item \code{module_evidence}: compact module-level evidence table with class
-names, core drivers, origin fractions, global direction, and top pathway
-summaries.
-\item \code{module_pubmed_evidence}: PubMed and phenotype-literature evidence
-fields separated from the main annotation table.
-\item \code{module_debate_trace}: raw LLM response fields separated from the
-main annotation table; advanced mode also includes debate trace fields.
+\item \code{module_evidence}: list of computed evidence tables used for
+annotation, with components \code{class_coverage},
+\code{pathway_coverage$hmdb}, \code{pathway_coverage$kegg},
+\code{pubmed_evidence}, \code{top_metabolites}, and \code{debate_trace}.
 \item \code{module_synthesis}: optional list created when
 \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
 hypothesis nodes, thematic clusters, sparse and completed

@@ -183,7 +183,8 @@ compute_global_direction <- function(module_df, feature_table, anno_feature_tabl
 #'   (default: 3).
 #'
 #' @return A named list with components \code{hmdb} and \code{kegg}, each a
-#'   tibble with columns pathway_name, n_hit, n_metabolites, coverage.
+#'   tibble with columns pathway_id, pathway_name, n_hit, n_metabolites,
+#'   coverage.
 #'   Empty tibble when the database is unavailable or no hits are found.
 compute_pathway_coverage <- function(module_df,
                                      pathway_hmdb = NULL,
@@ -213,10 +214,10 @@ compute_pathway_coverage <- function(module_df,
 
     agg <- merge(agg, pathway_sizes, by = "pathway_id", all.x = TRUE)
     agg$coverage <- round(agg$n_hit / pmax(agg$n_metabolites, 1L), 3)
-    agg <- agg[order(-agg$n_hit, -agg$coverage), , drop = FALSE]
+    agg <- agg[order(-agg$coverage, -agg$n_hit), , drop = FALSE]
     agg <- agg[seq_len(min(top_n, nrow(agg))), , drop = FALSE]
-    tibble::as_tibble(agg[, c("pathway_name", "n_hit", "n_metabolites", "coverage"),
-                          drop = FALSE])
+    tibble::as_tibble(agg[, c("pathway_id", "pathway_name", "n_hit",
+                              "n_metabolites", "coverage"), drop = FALSE])
   }
 
   hmdb_ids <- unique(module_df$HMDB_ID[

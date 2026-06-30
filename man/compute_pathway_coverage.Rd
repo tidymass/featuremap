@@ -30,12 +30,12 @@ skip.}
 }
 \value{
 A named list with components \code{hmdb} and \code{kegg}, each a
-tibble with columns pathway_name, n_hit, n_metabolites, coverage.
+tibble with columns pathway_id, pathway_name, n_hit, n_metabolites, coverage.
 Empty tibble when the database is unavailable or no hits are found.
 }
 \description{
 For each pathway database (HMDB and KEGG), counts how many module
 metabolites appear in each pathway and computes the hit/total coverage
-fraction.  Returns the top \code{top_n} pathways sorted by hit count then
-coverage.
+fraction.  Returns the top \code{top_n} pathways sorted by coverage then
+hit count.
 }

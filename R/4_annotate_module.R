@@ -56,18 +56,11 @@
 #'         annotation fields. Fast mode includes \code{annotation_mode = "fast"}.
 #'         Advanced mode includes \code{anchor_metabolites} and
 #'         \code{verdict_status} when available.
-#'   \item \code{module_top_metabolites}: data frame with one row per selected
-#'         top metabolite used as LLM annotation input, including
-#'         \code{Compound_ID} (InChI identifier), \code{HMDB_ID},
-#'         \code{KEGG_ID}, \code{top_rank}, \code{priority_level},
-#'         \code{weighted_score}, \code{Importance}, and \code{Robustness}.
-#'   \item \code{module_evidence}: compact module-level evidence table with class
-#'         names, core drivers, origin fractions, global direction, and top
-#'         pathway summaries.
-#'   \item \code{module_pubmed_evidence}: PubMed and phenotype-literature evidence
-#'         fields separated from the main annotation table.
-#'   \item \code{module_debate_trace}: raw LLM response fields separated from the
-#'         main annotation table; advanced mode also includes debate trace fields.
+#'   \item \code{module_evidence}: list of computed evidence tables used for
+#'         annotation, with components \code{class_coverage},
+#'         \code{pathway_coverage$hmdb}, \code{pathway_coverage$kegg},
+#'         \code{pubmed_evidence}, \code{top_metabolites}, and
+#'         \code{debate_trace}.
 #'   \item \code{module_synthesis}: optional list created when
 #'         \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
 #'         hypothesis nodes, thematic clusters, sparse and completed
@@ -204,7 +197,6 @@ annotate_module <- function(res                  = NULL,
       empty <- tibble::tibble()
       return(list(
         module_function        = empty,
-        module_evidence        = empty,
         module_pubmed_evidence = empty,
         module_debate_trace    = empty
       ))
@@ -226,12 +218,6 @@ annotate_module <- function(res                  = NULL,
       "pubmed_pmids"
     )
 
-    evidence_cols <- c(
-      "module_id", "class_names", "global_direction",
-      "origin_endogenous_frac", "origin_exogenous_frac",
-      "top_kegg_pathways", "top_hmdb_pathways"
-    )
-
     pubmed_cols <- c(
       "module_id", "hypothesis_id", "pubmed_pmids", "pubmed_evidence_json",
       "all_pubmed_json", "phenotype_literature_support",
@@ -248,8 +234,6 @@ annotate_module <- function(res                  = NULL,
     )
 
     module_function <- select_existing(all_results, main_cols)
-    module_evidence <- select_existing(all_results, evidence_cols) %>%
-      dplyr::distinct()
     module_pubmed_evidence <- select_existing(all_results, pubmed_cols) %>%
       dplyr::distinct()
 
@@ -263,7 +247,6 @@ annotate_module <- function(res                  = NULL,
 
     list(
       module_function        = module_function,
-      module_evidence        = module_evidence,
       module_pubmed_evidence = module_pubmed_evidence,
       module_debate_trace    = module_debate_trace
     )
@@ -322,6 +305,90 @@ annotate_module <- function(res                  = NULL,
         top_metabolites = paste(top_label, collapse = "; "),
         .groups = "drop"
       )
+  }
+
+  empty_module_evidence <- function() {
+    list(
+      class_coverage = tibble::tibble(),
+      pathway_coverage = list(
+        hmdb = tibble::tibble(),
+        kegg = tibble::tibble()
+      ),
+      pubmed_evidence = tibble::tibble(),
+      top_metabolites = tibble::tibble(),
+      debate_trace = tibble::tibble()
+    )
+  }
+
+  build_class_coverage <- function(module_class) {
+    if (is.null(module_class) || length(module_class) == 0) {
+      return(tibble::tibble())
+    }
+
+    out <- purrr::imap_dfr(module_class, function(df, module_id) {
+      if (is.null(df) || !is.data.frame(df) || nrow(df) == 0) {
+        return(tibble::tibble())
+      }
+      tibble::as_tibble(df) %>%
+        dplyr::mutate(module_id = as.character(module_id)) %>%
+        dplyr::rename(class_fraction = n_metabolites) %>%
+        dplyr::select(module_id, class, class_fraction,
+                      dplyr::any_of(c("metabolites", "Compound_IDs",
+                                      "priority_level")))
+    })
+
+    if (nrow(out) == 0) {
+      return(out)
+    }
+
+    out %>% dplyr::arrange(module_id, dplyr::desc(class_fraction), class)
+  }
+
+  build_pathway_coverage_tables <- function(pathway_coverage_list) {
+    make_one <- function(db) {
+      if (is.null(pathway_coverage_list) || length(pathway_coverage_list) == 0) {
+        return(tibble::tibble())
+      }
+      out <- purrr::imap_dfr(pathway_coverage_list, function(pc, module_id) {
+        df <- pc[[db]] %||% tibble::tibble()
+        if (is.null(df) || !is.data.frame(df) || nrow(df) == 0) {
+          return(tibble::tibble())
+        }
+        tibble::as_tibble(df) %>%
+          dplyr::mutate(module_id = as.character(module_id)) %>%
+          dplyr::select(module_id,
+                        dplyr::any_of(c("pathway_id", "pathway_name",
+                                        "coverage", "n_hit",
+                                        "n_metabolites")))
+      })
+
+      if (nrow(out) == 0) {
+        return(out)
+      }
+
+      out %>%
+        dplyr::arrange(module_id, dplyr::desc(coverage),
+                       dplyr::desc(n_hit), pathway_name)
+    }
+
+    list(
+      hmdb = make_one("hmdb"),
+      kegg = make_one("kegg")
+    )
+  }
+
+  build_module_evidence <- function(module_class,
+                                    pathway_coverage_list,
+                                    pubmed_evidence,
+                                    top_metabolites,
+                                    debate_trace) {
+    list(
+      class_coverage = build_class_coverage(module_class),
+      pathway_coverage = build_pathway_coverage_tables(pathway_coverage_list),
+      pubmed_evidence = pubmed_evidence %||% tibble::tibble(),
+      top_metabolites = top_metabolites %||% tibble::tibble(),
+      debate_trace = debate_trace %||% tibble::tibble()
+    )
   }
 
   # ---- Validate input ------------------------------------------------------
@@ -407,10 +474,7 @@ annotate_module <- function(res                  = NULL,
       "No modules passed the {.val {p}} < {.val {pcutoff}} threshold."
     )
     res$module_function            <- tibble::tibble()
-    res$module_top_metabolites     <- tibble::tibble()
-    res$module_evidence            <- tibble::tibble()
-    res$module_pubmed_evidence     <- tibble::tibble()
-    res$module_debate_trace        <- tibble::tibble()
+    res$module_evidence            <- empty_module_evidence()
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
   }
@@ -622,10 +686,13 @@ annotate_module <- function(res                  = NULL,
   if (length(all_modules_ready) == 0) {
     cli::cli_alert_warning("No modules available for LLM annotation.")
     res$module_function <- tibble::tibble()
-    res$module_top_metabolites <- module_top_metabolites
-    res$module_evidence <- tibble::tibble()
-    res$module_pubmed_evidence <- tibble::tibble()
-    res$module_debate_trace <- tibble::tibble()
+    res$module_evidence <- build_module_evidence(
+      module_class          = module_class,
+      pathway_coverage_list = pathway_coverage_list,
+      pubmed_evidence       = tibble::tibble(),
+      top_metabolites       = module_top_metabolites,
+      debate_trace          = tibble::tibble()
+    )
     res <- set_featuremap_stage(res, "module_annotated")
     return(res)
   }
@@ -667,7 +734,6 @@ annotate_module <- function(res                  = NULL,
   }
 
   tidy_results <- tidy_module_annotation_outputs(all_results)
-  res$module_top_metabolites <- module_top_metabolites
   res$module_function        <- tidy_results$module_function
   if (nrow(res$module_function) > 0 &&
       nrow(top_metabolite_summary) > 0 &&
@@ -680,9 +746,13 @@ annotate_module <- function(res                  = NULL,
         .after = dplyr::any_of("anchor_metabolites")
       )
   }
-  res$module_pubmed_evidence <- tidy_results$module_pubmed_evidence
-  res$module_debate_trace    <- tidy_results$module_debate_trace
-  res$module_evidence        <- tidy_results$module_evidence
+  res$module_evidence <- build_module_evidence(
+    module_class          = module_class,
+    pathway_coverage_list = pathway_coverage_list,
+    pubmed_evidence       = tidy_results$module_pubmed_evidence,
+    top_metabolites       = module_top_metabolites,
+    debate_trace          = tidy_results$module_debate_trace
+  )
 
   if (isTRUE(synthesize) && !identical(mode, "advanced")) {
     cli::cli_alert_warning(

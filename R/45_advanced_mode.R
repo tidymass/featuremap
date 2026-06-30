@@ -173,8 +173,10 @@ build_skeptic_module_evidence <- function(module_obj) {
   # Top metabolites (all annotation-selected top metabolites).
   top_df <- module_obj$topN_metabolites
   if (!is.null(top_df) && nrow(top_df) > 0) {
+    top_df <- add_top_ids(top_df)
     top_lines <- apply(top_df, 1, function(r) {
-      sprintf("  %s. %s [%s; class: %s]",
+      sprintf("  %s (rank %s): %s [%s; class: %s]",
+              scalar(r[["top_id"]]),
               scalar(r[["top_rank"]]),
               scalar(r[["Compound_name"]]),
               scalar(r[["priority_level"]]),
@@ -356,11 +358,22 @@ format_hypotheses_compact <- function(hypotheses) {
 # Used by all agents. No claim field (removed from pipeline).
 format_hypotheses_full <- function(hypotheses) {
   if (length(hypotheses) == 0) return("(no hypotheses)")
+  fmt_ref <- function(ids, names) {
+    ids <- ids %||% character(0)
+    names <- names %||% character(0)
+    n <- max(length(ids), length(names), 0L)
+    if (n == 0) return("none listed")
+    ids <- ids[seq_len(n)]
+    names <- names[seq_len(n)]
+    vals <- ifelse(!is.na(ids) & nzchar(ids),
+                   paste0(ids, ": ", names),
+                   names)
+    vals <- vals[!is.na(vals) & nzchar(vals)]
+    if (length(vals) == 0) "none listed" else paste(vals, collapse = ", ")
+  }
   blocks <- lapply(hypotheses, function(h) {
-    anc <- if (length(h$anchor_metabolites) > 0)
-      paste(h$anchor_metabolites, collapse = ", ") else "none listed"
-    ten <- if (length(h$tension_metabolites) > 0)
-      paste(h$tension_metabolites, collapse = ", ") else "none listed"
+    anc <- fmt_ref(h$anchor_top_ids, h$anchor_metabolites)
+    ten <- fmt_ref(h$tension_top_ids, h$tension_metabolites)
     typ <- h$type %||% "not specified"
     if (is.na(typ) || !nzchar(typ)) typ <- "not specified"
     glue::glue(
@@ -400,11 +413,17 @@ apply_revisions <- function(hypotheses, revisions) {
         h$title   <- rev$revised_title
       if (!is.null(rev$revised_summary) && nzchar(rev$revised_summary))
         h$summary <- rev$revised_summary
-      if (!is.null(rev$revised_anchor_metabolites) &&
-          length(rev$revised_anchor_metabolites) > 0)
-        h$anchor_metabolites  <- rev$revised_anchor_metabolites
-      if (!is.null(rev$revised_tension_metabolites))
-        h$tension_metabolites <- rev$revised_tension_metabolites
+      if (!is.null(rev$revised_anchor_top_ids) &&
+          length(rev$revised_anchor_top_ids) > 0) {
+        h$anchor_top_ids        <- rev$revised_anchor_top_ids
+        h$anchor_metabolites    <- rev$revised_anchor_metabolites
+        h$anchor_metabolite_ids <- rev$revised_anchor_metabolite_ids
+      }
+      if (!is.null(rev$revised_tension_top_ids)) {
+        h$tension_top_ids        <- rev$revised_tension_top_ids
+        h$tension_metabolites    <- rev$revised_tension_metabolites
+        h$tension_metabolite_ids <- rev$revised_tension_metabolite_ids
+      }
     }
     result[[length(result) + 1]] <- h
   }
@@ -412,28 +431,6 @@ apply_revisions <- function(hypotheses, revisions) {
 }
 
 # Parse Proposer output into a clean list of hypothesis objects.
-adv_top_metabolite_names <- function(module_obj) {
-  top_df <- module_obj$topN_metabolites
-  if (is.null(top_df) || !is.data.frame(top_df) || nrow(top_df) == 0 ||
-      !"Compound_name" %in% colnames(top_df)) {
-    return(character(0))
-  }
-  unique(trimws(as.character(top_df$Compound_name)))
-}
-
-restrict_to_top_metabolites <- function(x, valid_metabolites = NULL) {
-  if (is.null(x)) return(character(0))
-  x <- unique(trimws(as.character(x)))
-  x <- x[nzchar(x)]
-  if (is.null(valid_metabolites) || length(valid_metabolites) == 0) return(x)
-
-  valid_metabolites <- unique(trimws(as.character(valid_metabolites)))
-  valid_metabolites <- valid_metabolites[nzchar(valid_metabolites)]
-  valid_key <- stats::setNames(valid_metabolites, tolower(valid_metabolites))
-  matched <- valid_key[tolower(x)]
-  unique(unname(matched[!is.na(matched)]))
-}
-
 normalize_hypothesis_type <- function(x) {
   allowed <- c(
     "Host-Endogenous",
@@ -464,7 +461,7 @@ normalize_hypothesis_type <- function(x) {
   NA_character_
 }
 
-parse_proposer_output <- function(parsed, valid_metabolites = NULL) {
+parse_proposer_output <- function(parsed, top_df = NULL) {
   if (is.null(parsed)) return(NULL)
   hyps_raw <- parsed$hypotheses
   if (is.null(hyps_raw) || length(hyps_raw) == 0) return(NULL)
@@ -476,17 +473,27 @@ parse_proposer_output <- function(parsed, valid_metabolites = NULL) {
   }
 
   out <- lapply(hyps_raw, function(h) {
+    anchors <- resolve_top_metabolite_refs(
+      top_ids = h$anchor_top_ids,
+      top_df  = top_df,
+      ref_type = "anchor"
+    )
+    tensions <- resolve_top_metabolite_refs(
+      top_ids = h$tension_top_ids,
+      top_df  = top_df,
+      ref_type = "tension"
+    )
     list(
       hypothesis_id        = trimws(as.character(h$hypothesis_id %||% "H?")),
       type                 = normalize_hypothesis_type(h$type %||% NA_character_),
       title                = trimws(as.character(h$title         %||% "")),
       summary              = trimws(as.character(h$summary       %||% "")),
-      anchor_metabolites   = restrict_to_top_metabolites(
-        ensure_char_vec(h$anchor_metabolites), valid_metabolites
-      ),
-      tension_metabolites  = restrict_to_top_metabolites(
-        ensure_char_vec(h$tension_metabolites), valid_metabolites
-      )
+      anchor_top_ids       = anchors$top_ids,
+      anchor_metabolites   = anchors$names,
+      anchor_metabolite_ids = anchors$compound_ids,
+      tension_top_ids      = tensions$top_ids,
+      tension_metabolites  = tensions$names,
+      tension_metabolite_ids = tensions$compound_ids
     )
   })
   clean_hypotheses(out)
@@ -556,7 +563,7 @@ parse_skeptic_output <- function(parsed, valid_hypothesis_ids = NULL) {
 # Parse Proposer revision output into a clean list of revision objects.
 parse_revision_output <- function(parsed,
                                   valid_hypothesis_ids = NULL,
-                                  valid_metabolites = NULL) {
+                                  top_df = NULL) {
   if (is.null(parsed)) return(list())
   revs_raw <- parsed$revisions
   if (is.null(revs_raw) || length(revs_raw) == 0) return(list())
@@ -570,6 +577,16 @@ parse_revision_output <- function(parsed,
   out <- lapply(revs_raw, function(r) {
     revised_type <- normalize_hypothesis_type(r$revised_type %||% NA_character_)
     if (is.na(revised_type)) revised_type <- ""
+    anchors <- resolve_top_metabolite_refs(
+      top_ids = r$revised_anchor_top_ids,
+      top_df  = top_df,
+      ref_type = "anchor"
+    )
+    tensions <- resolve_top_metabolite_refs(
+      top_ids = r$revised_tension_top_ids,
+      top_df  = top_df,
+      ref_type = "tension"
+    )
     list(
       hypothesis_id               = trimws(as.character(r$hypothesis_id %||% "")),
       action                      = trimws(tolower(as.character(r$action %||% "keep"))),
@@ -577,12 +594,12 @@ parse_revision_output <- function(parsed,
       revised_type                = revised_type,
       revised_title               = trimws(as.character(r$revised_title %||% "")),
       revised_summary             = trimws(as.character(r$revised_summary %||% "")),
-      revised_anchor_metabolites  = restrict_to_top_metabolites(
-        ensure_char_vec(r$revised_anchor_metabolites), valid_metabolites
-      ),
-      revised_tension_metabolites = restrict_to_top_metabolites(
-        ensure_char_vec(r$revised_tension_metabolites), valid_metabolites
-      )
+      revised_anchor_top_ids        = anchors$top_ids,
+      revised_anchor_metabolites    = anchors$names,
+      revised_anchor_metabolite_ids = anchors$compound_ids,
+      revised_tension_top_ids       = tensions$top_ids,
+      revised_tension_metabolites   = tensions$names,
+      revised_tension_metabolite_ids = tensions$compound_ids
     )
   })
   Filter(function(r) {
@@ -956,7 +973,7 @@ make plausible evidence-grounded proposals and expose anchors and tensions clear
 
 You will receive:
 - Signal_concentration (high | medium | low): whether importance is concentrated in a few metabolites
-- Top metabolites: rank, name, chemical class, priority_level
+- Top metabolites: Top_ID, rank, name, chemical class, priority_level
 - Class-level structure: class name, proportion of module, metabolite names, priority_level
 - Pathway evidence from KEGG and HMDB
 
@@ -977,9 +994,9 @@ For each hypothesis provide:
 2. type          : one of the five origin/scope types below
 3. title         : KEGG-style pathway/process name (see title rules below)
 4. summary       : 4-6 sentences describing the biochemical mechanism (see summary rules below)
-5. anchor_metabolites  : metabolite names that STRONGLY support this hypothesis
-6. tension_metabolites : optional metabolite names that materially conflict with, or remain
-                         difficult to explain under, this hypothesis
+5. anchor_top_ids  : Top_ID values for metabolites that STRONGLY support this hypothesis
+6. tension_top_ids : optional Top_ID values for metabolites that materially conflict with,
+                     or remain difficult to explain under, this hypothesis
 
 Type rules:
    - Choose exactly one:
@@ -1039,12 +1056,14 @@ Summary rules:
 
 Rules:
 - Every hypothesis must be anchored by at least one high-priority metabolite
-- anchor_metabolites and tension_metabolites MUST be selected only from the provided Top
-  metabolites list. Class-level metabolites, pathway members, or other non-top metabolites
-  may be used only as supporting context in the summary, not as anchors or tensions.
-- anchor_metabolites should be as non-overlapping as the data allow; if two hypotheses rely on
+- anchor_top_ids and tension_top_ids MUST be selected only from the Top_ID values in the
+  provided Top metabolites list. Return exact Top_ID strings such as \"T1\"; do not return
+  metabolite names in these fields. Class-level metabolites, pathway members, or other
+  non-top metabolites may be used only as supporting context in the summary, not as
+  anchors or tensions.
+- anchor_top_ids should be as non-overlapping as the data allow; if two hypotheses rely on
   the same central anchor, they are probably not separate hypotheses
-- tension_metabolites should be empty unless a metabolite creates a real biochemical conflict
+- tension_top_ids should be empty unless a metabolite creates a real biochemical conflict
   with the proposed mechanism. Do NOT list peripheral or merely non-central metabolites as
   tensions simply because they are not part of the main pathway.
 - Do NOT reference study phenotype or disease
@@ -1060,8 +1079,8 @@ Return STRICT JSON only:
       \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
       \"title\": \"...\",
       \"summary\": \"...\",
-      \"anchor_metabolites\": [\"...\"],
-      \"tension_metabolites\": [\"...\"]
+      \"anchor_top_ids\": [\"T1\", \"T2\"],
+      \"tension_top_ids\": [\"T5\"]
     }}
   ]
 }}"
@@ -1221,7 +1240,7 @@ Rules:
            misread the module evidence; in that case, cite the specific metabolite, class,
            or pathway evidence that makes the challenge invalid.
 - modify : revise P0-generated content to address reasonable Skeptic challenges; provide
-           updated type, title, summary, anchor_metabolites, and tension_metabolites.
+           updated type, title, summary, anchor_top_ids, and tension_top_ids.
            A modification must change
            either the type, title, OR the mechanism text — renaming alone is not valid.
            Choose a standardized KEGG/HMDB-style title at the most specific level supported
@@ -1232,11 +1251,11 @@ Rules:
            NOT shorten a well-supported specific pathway name into a broader parent process
            solely for brevity. Avoid compound titles that simply join unrelated pathway names
            with \"and\".
-           Revised anchor_metabolites and revised_tension_metabolites MUST be selected only
-           from the current hypotheses' top-metabolite-derived anchors/tensions or from the
-           module's Top metabolites list. Do NOT promote class-level or other non-top
-           metabolites into anchors or tensions.
-           Remove tension_metabolites when they are merely peripheral rather than genuinely
+           Revised anchor_top_ids and revised_tension_top_ids MUST be selected only
+           from the Top_ID values in the module's Top metabolites list. Return exact
+           Top_ID strings such as \"T1\"; do not return metabolite names in these fields.
+           Do NOT promote class-level or other non-top metabolites into anchors or tensions.
+           Remove tension_top_ids when they are merely peripheral rather than genuinely
            conflicting with the revised mechanism.
            If a major challenge is valid, modify is the default action: change the title,
            summary, anchors, or tensions so the revised hypothesis no longer depends on the
@@ -1267,8 +1286,8 @@ Return STRICT JSON only:
       \"revised_type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
       \"revised_title\": \"...\",
       \"revised_summary\": \"...\",
-      \"revised_anchor_metabolites\": [\"...\"],
-      \"revised_tension_metabolites\": [\"...\"]
+      \"revised_anchor_top_ids\": [\"T1\"],
+      \"revised_tension_top_ids\": [\"T5\"]
     }}
   ]
 }}"
@@ -1855,11 +1874,11 @@ adv_gemini_schema_proposer <- function() {
             ),
             title               = list(type = "STRING"),
             summary             = list(type = "STRING"),
-            anchor_metabolites  = list(type = "ARRAY", items = list(type = "STRING")),
-            tension_metabolites = list(type = "ARRAY", items = list(type = "STRING"))
+            anchor_top_ids      = list(type = "ARRAY", items = list(type = "STRING")),
+            tension_top_ids     = list(type = "ARRAY", items = list(type = "STRING"))
           ),
           required = c("hypothesis_id", "type", "title", "summary",
-                       "anchor_metabolites", "tension_metabolites")
+                       "anchor_top_ids", "tension_top_ids")
         )
       )
     ),
@@ -1911,9 +1930,9 @@ adv_gemini_schema_revision <- function() {
             ),
             revised_title               = list(type = "STRING"),
             revised_summary             = list(type = "STRING"),
-            revised_anchor_metabolites  = list(type = "ARRAY",
+            revised_anchor_top_ids      = list(type = "ARRAY",
                                                items = list(type = "STRING")),
-            revised_tension_metabolites = list(type = "ARRAY",
+            revised_tension_top_ids     = list(type = "ARRAY",
                                                items = list(type = "STRING"))
           ),
           required = c("hypothesis_id", "action", "justification")
@@ -2068,6 +2087,12 @@ assemble_advanced_output_row <- function(module_obj,
     anchors  <- hobj$anchor_metabolites %||% character(0)
     anchors  <- unique(trimws(as.character(anchors)))
     anchors  <- anchors[!is.na(anchors) & nzchar(anchors)]
+    anchor_top_ids <- hobj$anchor_top_ids %||% character(0)
+    anchor_top_ids <- unique(trimws(as.character(anchor_top_ids)))
+    anchor_top_ids <- anchor_top_ids[!is.na(anchor_top_ids) & nzchar(anchor_top_ids)]
+    anchor_ids <- hobj$anchor_metabolite_ids %||% character(0)
+    anchor_ids <- unique(trimws(as.character(anchor_ids)))
+    anchor_ids <- anchor_ids[!is.na(anchor_ids) & nzchar(anchor_ids)]
     data.frame(
       module_id                  = mid,
       hypothesis_id              = hid,
@@ -2075,7 +2100,9 @@ assemble_advanced_output_row <- function(module_obj,
       verdict_status             = v$status %||% NA_character_,
       title                      = hobj$title   %||% NA_character_,
       functional_summary         = hobj$summary %||% NA_character_,
+      anchor_top_ids             = if (length(anchor_top_ids) > 0) paste(anchor_top_ids, collapse = "; ") else NA_character_,
       anchor_metabolites         = if (length(anchors) > 0) paste(anchors, collapse = "; ") else NA_character_,
+      anchor_metabolite_ids      = if (length(anchor_ids) > 0) paste(anchor_ids, collapse = "; ") else NA_character_,
       phenotype_relationship     = hyp_rel$phenotype_relationship %||%
         v$phenotype_relationship %||% NA_character_,
       phenotype_literature_support = hyp_rel$literature_support %||% NA_character_,
@@ -2151,7 +2178,9 @@ assemble_advanced_output_row <- function(module_obj,
       verdict_status             = "rejected",
       title                      = NA_character_,
       functional_summary         = NA_character_,
+      anchor_top_ids             = NA_character_,
       anchor_metabolites         = NA_character_,
+      anchor_metabolite_ids      = NA_character_,
       phenotype_relationship     = module_rel$phenotype_relationship %||% NA_character_,
       phenotype_literature_support = module_rel$literature_support %||% NA_character_,
       phenotype_evidence_note    = module_rel$evidence_note %||% NA_character_,
@@ -2244,7 +2273,7 @@ annotate_one_module_advanced <- function(module_obj,
   # ----------------------------------------------------------------
   skeptic_evidence <- build_skeptic_module_evidence(module_obj)
   context_block    <- build_context_block(module_obj, study_context)
-  valid_top_metabolites <- adv_top_metabolite_names(module_obj)
+  top_metabolite_df <- module_obj$topN_metabolites
 
   # ----------------------------------------------------------------
   # P0 – Proposer: initial hypothesis generation
@@ -2274,7 +2303,7 @@ annotate_one_module_advanced <- function(module_obj,
 
   hypotheses_v0 <- parse_proposer_output(
     p0_res$parsed,
-    valid_metabolites = valid_top_metabolites
+    top_df = top_metabolite_df
   )
 
   if (is.null(hypotheses_v0) || length(hypotheses_v0) == 0) {
@@ -2353,7 +2382,7 @@ annotate_one_module_advanced <- function(module_obj,
   p1_revisions      <- parse_revision_output(
     p1_res$parsed,
     valid_hypothesis_ids = hids_v0,
-    valid_metabolites = valid_top_metabolites
+    top_df = top_metabolite_df
   )
   hypotheses_after_r1 <- apply_revisions(hypotheses_v0, p1_revisions)
 
@@ -2430,7 +2459,7 @@ annotate_one_module_advanced <- function(module_obj,
     p2_revisions     <- parse_revision_output(
       p2_res$parsed,
       valid_hypothesis_ids = hids_r1,
-      valid_metabolites = valid_top_metabolites
+      top_df = top_metabolite_df
     )
     hypotheses_final <- apply_revisions(hypotheses_after_r1, p2_revisions)
   }

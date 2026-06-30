@@ -27,7 +27,7 @@ Your task is to name and summarize one dysregulated metabolic module from an omi
 
 For each module, you will receive:
 - Module-level label: Signal_concentration (high | medium | low)
-- Top metabolites: rank, metabolite name, chemical class, Priority_level
+- Top metabolites: Top_ID, rank, metabolite name, chemical class, Priority_level
 - Module classes: class name, member metabolite names, proportion, Priority_level
 - Pathway evidence from KEGG and HMDB databases
 
@@ -35,7 +35,7 @@ Definitions:
 - Signal_concentration: whether phenotype-associated Importance is concentrated in a few metabolites (high) or distributed across many metabolites (low).
 - Priority_level: interpretation priority within the module; early-ranked high-priority metabolites should anchor the main interpretation.
 
-Using only the provided information, return three fields:
+Using only the provided information, return four fields:
 
 1) TYPE
    - Choose exactly one:
@@ -82,19 +82,18 @@ Using only the provided information, return three fields:
    - Do NOT reference module-level statistics (Signal_concentration).
    - Mention secondary signals only briefly at the end if needed.
 
-4) ANCHOR_METABOLITES
-   - List 2-5 metabolites that most strongly anchor the module interpretation.
-   - Choose from the provided top metabolites, prioritising early-ranked high-priority ones.
-   - These will be used for literature retrieval; prefer metabolites with established names
-     (avoid generic class names).
-   - Return as a JSON array of strings.
+4) ANCHOR_TOP_IDS
+   - List 2-5 Top_ID values for metabolites that most strongly anchor the module interpretation.
+   - Choose only from the Top_ID values shown in the provided top metabolites list,
+     prioritising early-ranked high-priority metabolites.
+   - Return exact Top_ID strings such as \"T1\"; do not return metabolite names in this field.
 
 Return STRICT JSON only:
 {{
   \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
   \"title\": \"...\",
   \"functional_summary\": \"...\",
-  \"anchor_metabolites\": [\"metabolite1\", \"metabolite2\"]
+  \"anchor_top_ids\": [\"T1\", \"T2\"]
 }}
 
 Do not invent metabolites, unsupported pathways, or unsupported mechanisms."
@@ -128,6 +127,7 @@ build_module_prompt <- function(module_obj) {
   if (is.null(top_df) || !is.data.frame(top_df) || nrow(top_df) == 0) {
     top_text <- "NA (no top metabolites available)"
   } else {
+    top_df <- add_top_ids(top_df)
     if (!"functional_summary" %in% colnames(top_df)) {
       top_df$functional_summary <- NA_character_
     }
@@ -136,6 +136,7 @@ build_module_prompt <- function(module_obj) {
       row <- as.list(row)
       glue::glue(
         "Metabolite (top):
+- Top_ID: {scalar_text(row$top_id)}
 - Top_rank: {scalar_text(row$top_rank)}
 - Name: {scalar_text(row$Compound_name)}
 - Class: {scalar_text(row$class, na = 'not annotated')}
@@ -705,10 +706,10 @@ annotate_one_module <- function(module_obj,
         ),
         title              = list(type = "STRING"),
         functional_summary = list(type = "STRING"),
-        anchor_metabolites = list(type = "ARRAY",
-                                  items = list(type = "STRING"))
+        anchor_top_ids = list(type = "ARRAY",
+                              items = list(type = "STRING"))
       ),
-      required = c("type", "title", "functional_summary", "anchor_metabolites")
+      required = c("type", "title", "functional_summary", "anchor_top_ids")
     )
     schema_call2 <- list(
       type = "OBJECT",
@@ -735,10 +736,10 @@ annotate_one_module <- function(module_obj,
       list(role = "user",   content = usr1)
     ),
     schema           = schema_call1,
-    required_keys    = c("type", "title", "functional_summary"),
+    required_keys    = c("type", "title", "functional_summary", "anchor_top_ids"),
     retry_instruction = paste(
       "Return ONLY a valid JSON object with exactly four keys:",
-      "\"type\", \"title\", \"functional_summary\", and \"anchor_metabolites\"."
+      "\"type\", \"title\", \"functional_summary\", and \"anchor_top_ids\"."
     ),
     stage_label = "call1 (type+title+summary)"
   )
@@ -746,15 +747,24 @@ annotate_one_module <- function(module_obj,
   hypothesis_type    <- NA_character_
   title              <- NA_character_
   functional_summary <- NA_character_
+  anchor_top_ids     <- NA_character_
   anchor_metabolites <- NA_character_
+  anchor_metabolite_ids <- NA_character_
   if (!is.null(res1$parsed)) {
     hypothesis_type    <- normalize_fast_hypothesis_type(res1$parsed[["type"]] %||% NA_character_)
     title              <- as.character(res1$parsed[["title"]]              %||% NA_character_)
     functional_summary <- as.character(res1$parsed[["functional_summary"]] %||% NA_character_)
-    anc_raw            <- res1$parsed[["anchor_metabolites"]]
-    if (!is.null(anc_raw) && length(anc_raw) > 0) {
-      anchor_metabolites <- paste(as.character(unlist(anc_raw)), collapse = "; ")
-    }
+    anchor_refs <- resolve_top_metabolite_refs(
+      top_ids = res1$parsed[["anchor_top_ids"]],
+      top_df  = module_obj$topN_metabolites,
+      ref_type = "anchor"
+    )
+    if (length(anchor_refs$top_ids) > 0)
+      anchor_top_ids <- paste(anchor_refs$top_ids, collapse = "; ")
+    if (length(anchor_refs$names) > 0)
+      anchor_metabolites <- paste(anchor_refs$names, collapse = "; ")
+    if (length(anchor_refs$compound_ids) > 0)
+      anchor_metabolite_ids <- paste(anchor_refs$compound_ids, collapse = "; ")
   } else {
     message("[annotate_module] Call 1 failed for module ", mid,
             ". Returning NA for title/summary; continuing to Call 2.")
@@ -879,7 +889,9 @@ annotate_one_module <- function(module_obj,
     hypothesis_type        = hypothesis_type,
     title                  = title,
     functional_summary     = functional_summary,
+    anchor_top_ids         = anchor_top_ids,
     anchor_metabolites     = anchor_metabolites,
+    anchor_metabolite_ids  = anchor_metabolite_ids,
     phenotype_relationship = phenotype_relationship,
     confidence_label       = confidence_label,
     rationale              = rationale,

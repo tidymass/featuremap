@@ -94,12 +94,15 @@ The input \code{res} object updated with:
 \itemize{
 \item \code{module_function}: data frame with one row per annotated module
 or accepted hypothesis, containing the compact user-facing annotation fields.
-Fast mode includes \code{annotation_mode = "fast"}. Advanced mode includes
-\code{anchor_metabolites} and \code{verdict_status} when available.
+This includes \code{anchor_metabolites}, \code{anchor_metabolite_ids},
+\code{top_metabolites}, and \code{top_metabolite_ids}. Fast mode includes
+\code{annotation_mode = "fast"}. Advanced mode includes \code{verdict_status}
+when available.
 \item \code{module_evidence}: list of computed evidence tables used for
 annotation, with components \code{class_coverage},
 \code{pathway_coverage$hmdb}, \code{pathway_coverage$kegg},
-\code{pubmed_evidence}, \code{top_metabolites}, and \code{debate_trace}.
+\code{pubmed_evidence}, \code{top_metabolites},
+\code{anchor_metabolites}, and \code{debate_trace}.
 \item \code{module_synthesis}: optional list created when
 \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
 hypothesis nodes, thematic clusters, sparse and completed

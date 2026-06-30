@@ -37,13 +37,14 @@ flatten_pubmed_for_one_module <- function(pubmed_list_for_module) {
 #' PubMed functional summaries, then selects and orders relevant columns.
 #'
 #' @param module_top_df A data frame containing the top metabolites with columns:
-#'   top_rank, Compound_ID, Compound_name, class, priority_level, and optional
-#'   INCHI_ID, HMDB_ID, KEGG_ID
+#'   top_id, top_rank, Compound_ID, Compound_name, class, priority_level, and
+#'   optional INCHI_ID, HMDB_ID, KEGG_ID
 #' @param pubmed_top_df A data frame containing PubMed data with columns:
 #'   HMDB_ID, functional_summary
 #'
-#' @return A tibble with columns ordered as: top_rank, Compound_ID, Compound_name,
-#'   class, priority_level, optional identifier columns, and functional_summary
+#' @return A tibble with columns ordered as: top_id, top_rank, Compound_ID,
+#'   Compound_name, class, priority_level, optional identifier columns, and
+#'   functional_summary
 #'
 #' @details The left join ensures all metabolites from module_top_df are retained,
 #'   even if they don't have corresponding PubMed data.
@@ -52,10 +53,108 @@ combine_topN_with_pubmed <- function(module_top_df, pubmed_top_df) {
     left_join(pubmed_top_df, by = "Compound_ID") %>%
     dplyr::select(
       dplyr::any_of(c(
-        "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
+        "top_id", "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
         "Compound_name", "class", "priority_level", "functional_summary"
       ))
     )
+}
+
+
+# ============================================================
+# Top metabolite reference helpers
+# ============================================================
+
+add_top_ids <- function(top_df) {
+  if (is.null(top_df) || !is.data.frame(top_df) || nrow(top_df) == 0) {
+    return(top_df)
+  }
+  top_df <- tibble::as_tibble(top_df)
+  if (!"top_id" %in% colnames(top_df)) {
+    if ("top_rank" %in% colnames(top_df)) {
+      top_df <- dplyr::mutate(top_df, top_id = paste0("T", as.integer(top_rank)))
+    } else {
+      top_df <- dplyr::mutate(top_df, top_id = paste0("T", dplyr::row_number()))
+    }
+  }
+  top_df
+}
+
+normalize_top_id_tokens <- function(x) {
+  if (is.null(x) || length(x) == 0) return(character(0))
+  x <- unique(trimws(as.character(unlist(x))))
+  x <- x[!is.na(x) & nzchar(x)]
+  if (length(x) == 0) return(character(0))
+
+  vapply(x, function(tok) {
+    up <- toupper(tok)
+    up <- gsub("[[:space:]_-]+", "", up)
+    if (grepl("^T[0-9]+$", up)) {
+      return(paste0("T", as.integer(sub("^T", "", up))))
+    }
+    digits <- regmatches(up, regexpr("[0-9]+", up))
+    if (length(digits) == 1 && nzchar(digits) &&
+        grepl("^(TOP|RANK)?[0-9]+$", up)) {
+      return(paste0("T", as.integer(digits)))
+    }
+    tok
+  }, character(1), USE.NAMES = FALSE)
+}
+
+resolve_top_metabolite_refs <- function(top_ids = NULL,
+                                        top_df,
+                                        ref_type = "anchor") {
+  empty <- list(
+    top_ids      = character(0),
+    names        = character(0),
+    compound_ids = character(0),
+    unmatched    = character(0),
+    table        = tibble::tibble()
+  )
+  if (is.null(top_df) || !is.data.frame(top_df) || nrow(top_df) == 0) {
+    unmatched <- unique(trimws(as.character(unlist(top_ids))))
+    unmatched <- unmatched[!is.na(unmatched) & nzchar(unmatched)]
+    empty$unmatched <- unmatched
+    return(empty)
+  }
+
+  top_df <- add_top_ids(top_df)
+  required <- c("top_id", "Compound_name", "Compound_ID")
+  for (col in setdiff(required, colnames(top_df))) top_df[[col]] <- NA_character_
+
+  valid_ids <- unique(trimws(as.character(top_df$top_id)))
+  valid_ids <- valid_ids[!is.na(valid_ids) & nzchar(valid_ids)]
+  requested_ids_raw <- unique(trimws(as.character(unlist(top_ids))))
+  requested_ids_raw <- requested_ids_raw[!is.na(requested_ids_raw) & nzchar(requested_ids_raw)]
+  requested_ids <- normalize_top_id_tokens(requested_ids_raw)
+  matched_ids <- requested_ids[requested_ids %in% valid_ids]
+
+  unmatched <- requested_ids_raw[!(normalize_top_id_tokens(requested_ids_raw) %in% matched_ids)]
+
+  matched_ids <- unique(matched_ids[!is.na(matched_ids) & nzchar(matched_ids)])
+  matched_rows <- top_df[top_df$top_id %in% matched_ids, , drop = FALSE]
+  if (nrow(matched_rows) > 0) {
+    matched_rows <- matched_rows[match(matched_ids, matched_rows$top_id), , drop = FALSE]
+    matched_rows <- matched_rows[!is.na(matched_rows$top_id), , drop = FALSE]
+  }
+
+  out_table <- if (nrow(matched_rows) == 0) {
+    tibble::tibble()
+  } else {
+    tibble::tibble(
+      top_id = as.character(matched_rows$top_id),
+      metabolite_name = as.character(matched_rows$Compound_name),
+      Compound_ID = as.character(matched_rows$Compound_ID),
+      ref_type = ref_type
+    )
+  }
+
+  list(
+    top_ids      = out_table$top_id %||% character(0),
+    names        = out_table$metabolite_name %||% character(0),
+    compound_ids = out_table$Compound_ID %||% character(0),
+    unmatched    = unique(unmatched[!is.na(unmatched) & nzchar(unmatched)]),
+    table        = out_table
+  )
 }
 
 
@@ -671,6 +770,7 @@ prepare_module <- function(
   }
 
   module_topN <- module_list_top[[k]]
+  module_topN <- add_top_ids(module_topN)
   if (!"Compound_ID" %in% colnames(module_topN)) {
     if ("INCHI_ID" %in% colnames(module_topN)) {
       module_topN <- module_topN %>% dplyr::mutate(Compound_ID = INCHI_ID)
@@ -698,7 +798,7 @@ prepare_module <- function(
       module_topN_merged <- module_topN %>%
         dplyr::select(
           dplyr::any_of(c(
-            "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
+            "top_id", "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
             "Compound_name", "class", "priority_level"
           ))
         ) %>%
@@ -709,7 +809,7 @@ prepare_module <- function(
     module_topN_merged <- module_topN %>%
       dplyr::select(
         dplyr::any_of(c(
-          "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
+          "top_id", "top_rank", "Compound_ID", "INCHI_ID", "HMDB_ID", "KEGG_ID",
           "Compound_name", "class", "priority_level"
         ))
       ) %>%

@@ -1039,9 +1039,11 @@ Title rules
    - Choose the most specific level of granularity supported by the early-ranked high-priority metabolites.
    - If top metabolites point to a specific sub-pathway, reflect that specificity rather than defaulting to the parent pathway name.
    - Do NOT use broad chemical class titles such as \"Amino acid metabolism\", \"Lipid metabolism\", or \"Carbohydrate metabolism\" without a specific qualifier. Instead, identify the dominant sub-class or substrate (e.g., \"Branched-chain amino acid catabolism\", \"Aromatic amino acid metabolism\", \"Lysine degradation\"). If the metabolites genuinely span multiple unrelated sub-pathways with no dominant theme, choose the single best-supported sub-pathway and move the rest to the summary.
+   - The title and summary must be directly supported by the selected anchor_top_ids.
    - Use pathway evidence (KEGG/HMDB) to support or refine the title when it aligns with
-     metabolite evidence, class coherence, and biochemical plausibility. Pathway coverage is
-     supporting context, not a ground-truth label.
+     the selected anchor metabolites, class coherence, and biochemical plausibility.
+     Pathway coverage is supporting evidence, not a ground-truth label, and must not
+     dominate the title by itself.
    - If no canonical pathway fits, use the most specific neutral description of the dominant chemical transformation.
 
 Summary rules:
@@ -1259,6 +1261,10 @@ Rules:
            NOT shorten a well-supported specific pathway name into a broader parent process
            solely for brevity. Avoid compound titles that simply join unrelated pathway names
            with \"and\".
+           The revised title and revised summary must be directly supported by the revised
+           anchor_top_ids. Use pathway coverage only as supporting evidence when it aligns
+           with the revised anchors; pathway coverage must not dominate the revised title
+           by itself.
            Revised anchor_top_ids should identify metabolites that are central to the
            revised biochemical pathway/process. Use metabolite Name, Class, Top_rank,
            Priority_level, and pathway evidence to decide true anchors. Prefer early-ranked

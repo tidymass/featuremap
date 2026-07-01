@@ -450,7 +450,7 @@ annotate_module <- function(res                  = NULL,
 
   # ---- Step 1: Load reference databases ------------------------------------
   run_synthesis <- identical(mode, "advanced") && isTRUE(synthesize)
-  total_steps <- 3L + as.integer(pubmed) + as.integer(run_synthesis)
+  total_steps <- 4L + as.integer(run_synthesis)
   cli::cli_alert_info("[1/{total_steps}] Loading functional and pathway references.")
 
   if (is.null(ref_data)) {
@@ -724,7 +724,7 @@ annotate_module <- function(res                  = NULL,
   )
 
   # ---- Step 3/4: LLM annotation ----------------------------------------
-  llm_step <- if (pubmed) "4" else "3"
+  llm_step <- "4"
   cli::cli_alert_info(
     "[{llm_step}/{total_steps}] Running LLM annotation (mode = {mode})."
   )

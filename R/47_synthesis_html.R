@@ -42,13 +42,13 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
      background:#f4f5f7;color:#1c1f26;font-size:14px;line-height:1.55}
 
-.page-header{background:#1c1f26;color:#fff;padding:20px 30px 18px}
+.page-header{background:#519d9e;color:#fff;padding:20px 30px 18px}
 .page-header h1{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
-.page-header .sub{font-size:.8rem;color:#a8adba;margin-top:4px}
+.page-header .sub{font-size:.8rem;color:rgba(255,255,255,.82);margin-top:4px}
 
 .layout{display:grid;grid-template-columns:1fr 300px;gap:16px;
         max-width:1360px;margin:0 auto;padding:18px 18px 0}
-.panel{background:#fff;border:1px solid #e4e7ed;border-radius:10px;overflow:hidden}
+.panel{background:#fff;border:1px solid #dbe5f2;border-radius:10px;overflow:hidden}
 
 /* toolbar + legend */
 .toolbar{padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -57,13 +57,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
                cursor:pointer}
 .toolbar input[type=text]{border:1px solid #d8dde6;border-radius:6px;padding:5px 9px;
                           min-width:210px;font-size:.82rem;outline:none}
-.toolbar input[type=text]:focus{border-color:#6741d9}
+.toolbar input[type=text]:focus{border-color:#3966a2}
 .legend{padding:8px 14px;display:flex;gap:13px;flex-wrap:wrap;color:#6b7280;font-size:.73rem;
         border-bottom:1px solid #eef0f4;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .leg-circle{width:11px;height:11px;border-radius:50%;background:#667085;flex-shrink:0}
-.leg-edge-d{width:18px;height:2px;background:#516f9f;flex-shrink:0}
-.leg-edge-i{width:18px;height:0;border-top:2px dashed #9a8064;flex-shrink:0}
+.leg-edge-d{width:18px;height:2px;background:#3966a2;flex-shrink:0}
+.leg-edge-i{width:18px;height:0;border-top:2px dashed #c1602e;flex-shrink:0}
 .leg-sep{width:1px;height:11px;background:#d1d5db}
 #module-legend{display:flex;gap:8px;flex-wrap:wrap}
 #module-legend span{display:inline-flex;align-items:center;gap:4px;font-size:.72rem}
@@ -73,8 +73,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .network-wrap{position:relative;overflow:hidden;height:600px}
 svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .edge{stroke-opacity:.65}
-.edge.direct  {stroke:#516f9f;stroke-width:2}
-.edge.indirect{stroke:#9a8064;stroke-width:1.6;stroke-dasharray:5 4}
+.edge.direct  {stroke:#3966a2;stroke-width:2}
+.edge.indirect{stroke:#c1602e;stroke-width:1.6;stroke-dasharray:5 4}
 .node{cursor:default}
 .node text{font-size:10.5px;fill:#1f2937;paint-order:stroke;stroke:#fbfcfe;
            stroke-width:2.5px;user-select:none;pointer-events:none}
@@ -96,16 +96,16 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 /* study-context pills in page header */
 .ctx-pill{display:inline-flex;align-items:center;
           font-size:.75rem;padding:2px 10px;border-radius:20px;
-          background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
-          color:#e8eaf0;margin-right:5px}
+          background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);
+          color:#fff;margin-right:5px}
 #pinned .pin-hdr{padding:11px 13px 8px;border-bottom:1px solid #eef0f4;
                  display:flex;align-items:flex-start;gap:6px;flex-shrink:0}
-#pinned .pin-id {font-size:.68rem;font-weight:700;color:#6741d9;
-                 background:#ede9fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
+#pinned .pin-id {font-size:.68rem;font-weight:700;color:#3966a2;
+                 background:#eef4fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
 #pinned .pin-pills{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
 #pinned .pin-pill{font-size:.67rem;padding:1px 6px;border-radius:3px;
                   background:#f1f3f5;color:#4b5563;border:1px solid #e4e7ed}
-#pinned .pin-pill.accepted {background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
+#pinned .pin-pill.accepted {background:#eaf7ef;color:#21643a;border-color:#bddfc9}
 #pinned .pin-close{margin-left:auto;flex-shrink:0;cursor:pointer;
                    font-size:1rem;color:#9ca3af;line-height:1;
                    padding:0 2px;user-select:none}
@@ -133,38 +133,38 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .tab-btn{border:none;background:none;padding:8px 18px;font-size:.8rem;font-weight:600;
          color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;
          margin-bottom:-2px;transition:color .15s}
-.tab-btn.active{color:#6741d9;border-bottom-color:#6741d9}
+.tab-btn.active{color:#3966a2;border-bottom-color:#3966a2}
 .tab-btn:hover:not(.active){color:#374151}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 
 .node-tbl{width:100%;border-collapse:collapse;background:#fff;
-          border:1px solid #e4e7ed;border-radius:0 0 10px 10px;overflow:hidden;
+          border:1px solid #dbe5f2;border-radius:0 0 10px 10px;overflow:hidden;
           font-size:.78rem;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.node-tbl thead tr{background:#f8f9fb;border-bottom:2px solid #e4e7ed}
+.node-tbl thead tr{background:#f8f9fb;border-bottom:2px solid #dbe5f2}
 .node-tbl th{padding:9px 12px;text-align:left;font-size:.66rem;font-weight:700;
              letter-spacing:.07em;text-transform:uppercase;color:#6b7280}
 .node-tbl td{padding:8px 12px;border-bottom:1px solid #f0f2f5;color:#374151;
              vertical-align:top}
 .node-tbl tr:last-child td{border-bottom:none}
 .node-tbl tr:hover td{background:#fafbff}
-.tbl-id{font-weight:600;color:#6741d9;white-space:nowrap}
+.tbl-id{font-weight:600;color:#3966a2;white-space:nowrap}
 .tbl-mod{white-space:nowrap}
 .tbl-pill{display:inline-block;font-size:.66rem;padding:1px 6px;border-radius:3px;
           font-weight:600;white-space:nowrap}
-.tbl-direct {background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe}
-.tbl-indirect{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.tbl-direct {background:#eef4fb;color:#1c3957;border:1px solid #cfe0f2}
+.tbl-indirect{background:#faece7;color:#993c1d;border:1px solid #f0997b}
 .tbl-conf{color:#6b7280;font-size:.74rem}
 .tbl-rat{font-size:.76rem;color:#6b7280;line-height:1.55}
 
 /* hypothesis type pills — pinned card + table */
-.type-endo {background:#e8f5e9;color:#2e7d32;border:1px solid #c8e6c9}
-.type-micro {background:#fff3e0;color:#e65100;border:1px solid #ffe0b2}
-.type-diet  {background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb}
-.type-xeno  {background:#fce4ec;color:#880e4f;border:1px solid #f8bbd0}
-.type-mixed {background:#f3e5f5;color:#6a1b9a;border:1px solid #e1bee7}
+.type-endo {background:#eaf7ef;color:#21643a;border:1px solid #bddfc9}
+.type-micro {background:#fff6e6;color:#80551b;border:1px solid #f2d29a}
+.type-diet  {background:#eef4fb;color:#3966a2;border:1px solid #cfe0f2}
+.type-xeno  {background:#faece7;color:#993c1d;border:1px solid #f0997b}
+.type-mixed {background:#eef1f5;color:#44546b;border:1px solid #d7dee7}
 .tbl-type{display:inline-block;font-size:.66rem;padding:1px 7px;border-radius:3px;
-          font-weight:500;white-space:nowrap;border:1px solid #e4e7ed;
+          font-weight:500;white-space:nowrap;border:1px solid #dbe5f2;
           background:#f1f3f5;color:#4b5563}
 
 @media(max-width:960px){.layout{grid-template-columns:1fr}
@@ -188,9 +188,9 @@ let pinnedNode = null;
 
 /* ── colour / size maps ── */
 const PALETTE = [
-  "#395f9d","#8a5a9d","#2d7a55","#b55a2a",
-  "#7a6a2d","#2f7280","#8a3f58","#5b6f91",
-  "#4a7c59","#7c4a6b","#6b4a7c","#4a6b7c"
+  "#3966a2","#519d9e","#c1602e","#2f9e6a",
+  "#b5892f","#7a5ea0","#4a7c8c","#a24a6b",
+  "#5c8a3f","#8a5a3f","#3f6b8a","#6b6f4a"
 ];
 const moduleIds   = [...new Set(data.nodes.map(d => d.module_id))].sort();
 const moduleColor = Object.fromEntries(
@@ -635,21 +635,6 @@ generate_synthesis_network_html <- function(synthesis,
   )
   js <- sub("GRAPH_DATA", graph_json, .syn_js(), fixed = TRUE)
 
-  # ── study context pills for page header ──────────────────────
-  ctx_html <- {
-    sc <- if (is.list(study_context)) study_context else list()
-    vals <- c(
-      .syn_scalar(sc$species,     ""),
-      .syn_scalar(sc$biospecimen, ""),
-      .syn_scalar(sc$phenotype,   "")
-    )
-    vals <- vals[nzchar(vals)]
-    if (length(vals) > 0)
-      paste(sprintf('<span class="ctx-pill">%s</span>', .syn_he(vals)), collapse = "")
-    else
-      ""
-  }
-
   html <- sprintf(
 '<!DOCTYPE html>
 <html lang="en">
@@ -660,11 +645,6 @@ generate_synthesis_network_html <- function(synthesis,
 <style>%s</style>
 </head>
 <body>
-
-<div class="page-header">
-  <h1>&#x1F9EC; Hypothesis-level Synthesis Network</h1>
-  <div class="sub">%s</div>
-</div>
 
 <div class="layout">
 
@@ -741,7 +721,7 @@ generate_synthesis_network_html <- function(synthesis,
 <script>%s</script>
 </body>
 </html>',
-    .syn_css(), ctx_html, js
+    .syn_css(), js
   )
 
   if (!dir.exists(output_dir))

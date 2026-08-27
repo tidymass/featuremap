@@ -588,23 +588,29 @@ featuremap_load_metid_adduct_table <- function(polarity = c("positive", "negativ
   polarity <- match.arg(polarity)
   column <- match.arg(column)
 
-  data_name <- switch(
+  table_key <- switch(
     paste(column, polarity, sep = "."),
-    "rp.positive" = "rp.pos",
-    "rp.negative" = "rp.neg",
-    "hilic.positive" = "hilic.pos",
-    "hilic.negative" = "hilic.neg",
+    "rp.positive" = list(data = "rp.pos", object = "rp.pos"),
+    "rp.negative" = list(data = "rp.neg", object = "rp.neg"),
+    "hilic.positive" = list(data = "hilic.pos", object = "hilic.pos"),
+    "hilic.negative" = list(data = c("hilic.neg", "hilic_neg"), object = "hilic.neg"),
     stop("[Error] Unsupported adduct table combination: ", column, "/", polarity)
   )
 
   e <- new.env(parent = emptyenv())
-  utils::data(list = data_name, package = "metid", envir = e)
-  if (!exists(data_name, envir = e, inherits = FALSE)) {
+  for (data_name in table_key[["data"]]) {
+    suppressWarnings(utils::data(list = data_name, package = "metid", envir = e))
+    if (exists(table_key[["object"]], envir = e, inherits = FALSE)) {
+      break
+    }
+  }
+  if (!exists(table_key[["object"]], envir = e, inherits = FALSE)) {
     stop(
-      "[Error] Failed to load default adduct table '", data_name, "' from package 'metid'. ",
+      "[Error] Failed to load default adduct table '", paste(table_key[["data"]], collapse = "' or '"),
+      "' from package 'metid'. ",
       "Please reinstall metid and retry."
     )
   }
 
-  get(data_name, envir = e, inherits = FALSE)
+  get(table_key[["object"]], envir = e, inherits = FALSE)
 }

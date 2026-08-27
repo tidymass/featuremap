@@ -1,11 +1,19 @@
+chat_token_limit_body <- function(body, max_tokens, token_param = "max_tokens") {
+  token_param <- match.arg(token_param, c("max_tokens", "max_completion_tokens"))
+  body[[token_param]] <- max_tokens
+  body
+}
+
 chat_openai_silicon_call <- function(
     messages,
     api_key,
     model,
     base_url,
     max_tokens = 2000,
-    temperature = 0
+    temperature = 0,
+    token_param = c("max_tokens", "max_completion_tokens")
 ) {
+  token_param <- match.arg(token_param)
   base_url <- sub("/+$", "", base_url)
   url <- paste0(base_url, "/v1/chat/completions")
 
@@ -17,9 +25,9 @@ chat_openai_silicon_call <- function(
   body <- list(
     model       = model,
     messages    = messages,
-    max_tokens  = max_tokens,
     temperature = temperature
   )
+  body <- chat_token_limit_body(body, max_tokens, token_param = token_param)
 
   res <- tryCatch({
     httr::POST(url, headers, body = jsonlite::toJSON(body, auto_unbox = TRUE))
@@ -100,7 +108,8 @@ chat_siliconflow_call <- function(
       model = model,
       base_url = base_url,
       max_tokens = max_tokens,
-      temperature = temperature
+      temperature = temperature,
+      token_param = "max_tokens"
     )
     if (!is.null(out)) {
       out$base_url <- base_url
@@ -230,7 +239,8 @@ chat_api_call <- function(
       model = model,
       base_url = "https://api.openai.com",
       max_tokens = max_tokens,
-      temperature = temperature
+      temperature = temperature,
+      token_param = "max_completion_tokens"
     ))
   }
 
@@ -255,7 +265,8 @@ chat_api_call <- function(
       model = model,
       base_url = base_url,
       max_tokens = max_tokens,
-      temperature = temperature
+      temperature = temperature,
+      token_param = "max_tokens"
     ))
   }
 

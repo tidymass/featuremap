@@ -332,9 +332,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
      background:#f4f5f7;color:#1c1f26;font-size:14px;line-height:1.65}
 
 /* header */
-.page-header{background:#1c1f26;color:#fff;padding:20px 32px 18px}
+.page-header{background:#519d9e;color:#fff;padding:20px 32px 18px}
 .page-header h1{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
-.page-header .sub{font-size:.78rem;color:#8b909e;margin-top:3px;display:flex;gap:14px;flex-wrap:wrap}
+.page-header .sub{font-size:.78rem;color:rgba(255,255,255,.82);margin-top:3px;display:flex;gap:14px;flex-wrap:wrap}
 .page-header .sub span{display:flex;align-items:center;gap:4px}
 
 /* layout */
@@ -350,45 +350,45 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
     justify-content:center;font-size:15px;flex-shrink:0;
     border:1px solid rgba(0,0,0,.08)}
-.av-left  {background:#eef0f8}
-.av-right {background:#eaf4fe}
-.av-center{background:#f3effe;width:36px;height:36px;border-radius:50%;
+.av-left  {background:#eef4fb}
+.av-right {background:#e1f5ee}
+.av-center{background:#f6f9fc;width:36px;height:36px;border-radius:50%;
            display:flex;align-items:center;justify-content:center;
            font-size:15px;flex-shrink:0;margin:0 auto 10px;
            border:1px solid rgba(0,0,0,.08)}
 
 .bub{background:#fff;border-radius:12px;padding:14px 16px;
-     max-width:84%;border:1px solid #e4e7ed}
+     max-width:84%;border:1px solid #dbe5f2}
 .bub-left {border-top-left-radius:3px}
 .bub-right{border-top-right-radius:3px}
 .bub-center{max-width:100%;border-radius:12px}
 .msg-center .bub{max-width:100%}
 
-.skeptic .bub{background:#fdfaf9;border-color:#e8cfc8;border-left:3px solid #c0392b}
-.arbiter .bub{background:#fbf9ff;border-color:#d9d0f0;border-left:3px solid #6741d9}
+.skeptic .bub{background:#fdf7f5;border-color:#f0997b;border-left:3px solid #c1602e}
+.arbiter .bub{background:#f6fafa;border-color:#bcdad9;border-left:3px solid #519d9e}
 
 /* role label */
 .role-label{font-size:.68rem;font-weight:600;letter-spacing:.07em;
             text-transform:uppercase;color:#8b909e;margin-bottom:8px}
-.skeptic .role-label{color:#a93226}
-.arbiter .role-label{color:#5b34b0}
-.proposer-r .role-label{color:#1565c0}
+.skeptic .role-label{color:#993c1d}
+.arbiter .role-label{color:#2d6e6e}
+.proposer-r .role-label{color:#1c3957}
 
 /* summary line */
 .summary-line{font-size:.88rem;color:#3a3f4b;margin-bottom:10px}
 .summary-line strong{font-weight:600}
-.no-challenge-note{font-size:.88rem;color:#2e7d32;font-style:italic}
+.no-challenge-note{font-size:.88rem;color:#21643a;font-style:italic}
 
 /* ── query bubble ── */
 .query-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
 .query-section{padding:10px 12px;background:#f8f9fb;
-               border:1px solid #e4e7ed;border-radius:8px}
+               border:1px solid #dbe5f2;border-radius:8px}
 .section-label{font-size:.65rem;font-weight:600;letter-spacing:.08em;
                text-transform:uppercase;color:#8b909e;margin-bottom:6px}
 .met-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
 .met-chip{display:inline-block;font-size:.76rem;padding:2px 8px;
-          background:#edf2ff;color:#2c5282;border-radius:4px;
-          border:1px solid #c7d9f8;white-space:normal}
+          background:#eef4fb;color:#2a4662;border-radius:4px;
+          border:1px solid #cfe0f2;white-space:normal}
 .muted{color:#9ca3af;font-size:.82rem}
 
 /* class bars */
@@ -397,22 +397,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
          align-items:center;gap:6px;font-size:.75rem}
 .cls-name{color:#3a3f4b;white-space:normal;line-height:1.35}
 .cls-track{height:6px;background:#e4e7ed;border-radius:3px;overflow:hidden}
-.cls-fill {height:100%;background:#93afd4;border-radius:3px}
+.cls-fill {height:100%;background:#6191d3;border-radius:3px}
 .cls-pct  {color:#8b909e;text-align:right;white-space:nowrap}
 
 /* context pills (phenotype / species / biospecimen) */
 .context-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
-.ctx-pill{font-size:.75rem;padding:2px 9px;background:#f1f3f5;
-          color:#4b5563;border-radius:20px;border:1px solid #e2e5ea}
+.ctx-pill{font-size:.75rem;padding:2px 9px;background:#f6f9fc;
+          color:#52677e;border-radius:20px;border:1px solid #dbe5f2}
 
 /* ── hypothesis cards ── */
-.hyp-card{background:#f8f9fb;border:1px solid #e4e7ed;border-radius:8px;
+.hyp-card{background:#f8f9fb;border:1px solid #dbe5f2;border-radius:8px;
           padding:11px 13px;margin-top:9px}
 .hyp-header{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
-.hyp-id   {font-size:.68rem;font-weight:700;color:#6741d9;
-           background:#ede9fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.hyp-id   {font-size:.68rem;font-weight:700;color:#3966a2;
+           background:#eef4fb;padding:1px 6px;border-radius:3px;flex-shrink:0}
 .hyp-title{font-weight:600;font-size:.88rem;color:#1c1f26}
-.type-pill{font-size:.68rem;color:#445064;background:#eef5f2;border:1px solid #d9e8df;
+.type-pill{font-size:.68rem;color:#2d6e6e;background:#e1f5ee;border:1px solid #bcdad9;
            padding:2px 6px;border-radius:999px;white-space:nowrap}
 .hyp-summary{font-size:.82rem;color:#4b5563;line-height:1.6;margin-top:2px}
 
@@ -421,19 +421,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .mtag-label{font-size:.65rem;font-weight:600;letter-spacing:.05em;
             text-transform:uppercase;color:#9ca3af;margin-right:3px;flex-shrink:0}
 .mtag      {font-size:.72rem;padding:1px 7px;border-radius:3px}
-.mtag-anc  {background:#e8f0fe;color:#1a56db;border:1px solid #c8d8f8}
-.mtag-ten  {background:#fef3e2;color:#b45309;border:1px solid #f5d99a}
+.mtag-anc  {background:#eef4fb;color:#1c3957;border:1px solid #cfe0f2}
+.mtag-ten  {background:#fff6e6;color:#80551b;border:1px solid #f2d29a}
 
 /* ── challenge items ── */
 .ch-item  {border-radius:6px;padding:9px 11px;margin-top:8px;
            border-left:3px solid transparent}
-.ch-major {background:#fdf2f2;border-left-color:#c0392b}
-.ch-minor {background:#fdf8ee;border-left-color:#d4861a}
+.ch-major {background:#fdeeee;border-left-color:#8c3030}
+.ch-minor {background:#fff6e6;border-left-color:#c1602e}
 .ch-meta  {display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
 .sev-pill {font-size:.65rem;font-weight:700;letter-spacing:.04em;
            padding:2px 7px;border-radius:3px}
-.sev-major{background:#c0392b;color:#fff}
-.sev-minor{background:#d4861a;color:#fff}
+.sev-major{background:#8c3030;color:#fff}
+.sev-minor{background:#c1602e;color:#fff}
 .ch-type  {font-size:.72rem;color:#6b7280;font-style:italic}
 .ch-target{font-size:.75rem;font-weight:600;color:#374151;
            background:#f1f3f5;padding:1px 6px;border-radius:3px}
@@ -441,46 +441,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 
 /* ── revision items ── */
 .rev-item  {padding:9px 11px;margin-top:8px;border-radius:6px;
-            background:#f8f9fb;border:1px solid #e4e7ed;
-            border-left:3px solid #93afd4}
-.act-modify{border-left-color:#1565c0}
-.act-drop  {border-left-color:#c0392b}
-.act-keep  {border-left-color:#2e7d32}
+            background:#f8f9fb;border:1px solid #dbe5f2;
+            border-left:3px solid #6191d3}
+.act-modify{border-left-color:#3966a2}
+.act-drop  {border-left-color:#8c3030}
+.act-keep  {border-left-color:#21643a}
 .rev-header{display:flex;align-items:center;gap:7px;margin-bottom:5px}
 .act-pill  {font-size:.65rem;font-weight:700;letter-spacing:.04em;
             padding:2px 7px;border-radius:3px}
-.act-modify .act-pill,.act-pill.act-modify{background:#1565c0;color:#fff}
-.act-drop   .act-pill,.act-pill.act-drop  {background:#c0392b;color:#fff}
-.act-keep   .act-pill,.act-pill.act-keep  {background:#2e7d32;color:#fff}
+.act-modify .act-pill,.act-pill.act-modify{background:#3966a2;color:#fff}
+.act-drop   .act-pill,.act-pill.act-drop  {background:#8c3030;color:#fff}
+.act-keep   .act-pill,.act-pill.act-keep  {background:#21643a;color:#fff}
 .rev-hid   {font-size:.8rem;font-weight:600;color:#374151}
 .rev-just  {font-size:.82rem;color:#4b5563;line-height:1.6}
 .rev-detail{margin-top:9px;padding:9px 11px;background:#fff;
-            border:1px solid #e4e7ed;border-radius:6px}
-.rev-new-type   {display:inline-block;font-size:.68rem;color:#445064;background:#eef5f2;
-                 border:1px solid #d9e8df;padding:2px 6px;border-radius:999px;margin-bottom:5px}
+            border:1px solid #dbe5f2;border-radius:6px}
+.rev-new-type   {display:inline-block;font-size:.68rem;color:#2d6e6e;background:#e1f5ee;
+                 border:1px solid #bcdad9;padding:2px 6px;border-radius:999px;margin-bottom:5px}
 .rev-new-title  {font-size:.85rem;font-weight:600;color:#1c1f26;margin-bottom:4px}
 .rev-new-summary{font-size:.8rem;color:#4b5563;line-height:1.55}
 
 /* ── verdict cards ── */
 .verdict-card{border-radius:8px;padding:14px 15px;margin-top:10px;
-              border:1px solid #e4e7ed;background:#fff}
-.st-accepted {background:#f4faf5;border-color:#b7dfc0}
-.st-rejected {background:#fdf3f3;border-color:#f0b8b8}
+              border:1px solid #dbe5f2;background:#fff}
+.st-accepted {background:#f3faf6;border-color:#bddfc9}
+.st-rejected {background:#fdf3f3;border-color:#efc0c0}
 
 .verdict-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
 .verdict-hid{font-size:.8rem;font-weight:700;color:#374151;
              background:#f1f3f5;padding:2px 8px;border-radius:3px}
 .status-pill{font-size:.65rem;font-weight:700;letter-spacing:.05em;
              padding:2px 8px;border-radius:3px}
-.st-accepted  .status-pill{background:#1a7a35;color:#fff}
-.st-rejected  .status-pill{background:#a12020;color:#fff}
+.st-accepted  .status-pill{background:#2f9e6a;color:#fff}
+.st-rejected  .status-pill{background:#c1602e;color:#fff}
 
-.verdict-type       {display:inline-block;font-size:.68rem;color:#445064;background:#eef5f2;
-                    border:1px solid #d9e8df;padding:2px 6px;border-radius:999px;margin-bottom:5px}
+.verdict-type       {display:inline-block;font-size:.68rem;color:#2d6e6e;background:#e1f5ee;
+                    border:1px solid #bcdad9;padding:2px 6px;border-radius:999px;margin-bottom:5px}
 .verdict-title      {font-size:.9rem;font-weight:600;color:#1c1f26;margin-bottom:5px}
 .verdict-fin-summary{font-size:.82rem;color:#4b5563;line-height:1.6;
                      margin-bottom:10px;
-                     padding-bottom:10px;border-bottom:1px solid #e4e7ed}
+                     padding-bottom:10px;border-bottom:1px solid #dbe5f2}
 
 /* rationale sections */
 .rat-block {margin-top:8px}
@@ -488,39 +488,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
             text-transform:uppercase;color:#8b909e;margin-bottom:4px;
             display:flex;align-items:center;gap:8px}
 .rat-text  {font-size:.82rem;color:#4b5563;line-height:1.65}
-.rat-divider{height:1px;background:#e4e7ed;margin:10px 0}
+.rat-divider{height:1px;background:#dbe5f2;margin:10px 0}
 
 /* confidence pill inside rationale label */
 .conf-pill{font-size:.62rem;font-weight:600;padding:1px 7px;
            border-radius:20px;letter-spacing:.03em}
-.conf-high  {background:#d1fae5;color:#065f46}
-.conf-medium{background:#fef9c3;color:#713f12}
-.conf-low   {background:#fee2e2;color:#7f1d1d}
+.conf-high  {background:#eaf7ef;color:#21643a}
+.conf-medium{background:#fff6e6;color:#80551b}
+.conf-low   {background:#fdeeee;color:#8c3030}
 
 /* ambiguity note */
-.ambiguity-note{margin-top:12px;padding:9px 12px;background:#fffbf0;
-                border-left:3px solid #d4861a;border-radius:0 6px 6px 0;
+.ambiguity-note{margin-top:12px;padding:9px 12px;background:#fff6e6;
+                border-left:3px solid #c1602e;border-radius:0 6px 6px 0;
                 font-size:.82rem;color:#4b5563}
 .ambiguity-note strong{color:#1c1f26}
 
 /* PubMed evidence */
-.pubmed .bub{background:#f8fcf9;border-color:#cfe8d6;border-left:3px solid #2e7d32}
-.pubmed .role-label{color:#2e7d32}
-.pubmed-card{background:#fff;border:1px solid #dceee1;border-radius:8px;
+.pubmed .bub{background:#f3faf6;border-color:#bddfc9;border-left:3px solid #21643a}
+.pubmed .role-label{color:#21643a}
+.pubmed-card{background:#fff;border:1px solid #bddfc9;border-radius:8px;
              padding:11px 13px;margin-top:9px}
 .pubmed-hdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
-.pubmed-hid{font-size:.78rem;font-weight:700;color:#285c37;
-            background:#e9f6ed;padding:2px 8px;border-radius:3px}
+.pubmed-hid{font-size:.78rem;font-weight:700;color:#21643a;
+            background:#eaf7ef;padding:2px 8px;border-radius:3px}
 .lit-pill{font-size:.65rem;font-weight:700;letter-spacing:.04em;
           padding:2px 8px;border-radius:3px;text-transform:uppercase}
-.lit-direct{background:#1a7a35;color:#fff}
-.lit-indirect{background:#b7dfc0;color:#174d27}
+.lit-direct{background:#2f9e6a;color:#fff}
+.lit-indirect{background:#bddfc9;color:#174d27}
 .lit-insufficient{background:#e5e7eb;color:#4b5563}
 .pm-relationship,.pm-note{font-size:.82rem;color:#4b5563;line-height:1.6;margin-top:5px}
 .pmid-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
 .pmid-chip{display:inline-block;font-size:.74rem;padding:2px 8px;
-           background:#e9f6ed;color:#1f5f31;border-radius:4px;
-           border:1px solid #b7dfc0}
+           background:#eaf7ef;color:#21643a;border-radius:4px;
+           border:1px solid #bddfc9}
 .pm-empty{font-size:.8rem;color:#8b909e;font-style:italic}
 
 /* round divider */
@@ -528,7 +528,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
                font-size:.65rem;font-weight:600;letter-spacing:.1em;
                text-transform:uppercase;color:#9ca3af;margin:4px 0}
 .round-divider::before,.round-divider::after{
-  content:"";flex:1;height:1px;background:#e4e7ed}
+  content:"";flex:1;height:1px;background:#dbe5f2}
 '
 }
 
@@ -781,15 +781,6 @@ generate_debate_html <- function(module_id,
 <style>%s</style>
 </head>
 <body>
-<div class="page-header">
-  <h1>&#x1F9EC; Module Debate &mdash; %s</h1>
-  <div class="sub">
-    <span>%s</span>
-    <span>%s</span>
-    <span>%s</span>
-    <span>%s</span>
-  </div>
-</div>
 <div class="chat-body">
 %s
 </div>
@@ -797,9 +788,6 @@ generate_debate_html <- function(module_id,
 </html>',
     .he(module_id),
     .debate_css(),
-    .he(module_id),
-    .he(species), .he(biospecimen), .he(phenotype),
-    .he(as.character(Sys.Date())),
     bubbles
   )
 

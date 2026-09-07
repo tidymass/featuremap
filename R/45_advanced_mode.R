@@ -2254,7 +2254,7 @@ assemble_advanced_output_row <- function(module_obj,
 #' @param NCBI_api_key  NCBI API key.
 #' @param years  PubMed look-back years.
 #' @param debate_html Logical. Whether to export a per-module HTML debate trace.
-#' @param debate_html_dir Directory for debate HTML files.
+#' @param html_dir Directory for advanced-mode HTML outputs.
 #' @return Data frame compatible with fast mode output plus advanced columns.
 #'   Accepted hypotheses are returned as separate rows; rejected
 #'   modules return one rejected summary row. PubMed evidence is exported in
@@ -2275,7 +2275,7 @@ annotate_one_module_advanced <- function(module_obj,
                                           NCBI_api_key         = NULL,
                                           years                = 5,
                                           debate_html          = FALSE,
-                                          debate_html_dir      = getwd()) {
+                                          html_dir             = getwd()) {
 
   mid <- module_obj$module_id %||% "?"
   is_gemini <- identical(provider, "gemini")
@@ -2633,27 +2633,28 @@ annotate_one_module_advanced <- function(module_obj,
     )
   }
 
+  debate_html_payload <- list(
+    module_id        = mid,
+    module_obj       = module_obj,
+    study_context    = study_context,
+    hypotheses_v0    = hypotheses_v0,
+    s1_challenges    = s1_challenges,
+    p1_revisions     = p1_revisions,
+    hypotheses_v1    = hypotheses_after_r1,
+    s2_challenges    = s2_challenges,
+    p2_revisions     = p2_revisions,
+    hypotheses_final = hypotheses_final,
+    arbiter_result   = arbiter_result,
+    phenotype_relationships = phenotype_relationships,
+    pubmed_per_hyp   = pubmed_per_hyp
+  )
+
   if (isTRUE(debate_html)) {
     # --------------------------------------------------------------
     # Generate debate HTML visualization
     # --------------------------------------------------------------
     tryCatch(
-      generate_debate_html(
-        module_id        = mid,
-        module_obj       = module_obj,
-        study_context    = study_context,
-        hypotheses_v0    = hypotheses_v0,
-        s1_challenges    = s1_challenges,
-        p1_revisions     = p1_revisions,
-        hypotheses_v1    = hypotheses_after_r1,
-        s2_challenges    = s2_challenges,
-        p2_revisions     = p2_revisions,
-        hypotheses_final = hypotheses_final,
-        arbiter_result   = arbiter_result,
-        phenotype_relationships = phenotype_relationships,
-        pubmed_per_hyp   = pubmed_per_hyp,
-        output_dir       = debate_html_dir
-      ),
+      do.call(generate_debate_html, c(debate_html_payload, list(output_dir = html_dir))),
       error = function(e) message("[HTML] Skipped (", e$message, ")")
     )
   }
@@ -2661,7 +2662,7 @@ annotate_one_module_advanced <- function(module_obj,
   # ----------------------------------------------------------------
   # Assemble output row
   # ----------------------------------------------------------------
-  assemble_advanced_output_row(
+  out <- assemble_advanced_output_row(
     module_obj       = module_obj,
     arbiter_result   = arbiter_result,
     hypotheses_v0    = hypotheses_v0,
@@ -2671,6 +2672,8 @@ annotate_one_module_advanced <- function(module_obj,
     phenotype_relationships = phenotype_relationships,
     raw_texts        = raw_texts
   )
+  out$debate_html_payload <- I(rep(list(debate_html_payload), nrow(out)))
+  out
 }
 
 
@@ -2689,7 +2692,7 @@ annotate_one_module_advanced <- function(module_obj,
 #' @param NCBI_api_key  NCBI API key.
 #' @param years  PubMed look-back years.
 #' @param debate_html Logical. Whether to export per-module HTML debate traces.
-#' @param debate_html_dir Directory for debate HTML files.
+#' @param html_dir Directory for advanced-mode HTML outputs.
 #' @return Data frame with one row per module.
 annotate_all_modules_advanced <- function(all_modules_ready,
                                            study_context,
@@ -2703,7 +2706,7 @@ annotate_all_modules_advanced <- function(all_modules_ready,
                                            NCBI_api_key         = NULL,
                                            years                = 5,
                                            debate_html          = FALSE,
-                                           debate_html_dir      = getwd()) {
+                                           html_dir             = getwd()) {
 
   n_mod <- length(all_modules_ready)
   results_list <- lapply(seq_len(n_mod), function(i) {
@@ -2725,7 +2728,7 @@ annotate_all_modules_advanced <- function(all_modules_ready,
         NCBI_api_key         = NCBI_api_key,
         years                = years,
         debate_html          = debate_html,
-        debate_html_dir      = debate_html_dir
+        html_dir             = html_dir
       ),
       error = function(e) {
         message("[advanced] Module ", mod$module_id %||% i,

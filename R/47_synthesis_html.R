@@ -735,19 +735,24 @@ generate_synthesis_network_html <- function(synthesis,
 #' Export an interactive synthesis network from a featuremap result
 #'
 #' @param res A featuremap result containing \code{module_synthesis}.
-#' @inheritParams generate_synthesis_network_html
+#' @param html_dir Directory for the output HTML.
+#' @param output_file File name for the output HTML.
+#' @param show_same_module Ignored (same-module links are never rendered).
+#' @param output_dir Deprecated alias for \code{html_dir}.
 #' @return Invisibly, the written HTML path.
 #' @export
 export_synthesis_network_html <- function(res,
-                                          output_dir  = getwd(),
+                                          html_dir    = getwd(),
                                           output_file = "synthesis_network.html",
-                                          show_same_module = FALSE) {
+                                          show_same_module = FALSE,
+                                          output_dir  = html_dir) {
   if (is.null(res$module_synthesis))
     stop("res$module_synthesis is missing. Run synthesize_modules() first.")
+  if (!missing(output_dir)) html_dir <- output_dir
   generate_synthesis_network_html(
     synthesis        = res$module_synthesis,
     study_context    = res$study_context,
-    output_dir       = output_dir,
+    output_dir       = html_dir,
     output_file      = output_file,
     show_same_module = show_same_module
   )

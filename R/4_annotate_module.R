@@ -25,14 +25,16 @@
 #' @param synthesize Logical. In advanced mode, whether to run the final
 #'   cross-module synthesis agent after module annotation. When \code{TRUE},
 #'   accepted hypotheses are integrated into \code{res$module_synthesis} and an
-#'   interactive synthesis network HTML is exported to the working directory.
+#'   interactive synthesis network HTML is exported to \code{html_dir}.
 #'   Ignored in fast mode.
 #' @param synthesis_model Character. LLM model used by the synthesis agent.
 #'   Defaults to \code{llm_model}.
 #' @param debate_html Logical. In advanced mode, whether to export one
 #'   chat-style HTML debate trace per annotated module (default \code{FALSE}).
-#' @param debate_html_dir Character. Directory where debate HTML files are
-#'   written when \code{debate_html = TRUE}. Defaults to \code{getwd()}.
+#' @param html_dir Character. Directory where advanced-mode HTML outputs are
+#'   written. Debate trace pages are written here when \code{debate_html = TRUE};
+#'   the synthesis network page is written here when \code{synthesize = TRUE}.
+#'   Defaults to \code{getwd()}.
 #' @param species Character. Species context for LLM confidence scoring.
 #' @param biospecimen Character. Biospecimen type (e.g. plasma, urine, tissue).
 #' @param phenotype Character. Phenotype/disease string used in PubMed retrieval
@@ -62,7 +64,8 @@
 #'         annotation, with components \code{class_coverage},
 #'         \code{pathway_coverage$hmdb}, \code{pathway_coverage$kegg},
 #'         \code{pubmed_evidence}, \code{top_metabolites},
-#'         \code{anchor_metabolites}, and \code{debate_trace}.
+#'         \code{anchor_metabolites}, \code{debate_trace}, and the optional
+#'         \code{debate_html_payload} used by \code{\link{export_debate_html}}.
 #'   \item \code{module_synthesis}: optional list created when
 #'         \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
 #'         hypothesis nodes, thematic clusters, sparse and completed
@@ -143,7 +146,7 @@ annotate_module <- function(res                  = NULL,
                              synthesize           = FALSE,
                              synthesis_model      = llm_model,
                              debate_html          = FALSE,
-                             debate_html_dir      = getwd()) {
+                             html_dir             = getwd()) {
 
   mode <- match.arg(mode)
 
@@ -200,7 +203,8 @@ annotate_module <- function(res                  = NULL,
       return(list(
         module_function        = empty,
         module_pubmed_evidence = empty,
-        module_debate_trace    = empty
+        module_debate_trace    = empty,
+        module_debate_html_payload = empty
       ))
     }
 
@@ -247,10 +251,28 @@ annotate_module <- function(res                  = NULL,
       module_debate_trace <- dplyr::distinct(module_debate_trace)
     }
 
+    module_debate_html_payload <- tibble::tibble()
+    if (all(c("module_id", "debate_html_payload") %in% colnames(all_results))) {
+      module_debate_html_payload <- tibble::as_tibble(
+        all_results[, c("module_id", "debate_html_payload"), drop = FALSE]
+      )
+      keep <- vapply(module_debate_html_payload$debate_html_payload, is.list, logical(1))
+      module_debate_html_payload <- module_debate_html_payload[keep, , drop = FALSE]
+      if (nrow(module_debate_html_payload) > 0) {
+        module_debate_html_payload <- module_debate_html_payload[
+          !duplicated(module_debate_html_payload$module_id), , drop = FALSE
+        ]
+        colnames(module_debate_html_payload)[
+          colnames(module_debate_html_payload) == "debate_html_payload"
+        ] <- "payload"
+      }
+    }
+
     list(
       module_function        = module_function,
       module_pubmed_evidence = module_pubmed_evidence,
-      module_debate_trace    = module_debate_trace
+      module_debate_trace    = module_debate_trace,
+      module_debate_html_payload = module_debate_html_payload
     )
   }
 
@@ -325,7 +347,8 @@ annotate_module <- function(res                  = NULL,
       pubmed_evidence = tibble::tibble(),
       top_metabolites = tibble::tibble(),
       anchor_metabolites = tibble::tibble(),
-      debate_trace = tibble::tibble()
+      debate_trace = tibble::tibble(),
+      debate_html_payload = tibble::tibble()
     )
   }
 
@@ -425,14 +448,16 @@ annotate_module <- function(res                  = NULL,
                                     pubmed_evidence,
                                     top_metabolites,
                                     anchor_metabolites,
-                                    debate_trace) {
+                                    debate_trace,
+                                    debate_html_payload = tibble::tibble()) {
     list(
       class_coverage = build_class_coverage(module_class),
       pathway_coverage = build_pathway_coverage_tables(pathway_coverage_list),
       pubmed_evidence = pubmed_evidence %||% tibble::tibble(),
       top_metabolites = top_metabolites %||% tibble::tibble(),
       anchor_metabolites = anchor_metabolites %||% tibble::tibble(),
-      debate_trace = debate_trace %||% tibble::tibble()
+      debate_trace = debate_trace %||% tibble::tibble(),
+      debate_html_payload = debate_html_payload %||% tibble::tibble()
     )
   }
 
@@ -762,7 +787,7 @@ annotate_module <- function(res                  = NULL,
       NCBI_api_key         = NCBI_api_key,
       years                = years,
       debate_html          = debate_html,
-      debate_html_dir      = debate_html_dir
+      html_dir             = html_dir
     )
   } else {
     annotate_all_modules(
@@ -799,7 +824,8 @@ annotate_module <- function(res                  = NULL,
     pubmed_evidence       = tidy_results$module_pubmed_evidence,
     top_metabolites       = module_top_metabolites,
     anchor_metabolites    = build_anchor_evidence(all_results),
-    debate_trace          = tidy_results$module_debate_trace
+    debate_trace          = tidy_results$module_debate_trace,
+    debate_html_payload   = tidy_results$module_debate_html_payload
   )
 
   if (isTRUE(synthesize) && !identical(mode, "advanced")) {
@@ -832,7 +858,7 @@ annotate_module <- function(res                  = NULL,
       tryCatch(
         export_synthesis_network_html(
           res = res,
-          output_dir = getwd(),
+          html_dir = html_dir,
           output_file = "synthesis_network.html",
           show_same_module = FALSE
         ),

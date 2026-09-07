@@ -218,8 +218,9 @@ extract_subnetwork = function(res = NULL,
   anno_mapped <- dplyr::bind_rows(anno_hmdb, anno_kegg) %>%
     dplyr::arrange(variable_id, dplyr::desc(score_norm), mapping_source, INCHI_ID)
 
+  mapped_feature_n <- dplyr::n_distinct(anno_mapped$variable_id)
   cli::cli_alert_success(
-    "Using {.val {nrow(feature_sig)}} features with {.val {nrow(anno_mapped)}} mapped annotation rows for subnetwork extraction."
+    "Mapped {.val {mapped_feature_n}} features with {.val {nrow(anno_mapped)}} annotation rows to the metabolic reaction network."
   )
 
   c_min = 0.02

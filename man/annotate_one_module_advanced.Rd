@@ -17,7 +17,7 @@ annotate_one_module_advanced(
   NCBI_api_key = NULL,
   years = 5,
   debate_html = FALSE,
-  debate_html_dir = getwd()
+  html_dir = getwd()
 )
 }
 \arguments{
@@ -41,7 +41,7 @@ annotate_one_module_advanced(
 
 \item{debate_html}{Logical. Whether to export a per-module HTML debate trace.}
 
-\item{debate_html_dir}{Directory for debate HTML files.}
+\item{html_dir}{Directory for advanced-mode HTML outputs.}
 }
 \value{
 Data frame compatible with fast mode output plus advanced columns.

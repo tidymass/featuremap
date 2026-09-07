@@ -23,7 +23,7 @@ annotate_module(
   synthesize = FALSE,
   synthesis_model = llm_model,
   debate_html = FALSE,
-  debate_html_dir = getwd()
+  html_dir = getwd()
 )
 }
 \arguments{
@@ -77,7 +77,7 @@ PMID before LLM Call 2.}
 \item{synthesize}{Logical. In advanced mode, whether to run the final
 cross-module synthesis agent after module annotation. When \code{TRUE},
 accepted hypotheses are integrated into \code{res$module_synthesis} and an
-interactive synthesis network HTML is exported to the working directory.
+interactive synthesis network HTML is exported to \code{html_dir}.
 Ignored in fast mode.}
 
 \item{synthesis_model}{Character. LLM model used by the synthesis agent.
@@ -86,8 +86,10 @@ Defaults to \code{llm_model}.}
 \item{debate_html}{Logical. In advanced mode, whether to export one
 chat-style HTML debate trace per annotated module (default \code{FALSE}).}
 
-\item{debate_html_dir}{Character. Directory where debate HTML files are
-written when \code{debate_html = TRUE}. Defaults to \code{getwd()}.}
+\item{html_dir}{Character. Directory where advanced-mode HTML outputs are
+written. Debate trace pages are written here when \code{debate_html = TRUE};
+the synthesis network page is written here when \code{synthesize = TRUE}.
+Defaults to \code{getwd()}.}
 }
 \value{
 The input \code{res} object updated with:
@@ -102,7 +104,8 @@ when available.
 annotation, with components \code{class_coverage},
 \code{pathway_coverage$hmdb}, \code{pathway_coverage$kegg},
 \code{pubmed_evidence}, \code{top_metabolites},
-\code{anchor_metabolites}, and \code{debate_trace}.
+\code{anchor_metabolites}, \code{debate_trace}, and the optional
+\code{debate_html_payload} used by \code{\link{export_debate_html}}.
 \item \code{module_synthesis}: optional list created when
 \code{mode = "advanced"} and \code{synthesize = TRUE}, containing
 hypothesis nodes, thematic clusters, sparse and completed

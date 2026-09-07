@@ -3,7 +3,7 @@
 # Debate HTML visualizer — academic chat-style layout
 #
 # Sourced automatically by 45_advanced_mode.R.
-# Public export: generate_debate_html()
+# Public exports: generate_debate_html(), export_debate_html()
 # ============================================================
 
 
@@ -535,6 +535,53 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 
 # ── Public function ───────────────────────────────────────────
 
+#' Export saved debate HTML files from a featuremap result
+#'
+#' Writes the same chat-style HTML files produced during
+#' \code{annotate_module()} when \code{debate_html = TRUE}, using the saved
+#' advanced-mode HTML payload in \code{res}.
+#'
+#' @param res A \code{featuremap_result} object containing
+#'   \code{module_evidence$debate_html_payload}.
+#' @param module_id Optional module id or vector of module ids to export. If
+#'   \code{NULL}, all modules with saved debate HTML payloads are exported.
+#' @param html_dir Directory for the output HTML files. Defaults to \code{getwd()}.
+#' @return Invisibly, a named character vector of written HTML paths.
+#' @export
+export_debate_html <- function(res,
+                               module_id = NULL,
+                               html_dir = getwd()) {
+  payloads <- res$module_evidence$debate_html_payload
+  if (is.null(payloads) || !is.data.frame(payloads) || nrow(payloads) == 0L) {
+    stop("res$module_evidence$debate_html_payload is missing. Re-run annotate_module() in advanced mode.")
+  }
+
+  if (!all(c("module_id", "payload") %in% colnames(payloads))) {
+    stop("res$module_evidence$debate_html_payload must contain module_id and payload columns.")
+  }
+
+  saved_ids <- unique(as.character(payloads$module_id))
+  saved_ids <- saved_ids[!is.na(saved_ids) & nzchar(saved_ids)]
+  if (length(saved_ids) == 0L) {
+    stop("No module ids found in res$module_evidence$debate_html_payload.")
+  }
+
+  ids <- if (is.null(module_id)) saved_ids else as.character(module_id)
+  missing_ids <- setdiff(ids, saved_ids)
+  if (length(missing_ids) > 0L) {
+    stop("No saved debate HTML payload found for module id(s): ",
+         paste(missing_ids, collapse = ", "))
+  }
+
+  paths <- vapply(ids, function(mid) {
+    idx <- match(mid, as.character(payloads$module_id))
+    payload <- payloads$payload[[idx]]
+    do.call(generate_debate_html, c(payload, list(output_dir = html_dir)))
+  }, character(1L))
+  names(paths) <- ids
+  invisible(paths)
+}
+
 #' Generate a chat-style debate HTML for one module
 #'
 #' Called automatically at the end of annotate_one_module_advanced().
@@ -792,6 +839,8 @@ generate_debate_html <- function(module_id,
   )
 
   fname    <- gsub("[^A-Za-z0-9._-]", "_", module_id)
+  if (!dir.exists(output_dir))
+    dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   out_path <- file.path(output_dir, sprintf("debate_%s.html", fname))
   writeLines(html, out_path, useBytes = FALSE)
   message(sprintf("[HTML] Debate visualization → %s", out_path))

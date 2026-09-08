@@ -46,8 +46,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .page-header h1{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
 .page-header .sub{font-size:.8rem;color:rgba(255,255,255,.82);margin-top:4px}
 
-.layout{max-width:1360px;margin:0 auto;padding:18px 18px 0}
+.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);
+        align-items:stretch;gap:14px;max-width:1360px;margin:0 auto;padding:18px 18px 0}
 .panel{background:#fff;border:1px solid #dbe5f2;border-radius:10px;overflow:hidden}
+.network-panel{display:flex;flex-direction:column;min-height:0}
 
 /* toolbar + legend */
 .toolbar{padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -57,16 +59,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .toolbar input[type=text]{border:1px solid #d8dde6;border-radius:6px;padding:5px 9px;
                           min-width:210px;font-size:.82rem;outline:none}
 .toolbar input[type=text]:focus{border-color:#3966a2}
-.legend{padding:8px 14px;display:flex;gap:13px;flex-wrap:nowrap;color:#6b7280;font-size:.73rem;
-        border-bottom:1px solid #eef0f4;align-items:center;overflow:hidden}
+.legend{padding:8px 14px;display:flex;gap:8px 13px;flex-wrap:wrap;color:#6b7280;font-size:.73rem;
+        border-bottom:1px solid #eef0f4;align-items:center;overflow:visible}
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .leg-circle{width:11px;height:11px;border-radius:50%;background:#667085;flex-shrink:0}
 .leg-edge-biochem{width:18px;height:0;border-top:2px dashed #2f9e6a;flex-shrink:0}
 .leg-edge-biology{width:18px;height:0;border-top:2px dashed #c1602e;flex-shrink:0}
 .leg-edge-both{width:18px;height:2px;background:#3966a2;flex-shrink:0}
 .leg-sep{width:1px;height:11px;background:#d1d5db}
-#cluster-legend{display:flex;gap:8px;flex:1;min-width:0;overflow-x:auto;
-                white-space:nowrap;scrollbar-width:thin}
+#cluster-legend{display:flex;gap:5px 10px;flex:1 0 100%;min-width:0;
+                flex-wrap:wrap;overflow:visible;white-space:normal}
 .cluster-filter{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;
                 border:0;background:transparent;color:#6b7280;font:inherit;
                 cursor:pointer;padding:2px 1px}
@@ -76,7 +78,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .cluster-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
 /* network SVG */
-.network-wrap{position:relative;overflow:hidden;height:600px}
+.network-wrap{position:relative;overflow:hidden;min-height:500px;height:auto;flex:1}
 svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .edge{stroke-opacity:.65}
 .edge.biochemical{stroke:#2f9e6a;stroke-width:1.8;stroke-dasharray:5 4}
@@ -152,12 +154,11 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 #pinned .pin-txt{font-size:.79rem;color:#4b5563;line-height:1.6;white-space:pre-wrap}
 
 /* right summary panel */
-.sum-panel{padding:16px;margin-top:14px;display:flex;flex-direction:column;gap:0}
+.sum-panel{padding:16px;display:flex;flex-direction:column;gap:0}
 .sum-panel h2{font-size:.9rem;font-weight:600;margin-bottom:8px;color:#1c1f26}
 .sum-label{font-size:.63rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
            color:#8b909e;margin-bottom:6px}
-.sum-text{font-size:.81rem;color:#374151;line-height:1.65;white-space:pre-wrap;
-          max-width:1040px}
+.sum-text{font-size:.81rem;color:#374151;line-height:1.65;white-space:pre-wrap}
 .sum-empty{font-size:.82rem;color:#9ca3af;font-style:italic}
 
 /* bottom table tabs */
@@ -201,10 +202,10 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
           font-weight:500;white-space:nowrap;border:1px solid #dbe5f2;
           background:#f1f3f5;color:#4b5563}
 
-@media(max-width:720px){
-  .legend{flex-wrap:wrap;overflow:visible}
-  #cluster-legend{flex-basis:100%;order:2}
-  .network-wrap{height:480px}
+@media(max-width:960px){
+  .layout{grid-template-columns:1fr}
+  .sum-panel{margin-top:0}
+  .network-wrap{height:460px;min-height:460px;flex:none}
   .unlinked-group{grid-template-columns:1fr;gap:5px}
 }'
 }
@@ -541,23 +542,24 @@ function gridZones(count, x, y, width, height){
 }
 
 function componentZones(components, width, height){
-  const margin = 22;
-  const innerW = width - margin * 2;
-  const innerH = height - margin * 2;
+  const compactW = Math.min(width - 36, Math.max(480, width * 0.78));
+  const compactH = Math.min(height - 30, Math.max(340, height * 0.76));
+  const originX = (width - compactW) / 2;
+  const originY = (height - compactH) / 2;
   if (components.length <= 1 || width < 780 || components[0].length < 4){
-    return gridZones(components.length, margin, margin, innerW, innerH);
+    return gridZones(components.length, originX, originY, compactW, compactH);
   }
 
-  const leadW = innerW * 0.57;
-  const gap = 22;
+  const leadW = compactW * 0.57;
+  const gap = 14;
   return [
-    {x: margin, y: margin, width: leadW - gap / 2, height: innerH},
+    {x: originX, y: originY, width: leadW - gap / 2, height: compactH},
     ...gridZones(
       components.length - 1,
-      margin + leadW + gap / 2,
-      margin,
-      innerW - leadW - gap / 2,
-      innerH
+      originX + leadW + gap / 2,
+      originY,
+      compactW - leadW - gap / 2,
+      compactH
     )
   ];
 }
@@ -574,11 +576,11 @@ function computeLayout(){
     const zone = zones[ci];
     const cx = zone.x + zone.width / 2;
     const cy = zone.y + zone.height / 2;
-    const radius = Math.max(42, Math.min(zone.width - 100, zone.height - 70) * 0.30);
+    const radius = Math.max(34, Math.min(zone.width - 90, zone.height - 60) * 0.25);
 
     component.forEach((n, i) => {
       const angle = 2 * Math.PI * i / component.length - Math.PI / 2;
-      const spread = component.length === 2 ? Math.min(72, zone.width * 0.20) : radius;
+      const spread = component.length === 2 ? Math.min(54, zone.width * 0.17) : radius;
       n.x = component.length === 2 ? cx + (i === 0 ? -spread : spread) : cx + spread * Math.cos(angle);
       n.y = component.length === 2 ? cy : cy + spread * Math.sin(angle);
     });
@@ -594,7 +596,7 @@ function computeLayout(){
           const a = component[i], b = component[j];
           let dx = a.x - b.x, dy = a.y - b.y;
           const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-          const minD = nodeSize(a) + nodeSize(b) + 48;
+          const minD = nodeSize(a) + nodeSize(b) + 34;
           if (d < minD){
             const push = (minD - d) * 0.42;
             dx /= d; dy /= d;
@@ -608,16 +610,16 @@ function computeLayout(){
         const a = e.source, b = e.target;
         let dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-        const target = edgeType(e) === "both" ? 105 : 132;
-        const pull = (d - target) * 0.035;
+        const target = edgeType(e) === "both" ? 82 : 104;
+        const pull = (d - target) * 0.045;
         dx /= d; dy /= d;
         a.x += dx * pull; a.y += dy * pull;
         b.x -= dx * pull; b.y -= dy * pull;
       });
 
       component.forEach(n => {
-        n.x += (cx - n.x) * 0.008;
-        n.y += (cy - n.y) * 0.008;
+        n.x += (cx - n.x) * 0.012;
+        n.y += (cy - n.y) * 0.012;
         const pad = nodeSize(n) + 18;
         const minX = zone.x + pad;
         const maxX = Math.max(minX, zone.x + zone.width - pad - 48);
@@ -891,7 +893,7 @@ generate_synthesis_network_html <- function(synthesis,
 <div class="layout">
 
   <!-- network -->
-  <div class="panel">
+  <div class="panel network-panel">
     <div class="toolbar">
       <label><input type="checkbox" id="fBiochemical" checked> Biochemical links</label>
       <label><input type="checkbox" id="fBiology" checked> Biology links</label>

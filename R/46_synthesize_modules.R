@@ -456,6 +456,7 @@ build_synthesis_biochemical_links <- function(nodes_df,
     a1 <- top_metabolites_by_node[[n1]]
     a2 <- top_metabolites_by_node[[n2]]
     mrn_pairs <- character(0)
+    mrn_name_pairs <- character(0)
     if (nrow(a1) > 0L && nrow(a2) > 0L && length(edge_keys) > 0L) {
       for (i in seq_len(nrow(a1))) {
         for (j in seq_len(nrow(a2))) {
@@ -468,6 +469,10 @@ build_synthesis_biochemical_links <- function(nodes_df,
               paste0(a2$name[j], " [", a2$id[j], "]")
             } else a2$id[j]
             mrn_pairs <- c(mrn_pairs, paste(left, right, sep = " -- "))
+
+            left_name <- if (!is.na(a1$name[i]) && nzchar(a1$name[i])) a1$name[i] else "Unnamed metabolite"
+            right_name <- if (!is.na(a2$name[j]) && nzchar(a2$name[j])) a2$name[j] else "Unnamed metabolite"
+            mrn_name_pairs <- c(mrn_name_pairs, paste(left_name, right_name, sep = " <-> "))
           }
         }
       }
@@ -481,20 +486,30 @@ build_synthesis_biochemical_links <- function(nodes_df,
       p2[p2$pathway_key %in% overlap_keys, , drop = FALSE]
     ))
     pathway_ids <- unique(overlap$pathway_key)
-    pathway_names <- unique(ifelse(
-      is.na(overlap$pathway_name) | !nzchar(overlap$pathway_name),
-      overlap$pathway_key,
-      paste0(overlap$pathway_name, " [", overlap$pathway_key, "]")
-    ))
+    pathway_names <- unique(vapply(seq_len(nrow(overlap)), function(i) {
+      db_id <- paste0(toupper(overlap$db[i]), ": ", overlap$pathway_id[i])
+      if (is.na(overlap$pathway_name[i]) || !nzchar(overlap$pathway_name[i])) {
+        db_id
+      } else {
+        paste0(overlap$pathway_name[i], " (", db_id, ")")
+      }
+    }, character(1)))
 
     has_mrn <- length(mrn_pairs) > 0L
     has_pw  <- length(pathway_ids) > 0L
     if (!has_mrn || !has_pw) return(NULL)
 
     evidence_type <- "mrn_top_metabolite_edge+pathway_overlap"
+    unique_name_pairs <- unique(mrn_name_pairs)
     details <- c(
-      if (has_mrn) paste0("Direct MRN top-metabolite edge(s): ", paste(unique(mrn_pairs), collapse = "; ")),
-      if (has_pw) paste0("Metabolic pathway ID overlap: ", paste(pathway_ids, collapse = "; "))
+      if (has_mrn) paste0(
+        if (length(unique_name_pairs) == 1L) "Module key-metabolite link: " else "Module key-metabolite links: ",
+        paste(unique_name_pairs, collapse = "; ")
+      ),
+      if (has_pw) paste0(
+        if (length(pathway_names) == 1L) "Shared metabolic pathway: " else "Shared metabolic pathways: ",
+        paste(pathway_names, collapse = "; ")
+      )
     )
 
     data.frame(

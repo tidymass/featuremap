@@ -46,8 +46,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .page-header h1{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
 .page-header .sub{font-size:.8rem;color:rgba(255,255,255,.82);margin-top:4px}
 
-.layout{display:grid;grid-template-columns:1fr 300px;gap:16px;
-        max-width:1360px;margin:0 auto;padding:18px 18px 0}
+.layout{max-width:1360px;margin:0 auto;padding:18px 18px 0}
 .panel{background:#fff;border:1px solid #dbe5f2;border-radius:10px;overflow:hidden}
 
 /* toolbar + legend */
@@ -58,16 +57,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
 .toolbar input[type=text]{border:1px solid #d8dde6;border-radius:6px;padding:5px 9px;
                           min-width:210px;font-size:.82rem;outline:none}
 .toolbar input[type=text]:focus{border-color:#3966a2}
-.legend{padding:8px 14px;display:flex;gap:13px;flex-wrap:wrap;color:#6b7280;font-size:.73rem;
-        border-bottom:1px solid #eef0f4;align-items:center}
+.legend{padding:8px 14px;display:flex;gap:13px;flex-wrap:nowrap;color:#6b7280;font-size:.73rem;
+        border-bottom:1px solid #eef0f4;align-items:center;overflow:hidden}
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .leg-circle{width:11px;height:11px;border-radius:50%;background:#667085;flex-shrink:0}
 .leg-edge-biochem{width:18px;height:0;border-top:2px dashed #2f9e6a;flex-shrink:0}
 .leg-edge-biology{width:18px;height:0;border-top:2px dashed #c1602e;flex-shrink:0}
 .leg-edge-both{width:18px;height:2px;background:#3966a2;flex-shrink:0}
 .leg-sep{width:1px;height:11px;background:#d1d5db}
-#cluster-legend{display:flex;gap:8px;flex-wrap:wrap}
-#cluster-legend span{display:inline-flex;align-items:center;gap:4px;font-size:.72rem}
+#cluster-legend{display:flex;gap:8px;flex:1;min-width:0;overflow-x:auto;
+                white-space:nowrap;scrollbar-width:thin}
+.cluster-filter{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;
+                border:0;background:transparent;color:#6b7280;font:inherit;
+                cursor:pointer;padding:2px 1px}
+.cluster-filter:hover,.cluster-filter.active{color:#1f2937}
+.cluster-filter.active{font-weight:600}
+.cluster-filter.dimmed{opacity:.36}
 .cluster-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
 /* network SVG */
@@ -80,9 +85,31 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .node{cursor:default}
 .node text{font-size:10.5px;fill:#1f2937;paint-order:stroke;stroke:#fbfcfe;
            stroke-width:2.5px;user-select:none;pointer-events:none}
-.isolate-divider{stroke:#e4e7ed;stroke-width:1;stroke-dasharray:3 5}
-.isolate-heading{font-size:10px;font-weight:600;fill:#8b909e;text-anchor:middle;
-                 text-transform:uppercase;letter-spacing:0}
+
+/* compact index for hypotheses without links */
+.unlinked{border-top:1px solid #eef0f4;background:#fff}
+.unlinked-toggle{width:100%;border:0;background:#fff;padding:9px 14px;
+                 display:flex;align-items:center;gap:8px;text-align:left;
+                 color:#4b5563;font-size:.76rem;font-weight:600;cursor:pointer}
+.unlinked-toggle:hover{background:#fafbfc}
+.unlinked-count{color:#8b909e;font-weight:500}
+.unlinked-chevron{margin-left:auto;color:#9ca3af;transition:transform .16s ease}
+.unlinked.open .unlinked-chevron{transform:rotate(180deg)}
+.unlinked-body{display:none;padding:3px 14px 12px}
+.unlinked.open .unlinked-body{display:block}
+.unlinked-group{display:grid;grid-template-columns:minmax(150px,230px) 1fr;
+                gap:10px;padding:7px 0;border-top:1px solid #f1f3f5}
+.unlinked-group:first-child{border-top:0}
+.unlinked-cluster{display:flex;align-items:center;gap:6px;min-width:0;
+                  color:#667085;font-size:.72rem}
+.unlinked-cluster span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.unlinked-nodes{display:flex;align-items:center;gap:7px 14px;flex-wrap:wrap}
+.unlinked-node{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;
+               color:#374151;font-size:.72rem;cursor:pointer;padding:1px 0}
+.unlinked-node:hover{color:#1f2937}
+.unlinked-node.dimmed{opacity:.22}
+.unlinked-node-dot{display:inline-block;border-radius:50%;flex:0 0 auto;
+                   border:1.5px solid #fff;box-shadow:0 0 0 1px #dfe3e8}
 
 /* hover tooltip — lightweight, title only, no pointer-events */
 #tooltip{position:absolute;pointer-events:none;display:none;z-index:30;
@@ -125,11 +152,12 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 #pinned .pin-txt{font-size:.79rem;color:#4b5563;line-height:1.6;white-space:pre-wrap}
 
 /* right summary panel */
-.sum-panel{padding:16px;display:flex;flex-direction:column;gap:0}
+.sum-panel{padding:16px;margin-top:14px;display:flex;flex-direction:column;gap:0}
 .sum-panel h2{font-size:.9rem;font-weight:600;margin-bottom:8px;color:#1c1f26}
 .sum-label{font-size:.63rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
            color:#8b909e;margin-bottom:6px}
-.sum-text{font-size:.81rem;color:#374151;line-height:1.65;white-space:pre-wrap}
+.sum-text{font-size:.81rem;color:#374151;line-height:1.65;white-space:pre-wrap;
+          max-width:1040px}
 .sum-empty{font-size:.82rem;color:#9ca3af;font-style:italic}
 
 /* bottom table tabs */
@@ -173,15 +201,18 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
           font-weight:500;white-space:nowrap;border:1px solid #dbe5f2;
           background:#f1f3f5;color:#4b5563}
 
-@media(max-width:960px){.layout{grid-template-columns:1fr}
-  .network-wrap{height:480px}}'
+@media(max-width:720px){
+  .legend{flex-wrap:wrap;overflow:visible}
+  #cluster-legend{flex-basis:100%;order:2}
+  .network-wrap{height:480px}
+  .unlinked-group{grid-template-columns:1fr;gap:5px}
+}'
 }
 
 # ── JavaScript ────────────────────────────────────────────────
 .syn_js <- function() {
 'const data = GRAPH_DATA;
 const svg    = document.getElementById("network");
-const gGuides = document.getElementById("guides");
 const gEdges = document.getElementById("edges");
 const gNodes = document.getElementById("nodes");
 const tooltip = document.getElementById("tooltip");
@@ -193,6 +224,8 @@ const controls = {
   both:        document.getElementById("fBoth")
 };
 let pinnedNode = null;
+let activeCluster = null;
+let unlinkedOpen = false;
 
 /* ── colour / size maps ── */
 const PALETTE = [
@@ -227,9 +260,21 @@ function edgeType(e){ return e.relation_type || e.relation_class || ""; }
 /* ── cluster colour legend ── */
 const clusterLeg = document.getElementById("cluster-legend");
 clusterIds.forEach(c => {
-  const sp = document.createElement("span");
+  const sp = document.createElement("button");
+  sp.type = "button";
+  sp.className = "cluster-filter";
+  sp.dataset.cluster = c;
   const label = c === UNCLUSTERED ? c : `${c}: ${clusterTheme[c] || c}`;
   sp.innerHTML = `<i class="cluster-dot" style="background:${clusterColor[c]}"></i>${esc(label)}`;
+  sp.addEventListener("click", () => {
+    activeCluster = activeCluster === c ? null : c;
+    document.querySelectorAll(".cluster-filter").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.cluster === activeCluster);
+      btn.classList.toggle("dimmed", activeCluster && btn.dataset.cluster !== activeCluster);
+    });
+    render();
+    renderUnlinked();
+  });
   clusterLeg.appendChild(sp);
 });
 
@@ -245,7 +290,6 @@ edges.forEach(e => {
   structurallyConnectedIds.add(e.node_2);
 });
 nodes.forEach(n => { n.isIsolated = !structurallyConnectedIds.has(n.node_id); });
-let isolateRegion = null;
 
 /* ── helpers ── */
 function esc(s){
@@ -364,8 +408,8 @@ function showPin(ev, n){
   const wrap = document.querySelector(".network-wrap");
   const wW = wrap.offsetWidth, wH = wrap.offsetHeight;
   const cardW = 270, cardH = Math.min(280, wH - 20);
-  let px = n.x + nodeSize(n) + 10;
-  let py = n.y - 60;
+  let px = n.isIsolated ? wW - cardW - 12 : n.x + nodeSize(n) + 10;
+  let py = n.isIsolated ? 12 : n.y - 60;
   if (px + cardW > wW - 8) px = n.x - nodeSize(n) - cardW - 10;
   if (py + cardH > wH - 8) py = wH - cardH - 8;
   if (py < 8) py = 8;
@@ -392,7 +436,7 @@ svg.addEventListener("mousemove", ev => {
   const mx = ev.clientX - r.left;
   const my = ev.clientY - r.top;
   const f  = filters();
-  const vis    = nodes.filter(n => nodeVisible(n, f));
+  const vis    = nodes.filter(n => !n.isIsolated && nodeVisible(n, f));
   const visIds = new Set(vis.map(n => n.node_id));
   let hit = null;
   for (let i = vis.length - 1; i >= 0; i--) {
@@ -434,7 +478,7 @@ svg.addEventListener("click", ev => {
   const mx = ev.clientX - r.left;
   const my = ev.clientY - r.top;
   const f  = filters();
-  const vis = nodes.filter(n => nodeVisible(n, f));
+  const vis = nodes.filter(n => !n.isIsolated && nodeVisible(n, f));
   const hit = vis.find(n => isOver(n, mx, my));
   if (hit) {
     tooltip.style.display = "none";
@@ -446,160 +490,152 @@ svg.addEventListener("click", ev => {
 });
 
 /* ── static layout ── */
-function computeLayout(){
-  let rect = svg.getBoundingClientRect();
-  const W = rect.width || 860;
-  const connectedNodes = nodes.filter(n => !n.isIsolated);
-  const isolatedNodes = nodes.filter(n => n.isIsolated);
-
-  const railWidth = isolatedNodes.length > 0
-    ? Math.min(420, Math.max(250, W * 0.34))
-    : 0;
-  const graphW = isolatedNodes.length > 0 ? Math.max(260, W - railWidth - 16) : W;
-  const railX = graphW + 16;
-  const railInnerWidth = Math.max(1, W - railX - 20);
-  const isoCols = isolatedNodes.length > 0
-    ? Math.max(1, Math.floor(railInnerWidth / 72))
-    : 1;
-  const isolatedGroups = clusterIds
-    .map(id => ({
-      id,
-      nodes: isolatedNodes
-        .filter(n => clusterId(n) === id)
-        .sort((a, b) => naturalCollator.compare(a.node_id, b.node_id))
-    }))
-    .filter(group => group.nodes.length > 0);
-  const isoRows = isolatedGroups.reduce(
-    (sum, group) => sum + Math.ceil(group.nodes.length / isoCols), 0
-  );
-
-  const wrap = svg.closest(".network-wrap");
-  const baseHeight = window.matchMedia("(max-width:960px)").matches ? 480 : 600;
-  const requiredHeight = isolatedNodes.length > 0 ? 58 + isoRows * 52 : baseHeight;
-  wrap.style.height = Math.max(baseHeight, requiredHeight) + "px";
-  rect = svg.getBoundingClientRect();
-  const H = rect.height || baseHeight;
-  const cx = graphW / 2, cy = H / 2;
-
-  /* group nodes by module */
-  const groups = {};
-  connectedNodes.forEach(n => { (groups[n.module_id] = groups[n.module_id] || []).push(n); });
-  const mids = Object.keys(groups).sort((a, b) => naturalCollator.compare(a, b));
-  const nMod = mids.length;
-
-  /* place module centres in a circle */
-  const Rmod = Math.min(cx, cy) * (nMod <= 2 ? 0.30 : nMod <= 4 ? 0.44 : 0.52);
-  mids.forEach((mid, mi) => {
-    const angle = 2 * Math.PI * mi / nMod - Math.PI / 2;
-    const mcx   = cx + Rmod * Math.cos(angle);
-    const mcy   = cy + Rmod * Math.sin(angle);
-    const grp   = groups[mid];
-    const nN    = grp.length;
-    /* spread nodes in a small circle around module centre */
-    const Rnode = nN === 1 ? 0 : Math.max(28, nN * 13);
-    grp.forEach((n, ni) => {
-      const a = 2 * Math.PI * ni / nN - Math.PI / 2;
-      n.x = mcx + Rnode * Math.cos(a);
-      n.y = mcy + Rnode * Math.sin(a);
-    });
+function connectedComponents(connectedNodes){
+  const adjacency = new Map(connectedNodes.map(n => [n.node_id, []]));
+  edges.forEach(e => {
+    adjacency.get(e.node_1)?.push(e.node_2);
+    adjacency.get(e.node_2)?.push(e.node_1);
   });
 
-  /* iterative overlap resolution — no animation, just converge */
-  for (let iter = 0; iter < 200; iter++){
-    /* repulsion between all pairs */
-    for (let i = 0; i < connectedNodes.length; i++){
-      for (let j = i+1; j < connectedNodes.length; j++){
-        const a = connectedNodes[i], b = connectedNodes[j];
-        let dx = a.x - b.x, dy = a.y - b.y;
-        const d2 = dx*dx + dy*dy + 0.01;
-        const d  = Math.sqrt(d2);
-        const minD = nodeSize(a) + nodeSize(b) + 44;
-        if (d < minD){
-          const push = (minD - d) * 0.45;
-          dx /= d; dy /= d;
-          a.x += dx * push; a.y += dy * push;
-          b.x -= dx * push; b.y -= dy * push;
+  const visited = new Set();
+  const components = [];
+  connectedNodes
+    .slice()
+    .sort((a, b) => naturalCollator.compare(a.node_id, b.node_id))
+    .forEach(start => {
+      if (visited.has(start.node_id)) return;
+      const queue = [start.node_id];
+      const component = [];
+      visited.add(start.node_id);
+      while (queue.length){
+        const id = queue.shift();
+        component.push(nodeById[id]);
+        (adjacency.get(id) || []).forEach(next => {
+          if (!visited.has(next)){
+            visited.add(next);
+            queue.push(next);
+          }
+        });
+      }
+      components.push(component);
+    });
+
+  return components.sort((a, b) =>
+    b.length - a.length || naturalCollator.compare(a[0].node_id, b[0].node_id)
+  );
+}
+
+function gridZones(count, x, y, width, height){
+  if (count <= 0) return [];
+  const gap = 18;
+  const cols = count === 1 ? 1 : Math.ceil(Math.sqrt(count * width / Math.max(height, 1)));
+  const rows = Math.ceil(count / cols);
+  const cellW = (width - gap * (cols - 1)) / cols;
+  const cellH = (height - gap * (rows - 1)) / rows;
+  return Array.from({length: count}, (_, i) => ({
+    x: x + (i % cols) * (cellW + gap),
+    y: y + Math.floor(i / cols) * (cellH + gap),
+    width: cellW,
+    height: cellH
+  }));
+}
+
+function componentZones(components, width, height){
+  const margin = 22;
+  const innerW = width - margin * 2;
+  const innerH = height - margin * 2;
+  if (components.length <= 1 || width < 780 || components[0].length < 4){
+    return gridZones(components.length, margin, margin, innerW, innerH);
+  }
+
+  const leadW = innerW * 0.57;
+  const gap = 22;
+  return [
+    {x: margin, y: margin, width: leadW - gap / 2, height: innerH},
+    ...gridZones(
+      components.length - 1,
+      margin + leadW + gap / 2,
+      margin,
+      innerW - leadW - gap / 2,
+      innerH
+    )
+  ];
+}
+
+function computeLayout(){
+  const rect = svg.getBoundingClientRect();
+  const W = rect.width || 860;
+  const H = rect.height || 560;
+  const connectedNodes = nodes.filter(n => !n.isIsolated);
+  const components = connectedComponents(connectedNodes);
+  const zones = componentZones(components, W, H);
+
+  components.forEach((component, ci) => {
+    const zone = zones[ci];
+    const cx = zone.x + zone.width / 2;
+    const cy = zone.y + zone.height / 2;
+    const radius = Math.max(42, Math.min(zone.width - 100, zone.height - 70) * 0.30);
+
+    component.forEach((n, i) => {
+      const angle = 2 * Math.PI * i / component.length - Math.PI / 2;
+      const spread = component.length === 2 ? Math.min(72, zone.width * 0.20) : radius;
+      n.x = component.length === 2 ? cx + (i === 0 ? -spread : spread) : cx + spread * Math.cos(angle);
+      n.y = component.length === 2 ? cy : cy + spread * Math.sin(angle);
+    });
+
+    const componentIds = new Set(component.map(n => n.node_id));
+    const componentEdges = edges.filter(e =>
+      componentIds.has(e.node_1) && componentIds.has(e.node_2)
+    );
+
+    for (let iter = 0; iter < 220; iter++){
+      for (let i = 0; i < component.length; i++){
+        for (let j = i + 1; j < component.length; j++){
+          const a = component[i], b = component[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+          const minD = nodeSize(a) + nodeSize(b) + 48;
+          if (d < minD){
+            const push = (minD - d) * 0.42;
+            dx /= d; dy /= d;
+            a.x += dx * push; a.y += dy * push;
+            b.x -= dx * push; b.y -= dy * push;
+          }
         }
       }
-    }
-    /* gentle spring along edges (pull connected nodes closer) */
-    edges.forEach(e => {
-      const a = e.source, b = e.target;
-      let dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.sqrt(dx*dx + dy*dy) + 0.01;
-      const target = edgeType(e) === "both" ? 140 : 180;
-      if (d > target){
-        const pull = (d - target) * 0.04;
+
+      componentEdges.forEach(e => {
+        const a = e.source, b = e.target;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+        const target = edgeType(e) === "both" ? 105 : 132;
+        const pull = (d - target) * 0.035;
         dx /= d; dy /= d;
         a.x += dx * pull; a.y += dy * pull;
         b.x -= dx * pull; b.y -= dy * pull;
-      }
-    });
-    /* soft pull back to module centre */
-    mids.forEach(mid => {
-      const grp = groups[mid];
-      const mcx = grp.reduce((s, n) => s + n.x, 0) / grp.length;  /* current centroid */
-      const mcy = grp.reduce((s, n) => s + n.y, 0) / grp.length;
-    });
-    /* boundary clamp */
-    connectedNodes.forEach(n => {
-      const pad = nodeSize(n) + 16;
-      n.x = Math.max(pad, Math.min(graphW - pad, n.x));
-      n.y = Math.max(pad, Math.min(H - pad, n.y));
-    });
-  }
+      });
 
-  if (isolatedNodes.length > 0){
-    const top = 42;
-    const bottom = H - 18;
-    const rowStep = isoRows > 0 ? (bottom - top) / isoRows : 0;
-    const slotWidth = railInnerWidth / isoCols;
-    let rowCursor = 0;
-
-    isolatedGroups.forEach(group => {
-      const rowsInGroup = Math.ceil(group.nodes.length / isoCols);
-      for (let r = 0; r < rowsInGroup; r++){
-        const rowNodes = group.nodes.slice(r * isoCols, (r + 1) * isoCols);
-        const rowWidth = rowNodes.length * slotWidth;
-        const startX = railX + 10 + (railInnerWidth - rowWidth) / 2;
-        rowNodes.forEach((n, col) => {
-          n.x = startX + (col + 0.5) * slotWidth;
-          n.y = top + (rowCursor + r + 0.5) * rowStep;
-        });
-      }
-      rowCursor += rowsInGroup;
-    });
-    isolateRegion = {dividerX: railX - 8, centreX: railX + railInnerWidth / 2 + 10, height: H};
-  } else {
-    isolateRegion = null;
-  }
+      component.forEach(n => {
+        n.x += (cx - n.x) * 0.008;
+        n.y += (cy - n.y) * 0.008;
+        const pad = nodeSize(n) + 18;
+        const minX = zone.x + pad;
+        const maxX = Math.max(minX, zone.x + zone.width - pad - 48);
+        const minY = zone.y + pad;
+        const maxY = Math.max(minY, zone.y + zone.height - pad);
+        n.x = Math.max(minX, Math.min(maxX, n.x));
+        n.y = Math.max(minY, Math.min(maxY, n.y));
+      });
+    }
+  });
 }
 
 /* ── render ── */
 function render(){
   const f      = filters();
-  const vis    = nodes.filter(n => nodeVisible(n, f));
+  const vis    = nodes.filter(n => !n.isIsolated && nodeVisible(n, f));
   const visIds = new Set(vis.map(n => n.node_id));
   const visE   = edges.filter(e => edgeVisible(e, visIds, f));
-
-  /* stable side area for nodes with no relationships */
-  gGuides.innerHTML = "";
-  if (isolateRegion){
-    const divider = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    divider.setAttribute("x1", isolateRegion.dividerX);
-    divider.setAttribute("x2", isolateRegion.dividerX);
-    divider.setAttribute("y1", 16);
-    divider.setAttribute("y2", isolateRegion.height - 16);
-    divider.setAttribute("class", "isolate-divider");
-    gGuides.appendChild(divider);
-
-    const heading = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    heading.setAttribute("x", isolateRegion.centreX);
-    heading.setAttribute("y", 20);
-    heading.setAttribute("class", "isolate-heading");
-    heading.textContent = "Isolated nodes";
-    gGuides.appendChild(heading);
-  }
 
   /* edges */
   gEdges.innerHTML = "";
@@ -608,6 +644,11 @@ function render(){
     line.setAttribute("x1", e.source.x); line.setAttribute("y1", e.source.y);
     line.setAttribute("x2", e.target.x); line.setAttribute("y2", e.target.y);
     line.setAttribute("class", `edge ${edgeType(e)}`);
+    if (activeCluster){
+      const sourceMatch = clusterId(e.source) === activeCluster;
+      const targetMatch = clusterId(e.target) === activeCluster;
+      line.setAttribute("opacity", sourceMatch && targetMatch ? 1 : sourceMatch || targetMatch ? 0.32 : 0.07);
+    }
     gEdges.appendChild(line);
   }
 
@@ -617,6 +658,7 @@ function render(){
     const grp = document.createElementNS("http://www.w3.org/2000/svg","g");
     grp.setAttribute("class", "node");
     grp.setAttribute("transform", `translate(${n.x},${n.y})`);
+    if (activeCluster && clusterId(n) !== activeCluster) grp.setAttribute("opacity", 0.16);
 
     const sz   = nodeSize(n);
     const fill = nodeColor(n);
@@ -630,20 +672,84 @@ function render(){
     shape.setAttribute("stroke-width", isPinned ? "3.5" : "2.5");
 
     const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-    if (n.isIsolated){
-      t.setAttribute("x", 0);
-      t.setAttribute("y", sz + 12);
-      t.setAttribute("text-anchor", "middle");
-    } else {
-      t.setAttribute("x", sz + 4);
-      t.setAttribute("y", 4);
-    }
+    t.setAttribute("x", sz + 4);
+    t.setAttribute("y", 4);
     t.textContent = n.node_id;
 
     grp.appendChild(shape);
     grp.appendChild(t);
     gNodes.appendChild(grp);
   }
+}
+
+/* ── compact index for hypotheses without relationships ── */
+function renderUnlinked(){
+  const wrap = document.getElementById("unlinked");
+  const body = document.getElementById("unlinked-body");
+  const count = document.getElementById("unlinked-count");
+  const toggle = document.getElementById("unlinked-toggle");
+  const f = filters();
+  const allUnlinked = nodes.filter(n => n.isIsolated);
+  const visibleUnlinked = allUnlinked.filter(n => nodeVisible(n, f));
+
+  wrap.hidden = allUnlinked.length === 0;
+  if (allUnlinked.length === 0) return;
+
+  const searchOpen = Boolean(f.q);
+  wrap.classList.toggle("open", unlinkedOpen || searchOpen);
+  toggle.setAttribute("aria-expanded", String(unlinkedOpen || searchOpen));
+  count.textContent = f.q
+    ? `${visibleUnlinked.length} of ${allUnlinked.length}`
+    : String(allUnlinked.length);
+  body.innerHTML = "";
+
+  clusterIds.forEach(id => {
+    const groupNodes = visibleUnlinked
+      .filter(n => clusterId(n) === id)
+      .sort((a, b) => naturalCollator.compare(a.node_id, b.node_id));
+    if (groupNodes.length === 0) return;
+
+    const group = document.createElement("div");
+    group.className = "unlinked-group";
+
+    const cluster = document.createElement("div");
+    cluster.className = "unlinked-cluster";
+    cluster.innerHTML =
+      `<i class="cluster-dot" style="background:${clusterColor[id]}"></i>` +
+      `<span>${esc(id === UNCLUSTERED ? id : `${id}: ${clusterTheme[id] || id}`)}</span>`;
+
+    const nodeList = document.createElement("div");
+    nodeList.className = "unlinked-nodes";
+    groupNodes.forEach(n => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "unlinked-node";
+      if (activeCluster && clusterId(n) !== activeCluster) button.classList.add("dimmed");
+      button.title = n.title || n.node_id;
+      button.setAttribute("aria-label", `${n.node_id}: ${n.title || "Unlinked hypothesis"}`);
+
+      const dot = document.createElement("i");
+      const dotSize = Math.max(7, Math.round(nodeSize(n) * 0.62));
+      dot.className = "unlinked-node-dot";
+      dot.style.width = dotSize + "px";
+      dot.style.height = dotSize + "px";
+      dot.style.background = nodeColor(n);
+
+      const label = document.createElement("span");
+      label.textContent = n.node_id;
+      button.appendChild(dot);
+      button.appendChild(label);
+      button.addEventListener("click", ev => {
+        ev.stopPropagation();
+        showPin(ev, n);
+      });
+      nodeList.appendChild(button);
+    });
+
+    group.appendChild(cluster);
+    group.appendChild(nodeList);
+    body.appendChild(group);
+  });
 }
 
 /* ── node table ── */
@@ -699,11 +805,22 @@ if (data.summary && data.summary.trim()) {
 
 /* ── wire controls ── */
 for (const el of Object.values(controls)) el.addEventListener("change", render);
-search.addEventListener("input", render);
+for (const el of Object.values(controls)) {
+  el.addEventListener("change", renderUnlinked);
+}
+search.addEventListener("input", () => {
+  render();
+  renderUnlinked();
+});
+document.getElementById("unlinked-toggle").addEventListener("click", () => {
+  unlinkedOpen = !unlinkedOpen;
+  renderUnlinked();
+});
 
 window.addEventListener("load", function(){
   computeLayout();
   render();
+  renderUnlinked();
 });'
 }
 
@@ -793,9 +910,17 @@ generate_synthesis_network_html <- function(synthesis,
       <div id="cluster-legend"></div>
     </div>
     <div class="network-wrap">
-      <svg id="network"><g id="guides"></g><g id="edges"></g><g id="nodes"></g></svg>
+      <svg id="network"><g id="edges"></g><g id="nodes"></g></svg>
       <div id="tooltip"></div>
       <div id="pinned"></div>
+    </div>
+    <div class="unlinked" id="unlinked" hidden>
+      <button class="unlinked-toggle" id="unlinked-toggle" type="button" aria-expanded="false">
+        <span>Unlinked hypotheses</span>
+        <span class="unlinked-count" id="unlinked-count"></span>
+        <span class="unlinked-chevron" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="unlinked-body" id="unlinked-body"></div>
     </div>
   </div>
 

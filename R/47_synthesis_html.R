@@ -80,6 +80,9 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .node{cursor:default}
 .node text{font-size:10.5px;fill:#1f2937;paint-order:stroke;stroke:#fbfcfe;
            stroke-width:2.5px;user-select:none;pointer-events:none}
+.isolate-divider{stroke:#e4e7ed;stroke-width:1;stroke-dasharray:3 5}
+.isolate-heading{font-size:10px;font-weight:600;fill:#8b909e;text-anchor:middle;
+                 text-transform:uppercase;letter-spacing:0}
 
 /* hover tooltip — lightweight, title only, no pointer-events */
 #tooltip{position:absolute;pointer-events:none;display:none;z-index:30;
@@ -178,6 +181,7 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .syn_js <- function() {
 'const data = GRAPH_DATA;
 const svg    = document.getElementById("network");
+const gGuides = document.getElementById("guides");
 const gEdges = document.getElementById("edges");
 const gNodes = document.getElementById("nodes");
 const tooltip = document.getElementById("tooltip");
@@ -198,12 +202,18 @@ const PALETTE = [
 ];
 const UNCLUSTERED = "Unclustered";
 const clusterId = n => (n.cluster_id && n.cluster_id.trim()) ? n.cluster_id : UNCLUSTERED;
+const naturalCollator = new Intl.Collator(undefined, {numeric: true, sensitivity: "base"});
+function clusterCompare(a, b){
+  if (a === UNCLUSTERED) return b === UNCLUSTERED ? 0 : 1;
+  if (b === UNCLUSTERED) return -1;
+  return naturalCollator.compare(a, b);
+}
 const clusterRows = data.clusters || [];
 const clusterTheme = Object.fromEntries(
   clusterRows.map(c => [c.cluster_id, c.cluster_theme || c.cluster_id])
 );
 const clusterIds = [...new Set(data.nodes.map(clusterId))]
-  .sort((a, b) => a === UNCLUSTERED ? 1 : b === UNCLUSTERED ? -1 : a.localeCompare(b));
+  .sort(clusterCompare);
 const clusterColor = Object.fromEntries(
   clusterIds.map((c, i) => [c, c === UNCLUSTERED ? "#667085" : PALETTE[i % PALETTE.length]])
 );
@@ -229,6 +239,13 @@ const nodeById = Object.fromEntries(nodes.map(d => [d.node_id, d]));
 let edges = data.edges
   .map(e => ({...e, source: nodeById[e.node_1], target: nodeById[e.node_2]}))
   .filter(e => e.source && e.target);
+const structurallyConnectedIds = new Set();
+edges.forEach(e => {
+  structurallyConnectedIds.add(e.node_1);
+  structurallyConnectedIds.add(e.node_2);
+});
+nodes.forEach(n => { n.isIsolated = !structurallyConnectedIds.has(n.node_id); });
+let isolateRegion = null;
 
 /* ── helpers ── */
 function esc(s){
@@ -430,15 +447,44 @@ svg.addEventListener("click", ev => {
 
 /* ── static layout ── */
 function computeLayout(){
-  const rect = svg.getBoundingClientRect();
-  const W = rect.width  || 860;
-  const H = rect.height || 560;
-  const cx = W / 2, cy = H / 2;
+  let rect = svg.getBoundingClientRect();
+  const W = rect.width || 860;
+  const connectedNodes = nodes.filter(n => !n.isIsolated);
+  const isolatedNodes = nodes.filter(n => n.isIsolated);
+
+  const railWidth = isolatedNodes.length > 0
+    ? Math.min(420, Math.max(250, W * 0.34))
+    : 0;
+  const graphW = isolatedNodes.length > 0 ? Math.max(260, W - railWidth - 16) : W;
+  const railX = graphW + 16;
+  const railInnerWidth = Math.max(1, W - railX - 20);
+  const isoCols = isolatedNodes.length > 0
+    ? Math.max(1, Math.floor(railInnerWidth / 72))
+    : 1;
+  const isolatedGroups = clusterIds
+    .map(id => ({
+      id,
+      nodes: isolatedNodes
+        .filter(n => clusterId(n) === id)
+        .sort((a, b) => naturalCollator.compare(a.node_id, b.node_id))
+    }))
+    .filter(group => group.nodes.length > 0);
+  const isoRows = isolatedGroups.reduce(
+    (sum, group) => sum + Math.ceil(group.nodes.length / isoCols), 0
+  );
+
+  const wrap = svg.closest(".network-wrap");
+  const baseHeight = window.matchMedia("(max-width:960px)").matches ? 480 : 600;
+  const requiredHeight = isolatedNodes.length > 0 ? 58 + isoRows * 52 : baseHeight;
+  wrap.style.height = Math.max(baseHeight, requiredHeight) + "px";
+  rect = svg.getBoundingClientRect();
+  const H = rect.height || baseHeight;
+  const cx = graphW / 2, cy = H / 2;
 
   /* group nodes by module */
   const groups = {};
-  nodes.forEach(n => { (groups[n.module_id] = groups[n.module_id] || []).push(n); });
-  const mids = Object.keys(groups).sort();
+  connectedNodes.forEach(n => { (groups[n.module_id] = groups[n.module_id] || []).push(n); });
+  const mids = Object.keys(groups).sort((a, b) => naturalCollator.compare(a, b));
   const nMod = mids.length;
 
   /* place module centres in a circle */
@@ -461,9 +507,9 @@ function computeLayout(){
   /* iterative overlap resolution — no animation, just converge */
   for (let iter = 0; iter < 200; iter++){
     /* repulsion between all pairs */
-    for (let i = 0; i < nodes.length; i++){
-      for (let j = i+1; j < nodes.length; j++){
-        const a = nodes[i], b = nodes[j];
+    for (let i = 0; i < connectedNodes.length; i++){
+      for (let j = i+1; j < connectedNodes.length; j++){
+        const a = connectedNodes[i], b = connectedNodes[j];
         let dx = a.x - b.x, dy = a.y - b.y;
         const d2 = dx*dx + dy*dy + 0.01;
         const d  = Math.sqrt(d2);
@@ -496,11 +542,36 @@ function computeLayout(){
       const mcy = grp.reduce((s, n) => s + n.y, 0) / grp.length;
     });
     /* boundary clamp */
-    nodes.forEach(n => {
+    connectedNodes.forEach(n => {
       const pad = nodeSize(n) + 16;
-      n.x = Math.max(pad, Math.min(W - pad, n.x));
+      n.x = Math.max(pad, Math.min(graphW - pad, n.x));
       n.y = Math.max(pad, Math.min(H - pad, n.y));
     });
+  }
+
+  if (isolatedNodes.length > 0){
+    const top = 42;
+    const bottom = H - 18;
+    const rowStep = isoRows > 0 ? (bottom - top) / isoRows : 0;
+    const slotWidth = railInnerWidth / isoCols;
+    let rowCursor = 0;
+
+    isolatedGroups.forEach(group => {
+      const rowsInGroup = Math.ceil(group.nodes.length / isoCols);
+      for (let r = 0; r < rowsInGroup; r++){
+        const rowNodes = group.nodes.slice(r * isoCols, (r + 1) * isoCols);
+        const rowWidth = rowNodes.length * slotWidth;
+        const startX = railX + 10 + (railInnerWidth - rowWidth) / 2;
+        rowNodes.forEach((n, col) => {
+          n.x = startX + (col + 0.5) * slotWidth;
+          n.y = top + (rowCursor + r + 0.5) * rowStep;
+        });
+      }
+      rowCursor += rowsInGroup;
+    });
+    isolateRegion = {dividerX: railX - 8, centreX: railX + railInnerWidth / 2 + 10, height: H};
+  } else {
+    isolateRegion = null;
   }
 }
 
@@ -510,6 +581,25 @@ function render(){
   const vis    = nodes.filter(n => nodeVisible(n, f));
   const visIds = new Set(vis.map(n => n.node_id));
   const visE   = edges.filter(e => edgeVisible(e, visIds, f));
+
+  /* stable side area for nodes with no relationships */
+  gGuides.innerHTML = "";
+  if (isolateRegion){
+    const divider = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    divider.setAttribute("x1", isolateRegion.dividerX);
+    divider.setAttribute("x2", isolateRegion.dividerX);
+    divider.setAttribute("y1", 16);
+    divider.setAttribute("y2", isolateRegion.height - 16);
+    divider.setAttribute("class", "isolate-divider");
+    gGuides.appendChild(divider);
+
+    const heading = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    heading.setAttribute("x", isolateRegion.centreX);
+    heading.setAttribute("y", 20);
+    heading.setAttribute("class", "isolate-heading");
+    heading.textContent = "Isolated nodes";
+    gGuides.appendChild(heading);
+  }
 
   /* edges */
   gEdges.innerHTML = "";
@@ -540,8 +630,14 @@ function render(){
     shape.setAttribute("stroke-width", isPinned ? "3.5" : "2.5");
 
     const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-    t.setAttribute("x", sz + 4);
-    t.setAttribute("y", 4);
+    if (n.isIsolated){
+      t.setAttribute("x", 0);
+      t.setAttribute("y", sz + 12);
+      t.setAttribute("text-anchor", "middle");
+    } else {
+      t.setAttribute("x", sz + 4);
+      t.setAttribute("y", 4);
+    }
     t.textContent = n.node_id;
 
     grp.appendChild(shape);
@@ -552,17 +648,20 @@ function render(){
 
 /* ── node table ── */
 const tbody = document.getElementById("tbl-body");
-nodes.forEach(n => {
-  const tr = document.createElement("tr");
-  tr.innerHTML =
-    `<td class="tbl-id">${esc(n.node_id)}</td>` +
-    `<td class="tbl-mod">${esc(n.module_id)}</td>` +
-    `<td class="tbl-mod">${esc(clusterId(n))}</td>` +
-    `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "—")}</span></td>` +
-    `<td class="tbl-conf">${esc(n.confidence_label || "—")}</td>` +
-    `<td>${esc(n.title || "—")}</td>`;
-  tbody.appendChild(tr);
-});
+[...nodes]
+  .sort((a, b) => clusterCompare(clusterId(a), clusterId(b)) ||
+    naturalCollator.compare(a.node_id, b.node_id))
+  .forEach(n => {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="tbl-id">${esc(n.node_id)}</td>` +
+      `<td class="tbl-mod">${esc(n.module_id)}</td>` +
+      `<td class="tbl-mod">${esc(clusterId(n))}</td>` +
+      `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "—")}</span></td>` +
+      `<td class="tbl-conf">${esc(n.confidence_label || "—")}</td>` +
+      `<td>${esc(n.title || "—")}</td>`;
+    tbody.appendChild(tr);
+  });
 
 /* ── edge table ── */
 const etbody = document.getElementById("etbl-body");
@@ -694,7 +793,7 @@ generate_synthesis_network_html <- function(synthesis,
       <div id="cluster-legend"></div>
     </div>
     <div class="network-wrap">
-      <svg id="network"><g id="edges"></g><g id="nodes"></g></svg>
+      <svg id="network"><g id="guides"></g><g id="edges"></g><g id="nodes"></g></svg>
       <div id="tooltip"></div>
       <div id="pinned"></div>
     </div>

@@ -526,42 +526,18 @@ function connectedComponents(connectedNodes){
   );
 }
 
-function gridZones(count, x, y, width, height){
+function componentCentres(count, x, y, width, height){
   if (count <= 0) return [];
-  const gap = 18;
-  const cols = count === 1 ? 1 : Math.ceil(Math.sqrt(count * width / Math.max(height, 1)));
+  const cols = count === 1
+    ? 1
+    : Math.min(count, Math.max(1, Math.ceil(Math.sqrt(count * width / Math.max(height, 1)))));
   const rows = Math.ceil(count / cols);
-  const cellW = (width - gap * (cols - 1)) / cols;
-  const cellH = (height - gap * (rows - 1)) / rows;
+  const cellW = width / cols;
+  const cellH = height / rows;
   return Array.from({length: count}, (_, i) => ({
-    x: x + (i % cols) * (cellW + gap),
-    y: y + Math.floor(i / cols) * (cellH + gap),
-    width: cellW,
-    height: cellH
+    x: x + (i % cols + 0.5) * cellW,
+    y: y + (Math.floor(i / cols) + 0.5) * cellH
   }));
-}
-
-function componentZones(components, width, height){
-  const compactW = Math.min(width - 36, Math.max(480, width * 0.78));
-  const compactH = Math.min(height - 30, Math.max(340, height * 0.76));
-  const originX = (width - compactW) / 2;
-  const originY = (height - compactH) / 2;
-  if (components.length <= 1 || width < 780 || components[0].length < 4){
-    return gridZones(components.length, originX, originY, compactW, compactH);
-  }
-
-  const leadW = compactW * 0.57;
-  const gap = 14;
-  return [
-    {x: originX, y: originY, width: leadW - gap / 2, height: compactH},
-    ...gridZones(
-      components.length - 1,
-      originX + leadW + gap / 2,
-      originY,
-      compactW - leadW - gap / 2,
-      compactH
-    )
-  ];
 }
 
 function computeLayout(){
@@ -570,66 +546,73 @@ function computeLayout(){
   const H = rect.height || 560;
   const connectedNodes = nodes.filter(n => !n.isIsolated);
   const components = connectedComponents(connectedNodes);
-  const zones = componentZones(components, W, H);
+  const compactW = Math.min(W - 40, Math.max(500, W * 0.80));
+  const compactH = Math.min(H - 36, Math.max(360, H * 0.78));
+  const originX = (W - compactW) / 2;
+  const originY = (H - compactH) / 2;
+  const centres = componentCentres(components.length, originX, originY, compactW, compactH);
 
   components.forEach((component, ci) => {
-    const zone = zones[ci];
-    const cx = zone.x + zone.width / 2;
-    const cy = zone.y + zone.height / 2;
-    const radius = Math.max(34, Math.min(zone.width - 90, zone.height - 60) * 0.25);
+    const cx = centres[ci].x;
+    const cy = centres[ci].y;
+    const radius = Math.min(72, Math.max(38, 24 + component.length * 7));
 
     component.forEach((n, i) => {
       const angle = 2 * Math.PI * i / component.length - Math.PI / 2;
-      const spread = component.length === 2 ? Math.min(54, zone.width * 0.17) : radius;
+      const spread = component.length === 2 ? 48 : radius;
       n.x = component.length === 2 ? cx + (i === 0 ? -spread : spread) : cx + spread * Math.cos(angle);
       n.y = component.length === 2 ? cy : cy + spread * Math.sin(angle);
+      n.layoutComponent = ci;
     });
+  });
 
-    const componentIds = new Set(component.map(n => n.node_id));
-    const componentEdges = edges.filter(e =>
-      componentIds.has(e.node_1) && componentIds.has(e.node_2)
-    );
-
-    for (let iter = 0; iter < 220; iter++){
-      for (let i = 0; i < component.length; i++){
-        for (let j = i + 1; j < component.length; j++){
-          const a = component[i], b = component[j];
-          let dx = a.x - b.x, dy = a.y - b.y;
-          const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-          const minD = nodeSize(a) + nodeSize(b) + 34;
-          if (d < minD){
-            const push = (minD - d) * 0.42;
-            dx /= d; dy /= d;
-            a.x += dx * push; a.y += dy * push;
-            b.x -= dx * push; b.y -= dy * push;
+  /* Global relaxation prevents neighbouring components and labels from colliding. */
+  for (let iter = 0; iter < 320; iter++){
+    for (let i = 0; i < connectedNodes.length; i++){
+      for (let j = i + 1; j < connectedNodes.length; j++){
+        const a = connectedNodes[i], b = connectedNodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        const absX = Math.abs(dx), absY = Math.abs(dy);
+        const minX = nodeSize(a) + nodeSize(b) + 64;
+        const minY = nodeSize(a) + nodeSize(b) + 22;
+        if (absX < minX && absY < minY){
+          const overlapX = minX - absX;
+          const overlapY = minY - absY;
+          if (overlapX < overlapY){
+            const dir = dx === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dx);
+            const push = overlapX * 0.26;
+            a.x += dir * push;
+            b.x -= dir * push;
+          } else {
+            const dir = dy === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dy);
+            const push = overlapY * 0.26;
+            a.y += dir * push;
+            b.y -= dir * push;
           }
         }
       }
-
-      componentEdges.forEach(e => {
-        const a = e.source, b = e.target;
-        let dx = b.x - a.x, dy = b.y - a.y;
-        const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-        const target = edgeType(e) === "both" ? 82 : 104;
-        const pull = (d - target) * 0.045;
-        dx /= d; dy /= d;
-        a.x += dx * pull; a.y += dy * pull;
-        b.x -= dx * pull; b.y -= dy * pull;
-      });
-
-      component.forEach(n => {
-        n.x += (cx - n.x) * 0.012;
-        n.y += (cy - n.y) * 0.012;
-        const pad = nodeSize(n) + 18;
-        const minX = zone.x + pad;
-        const maxX = Math.max(minX, zone.x + zone.width - pad - 48);
-        const minY = zone.y + pad;
-        const maxY = Math.max(minY, zone.y + zone.height - pad);
-        n.x = Math.max(minX, Math.min(maxX, n.x));
-        n.y = Math.max(minY, Math.min(maxY, n.y));
-      });
     }
-  });
+
+    edges.forEach(e => {
+      const a = e.source, b = e.target;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+      const target = edgeType(e) === "both" ? 88 : 110;
+      const pull = (d - target) * 0.032;
+      dx /= d; dy /= d;
+      a.x += dx * pull; a.y += dy * pull;
+      b.x -= dx * pull; b.y -= dy * pull;
+    });
+
+    connectedNodes.forEach(n => {
+      const centre = centres[n.layoutComponent];
+      n.x += (centre.x - n.x) * 0.0035;
+      n.y += (centre.y - n.y) * 0.0035;
+      const pad = nodeSize(n) + 18;
+      n.x = Math.max(originX + pad, Math.min(originX + compactW - pad - 54, n.x));
+      n.y = Math.max(originY + pad, Math.min(originY + compactH - pad, n.y));
+    });
+  }
 }
 
 /* ── render ── */

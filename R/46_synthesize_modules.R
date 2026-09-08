@@ -10,7 +10,7 @@
 #   1. Thematic clusters  — grouping of hypotheses by shared biology
 #   2. Evidence-backed relationship tables:
 #      - biochemical links are computed deterministically from direct MRN
-#        anchor-metabolite edges and top pathway ID overlap
+#        top-metabolite edges plus metabolic pathway ID overlap
 #      - biology links are inferred by the synthesis LLM from title/summary
 #      - final relation_type is biochemical / biology / both / none
 #   3. Overall summary narrative — dominant themes, cross-module
@@ -23,7 +23,7 @@
 #   hypothesis is more central in the network.
 #
 # Relationship taxonomy:
-#   biochemical — direct anchor-metabolite edge in MRN and/or top pathway ID overlap
+#   biochemical — direct top-metabolite edge in MRN and metabolic pathway ID overlap
 #   biology     — LLM-inferred functional relationship from hypothesis titles/summaries
 #   both        — both evidence sources support the pair
 #   none        — no biochemical or biology link identified
@@ -44,8 +44,8 @@
 #' @param module_df  Data frame from \code{res$module_function}.
 #' @return Data frame with columns: node_id, module_id, hypothesis_id,
 #'   verdict_status, title, functional_summary, phenotype_relationship,
-#'   confidence_label, rationale, anchor_metabolites, pathway summaries, and
-#'   phenotype literature support fields when available.
+#'   confidence_label, rationale, anchor/top metabolites, pathway summaries,
+#'   and phenotype literature support fields when available.
 prepare_synthesis_nodes <- function(module_df) {
   if (is.null(module_df) || nrow(module_df) == 0)
     stop("module_df is empty — run annotate_module(mode = \"advanced\") first.")
@@ -79,7 +79,8 @@ prepare_synthesis_nodes <- function(module_df) {
 
   optional_cols <- c(
     "hypothesis_type", "confidence_label", "rationale", "anchor_metabolites",
-    "anchor_metabolite_ids", "top_kegg_pathways", "top_hmdb_pathways",
+    "anchor_metabolite_ids", "top_metabolites", "top_metabolite_ids",
+    "top_kegg_pathways", "top_hmdb_pathways",
     "phenotype_literature_support", "phenotype_evidence_note"
   )
   for (nm in optional_cols) {
@@ -116,6 +117,8 @@ PART 1 — CLUSTERS
 Group nodes into thematic clusters based on shared or closely related biology.
 A cluster must have at least 2 nodes; singleton nodes belong to their own cluster only
 if they represent a clearly distinct biological theme.
+Each node may appear in at most one cluster. Choose the single most likely cluster for
+ambiguous nodes; do not duplicate a node across clusters.
 
 For each cluster provide:
 - cluster_id    : \"C1\", \"C2\", ...
@@ -150,6 +153,12 @@ RULES:
 - Do NOT invent metabolites, pathways, or literature.
 - Do NOT rank accepted nodes by verdict status; treat all accepted nodes equally.
 - Only list a biology link when the titles/summaries imply a meaningful functional connection.
+- Be conservative. Do not link nodes merely because they share a broad umbrella label
+  such as lipid metabolism, amino acid metabolism, xenobiotic metabolism, or host-endogenous
+  metabolism.
+- Prefer no biology link unless the pair shares a specific process, substrate family,
+  pathway-level function, detoxification mechanism, or clear upstream/downstream biological
+  dependency stated in the titles/summaries.
 
 Return STRICT JSON only:
 {{
@@ -285,7 +294,9 @@ synth_gemini_schema <- function() {
   if (is.na(x) || !nzchar(trimws(x)) || toupper(trimws(x)) %in% c("NA", "NULL")) {
     return(character(0))
   }
-  out <- trimws(strsplit(x, ";\\s*")[[1]])
+  # InChI strings may contain semicolons in charge/protonation layers, so split
+  # only on the package's human-readable delimiter ("; ").
+  out <- trimws(strsplit(x, ";\\s+|\\{\\}")[[1]])
   out[!is.na(out) & nzchar(out) & toupper(out) != "NA"]
 }
 
@@ -402,8 +413,8 @@ synth_gemini_schema <- function() {
 #' Build deterministic biochemical links for synthesis nodes
 #'
 #' A pair has a biochemical link if the two nodes come from different modules
-#' and either their anchor metabolites have a direct MRN edge, or their modules
-#' share at least one top pathway ID.
+#' and their top metabolites have a direct MRN edge while their modules also
+#' share at least one metabolic pathway ID in the pathway-coverage evidence.
 build_synthesis_biochemical_links <- function(nodes_df,
                                               mrn = NULL,
                                               pathway_coverage = NULL) {
@@ -417,20 +428,20 @@ build_synthesis_biochemical_links <- function(nodes_df,
   pathway_df <- .syn_pathway_records(pathway_coverage)
   pathways_by_module <- split(pathway_df, pathway_df$module_id)
 
-  anchors_by_node <- setNames(lapply(seq_len(nrow(nodes_df)), function(i) {
-    ids <- .syn_split_field(nodes_df$anchor_metabolite_ids[i])
-    nms <- .syn_split_field(nodes_df$anchor_metabolites[i])
+  top_metabolites_by_node <- setNames(lapply(seq_len(nrow(nodes_df)), function(i) {
+    ids <- .syn_split_field(nodes_df$top_metabolite_ids[i])
+    nms <- .syn_split_field(nodes_df$top_metabolites[i])
     n <- max(length(ids), length(nms), 0L)
     if (n == 0L) {
       return(data.frame(id = character(), name = character(), stringsAsFactors = FALSE))
     }
-    anchor_df <- data.frame(
+    metabolite_df <- data.frame(
       id = vapply(seq_len(n), function(j) if (j <= length(ids)) ids[[j]] else NA_character_, character(1)),
       name = vapply(seq_len(n), function(j) if (j <= length(nms)) nms[[j]] else NA_character_, character(1)),
       stringsAsFactors = FALSE
     )
-    anchor_df[!is.na(anchor_df$id) & nzchar(anchor_df$id) &
-                toupper(anchor_df$id) != "NA", , drop = FALSE]
+    metabolite_df[!is.na(metabolite_df$id) & nzchar(metabolite_df$id) &
+                    toupper(metabolite_df$id) != "NA", , drop = FALSE]
   }), node_ids)
 
   mid_lookup <- setNames(nodes_df$module_id, nodes_df$node_id)
@@ -442,8 +453,8 @@ build_synthesis_biochemical_links <- function(nodes_df,
     m2 <- unname(mid_lookup[n2] %||% NA_character_)
     if (is.na(m1) || is.na(m2) || identical(m1, m2)) return(NULL)
 
-    a1 <- anchors_by_node[[n1]]
-    a2 <- anchors_by_node[[n2]]
+    a1 <- top_metabolites_by_node[[n1]]
+    a2 <- top_metabolites_by_node[[n2]]
     mrn_pairs <- character(0)
     if (nrow(a1) > 0L && nrow(a2) > 0L && length(edge_keys) > 0L) {
       for (i in seq_len(nrow(a1))) {
@@ -478,18 +489,12 @@ build_synthesis_biochemical_links <- function(nodes_df,
 
     has_mrn <- length(mrn_pairs) > 0L
     has_pw  <- length(pathway_ids) > 0L
-    if (!has_mrn && !has_pw) return(NULL)
+    if (!has_mrn || !has_pw) return(NULL)
 
-    evidence_type <- if (has_mrn && has_pw) {
-      "both"
-    } else if (has_mrn) {
-      "mrn_anchor_edge"
-    } else {
-      "pathway_overlap"
-    }
+    evidence_type <- "mrn_top_metabolite_edge+pathway_overlap"
     details <- c(
-      if (has_mrn) paste0("Direct MRN anchor edge(s): ", paste(unique(mrn_pairs), collapse = "; ")),
-      if (has_pw) paste0("Top pathway ID overlap: ", paste(pathway_ids, collapse = "; "))
+      if (has_mrn) paste0("Direct MRN top-metabolite edge(s): ", paste(unique(mrn_pairs), collapse = "; ")),
+      if (has_pw) paste0("Metabolic pathway ID overlap: ", paste(pathway_ids, collapse = "; "))
     )
 
     data.frame(
@@ -697,16 +702,6 @@ summarize_module_relationships <- function(relationships) {
 
     mrn_edge <- any(df$biochemical_mrn_edge, na.rm = TRUE)
     pathway_overlap <- any(df$biochemical_pathway_overlap, na.rm = TRUE)
-    evidence_type <- if (mrn_edge && pathway_overlap) {
-      "both"
-    } else if (mrn_edge) {
-      "mrn_anchor_edge"
-    } else if (pathway_overlap) {
-      "pathway_overlap"
-    } else {
-      NA_character_
-    }
-
     clean_join <- function(x) {
       x <- unique(trimws(as.character(x)))
       x <- x[!is.na(x) & nzchar(x) & toupper(x) != "NA"]
@@ -723,7 +718,7 @@ summarize_module_relationships <- function(relationships) {
       relation_type = relation_type,
       biochemical_mrn_edge = mrn_edge,
       biochemical_pathway_overlap = pathway_overlap,
-      biochemical_evidence_type = evidence_type,
+      biochemical_evidence_type = clean_join(df$biochemical_evidence_type),
       biochemical_evidence_detail = clean_join(df$biochemical_evidence_detail),
       biology_rationale = clean_join(df$biology_rationale),
       contributing_node_pairs = clean_join(contributing),
@@ -771,6 +766,17 @@ parse_synthesis_output <- function(parsed, nodes_df, biochemical_links = NULL) {
   })
   if (nrow(clusters_df) > 0) {
     clusters_df <- clusters_df[nzchar(clusters_df$cluster_id) & nzchar(clusters_df$node_ids), , drop = FALSE]
+  }
+  if (nrow(clusters_df) > 0) {
+    assigned_nodes <- character(0)
+    for (i in seq_len(nrow(clusters_df))) {
+      nids <- .syn_split_field(clusters_df$node_ids[i])
+      nids <- unique(nids[nids %in% valid_nodes])
+      keep <- setdiff(nids, assigned_nodes)
+      clusters_df$node_ids[i] <- paste(keep, collapse = "; ")
+      assigned_nodes <- unique(c(assigned_nodes, keep))
+    }
+    clusters_df <- clusters_df[nzchar(clusters_df$node_ids), , drop = FALSE]
   }
 
   # ---- relationships ----
@@ -866,8 +872,9 @@ parse_synthesis_output <- function(parsed, nodes_df, biochemical_links = NULL) {
   nodes_out <- nodes_df
   nodes_out$cluster_id <- NA_character_
   for (i in seq_len(nrow(clusters_df))) {
-    nids <- trimws(strsplit(clusters_df$node_ids[i], "; ", fixed = TRUE)[[1]])
-    nodes_out$cluster_id[nodes_out$node_id %in% nids] <- clusters_df$cluster_id[i]
+    nids <- .syn_split_field(clusters_df$node_ids[i])
+    needs_cluster <- nodes_out$node_id %in% nids & is.na(nodes_out$cluster_id)
+    nodes_out$cluster_id[needs_cluster] <- clusters_df$cluster_id[i]
   }
 
   list(
@@ -894,8 +901,8 @@ parse_synthesis_output <- function(parsed, nodes_df, biochemical_links = NULL) {
 #' \itemize{
 #'   \item Thematic clusters of hypotheses
 #'   \item LLM-inferred biology links from hypothesis titles/summaries
-#'   \item Deterministic biochemical links from direct MRN anchor edges and
-#'         top pathway ID overlap
+#'   \item Deterministic biochemical links from direct MRN top-metabolite edges
+#'         and metabolic pathway ID overlap
 #'   \item An overall narrative summary
 #' }
 #'

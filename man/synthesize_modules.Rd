@@ -38,6 +38,7 @@ synthesize_modules(
 \value{
 The input \code{res} object with a \code{module_synthesis} list
 appended, containing \code{$nodes}, \code{$clusters},
+\code{$biology_links}, \code{$biochemical_links},
 \code{$relationships_sparse}, \code{$relationships},
 \code{$summary}, and \code{$raw_response}.
 }
@@ -46,7 +47,10 @@ Takes the \code{module_function} data frame from an annotated featuremap
 result and runs a single LLM call to produce:
 \itemize{
 \item Thematic clusters of hypotheses
-\item A sparse pairwise relationship table (direct/indirect only)
+\item LLM-inferred biology links from hypothesis titles/summaries
+\item Deterministic biochemical links from direct MRN top-metabolite edges plus
+metabolic pathway ID overlap
+\item A completed pairwise relationship table
 \item An overall narrative summary
 }
 }

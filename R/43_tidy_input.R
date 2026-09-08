@@ -138,7 +138,12 @@ resolve_top_metabolite_refs <- function(top_ids = NULL,
   }
 
   out_table <- if (nrow(matched_rows) == 0) {
-    tibble::tibble()
+    tibble::tibble(
+      top_id = character(0),
+      metabolite_name = character(0),
+      Compound_ID = character(0),
+      ref_type = character(0)
+    )
   } else {
     tibble::tibble(
       top_id = as.character(matched_rows$top_id),

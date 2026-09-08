@@ -62,19 +62,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Ar
         border-bottom:1px solid #eef0f4;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .leg-circle{width:11px;height:11px;border-radius:50%;background:#667085;flex-shrink:0}
-.leg-edge-d{width:18px;height:2px;background:#3966a2;flex-shrink:0}
-.leg-edge-i{width:18px;height:0;border-top:2px dashed #c1602e;flex-shrink:0}
+.leg-edge-biochem{width:18px;height:0;border-top:2px dashed #2f9e6a;flex-shrink:0}
+.leg-edge-biology{width:18px;height:0;border-top:2px dashed #c1602e;flex-shrink:0}
+.leg-edge-both{width:18px;height:2px;background:#3966a2;flex-shrink:0}
 .leg-sep{width:1px;height:11px;background:#d1d5db}
-#module-legend{display:flex;gap:8px;flex-wrap:wrap}
-#module-legend span{display:inline-flex;align-items:center;gap:4px;font-size:.72rem}
-.mod-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+#cluster-legend{display:flex;gap:8px;flex-wrap:wrap}
+#cluster-legend span{display:inline-flex;align-items:center;gap:4px;font-size:.72rem}
+.cluster-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
 /* network SVG */
 .network-wrap{position:relative;overflow:hidden;height:600px}
 svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .edge{stroke-opacity:.65}
-.edge.direct  {stroke:#3966a2;stroke-width:2}
-.edge.indirect{stroke:#c1602e;stroke-width:1.6;stroke-dasharray:5 4}
+.edge.biochemical{stroke:#2f9e6a;stroke-width:1.8;stroke-dasharray:5 4}
+.edge.biology{stroke:#c1602e;stroke-width:1.8;stroke-dasharray:5 4}
+.edge.both{stroke:#3966a2;stroke-width:2.6}
 .node{cursor:default}
 .node text{font-size:10.5px;fill:#1f2937;paint-order:stroke;stroke:#fbfcfe;
            stroke-width:2.5px;user-select:none;pointer-events:none}
@@ -152,8 +154,9 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .tbl-mod{white-space:nowrap}
 .tbl-pill{display:inline-block;font-size:.66rem;padding:1px 6px;border-radius:3px;
           font-weight:600;white-space:nowrap}
-.tbl-direct {background:#eef4fb;color:#1c3957;border:1px solid #cfe0f2}
-.tbl-indirect{background:#faece7;color:#993c1d;border:1px solid #f0997b}
+.tbl-biochemical{background:#eaf7ef;color:#21643a;border:1px solid #bddfc9}
+.tbl-biology{background:#faece7;color:#993c1d;border:1px solid #f0997b}
+.tbl-both{background:#eef4fb;color:#1c3957;border:1px solid #cfe0f2}
 .tbl-conf{color:#6b7280;font-size:.74rem}
 .tbl-rat{font-size:.76rem;color:#6b7280;line-height:1.55}
 
@@ -181,8 +184,9 @@ const tooltip = document.getElementById("tooltip");
 const pinned  = document.getElementById("pinned");
 const search  = document.getElementById("search");
 const controls = {
-  direct:   document.getElementById("fDirect"),
-  indirect: document.getElementById("fIndirect")
+  biochemical: document.getElementById("fBiochemical"),
+  biology:     document.getElementById("fBiology"),
+  both:        document.getElementById("fBoth")
 };
 let pinnedNode = null;
 
@@ -192,22 +196,31 @@ const PALETTE = [
   "#b5892f","#7a5ea0","#4a7c8c","#a24a6b",
   "#5c8a3f","#8a5a3f","#3f6b8a","#6b6f4a"
 ];
-const moduleIds   = [...new Set(data.nodes.map(d => d.module_id))].sort();
-const moduleColor = Object.fromEntries(
-  moduleIds.map((m, i) => [m, PALETTE[i % PALETTE.length]])
+const UNCLUSTERED = "Unclustered";
+const clusterId = n => (n.cluster_id && n.cluster_id.trim()) ? n.cluster_id : UNCLUSTERED;
+const clusterRows = data.clusters || [];
+const clusterTheme = Object.fromEntries(
+  clusterRows.map(c => [c.cluster_id, c.cluster_theme || c.cluster_id])
+);
+const clusterIds = [...new Set(data.nodes.map(clusterId))]
+  .sort((a, b) => a === UNCLUSTERED ? 1 : b === UNCLUSTERED ? -1 : a.localeCompare(b));
+const clusterColor = Object.fromEntries(
+  clusterIds.map((c, i) => [c, c === UNCLUSTERED ? "#667085" : PALETTE[i % PALETTE.length]])
 );
 const SIZE = {high: 17, medium: 13, low: 10};
 const DEF_SIZE = 12;
 
 function nodeSize(n) { return SIZE[n.confidence_label] || DEF_SIZE; }
-function nodeColor(n){ return moduleColor[n.module_id] || "#667085"; }
+function nodeColor(n){ return clusterColor[clusterId(n)] || "#667085"; }
+function edgeType(e){ return e.relation_type || e.relation_class || ""; }
 
-/* ── module colour legend ── */
-const modLeg = document.getElementById("module-legend");
-moduleIds.forEach(m => {
+/* ── cluster colour legend ── */
+const clusterLeg = document.getElementById("cluster-legend");
+clusterIds.forEach(c => {
   const sp = document.createElement("span");
-  sp.innerHTML = `<i class="mod-dot" style="background:${nodeColor({module_id:m})}"></i>${esc(m)}`;
-  modLeg.appendChild(sp);
+  const label = c === UNCLUSTERED ? c : `${c}: ${clusterTheme[c] || c}`;
+  sp.innerHTML = `<i class="cluster-dot" style="background:${clusterColor[c]}"></i>${esc(label)}`;
+  clusterLeg.appendChild(sp);
 });
 
 /* ── node / edge data ── */
@@ -239,8 +252,9 @@ function typeCls(t){
 
 function filters(){
   return {
-    direct:   controls.direct.checked,
-    indirect: controls.indirect.checked,
+    biochemical: controls.biochemical.checked,
+    biology:     controls.biology.checked,
+    both:        controls.both.checked,
     q: search.value.trim().toLowerCase()
   };
 }
@@ -248,7 +262,7 @@ function filters(){
 function nodeVisible(n, f){
   if (f.q){
     const hay = [n.node_id,n.module_id,n.hypothesis_id,n.hypothesis_type,
-                 n.title,n.functional_summary,n.phenotype_relationship]
+                 n.cluster_id,n.title,n.functional_summary,n.phenotype_relationship]
                 .join(" ").toLowerCase();
     if (!hay.includes(f.q)) return false;
   }
@@ -257,8 +271,10 @@ function nodeVisible(n, f){
 
 function edgeVisible(e, visIds, f){
   if (!visIds.has(e.node_1) || !visIds.has(e.node_2)) return false;
-  if (e.relation_class === "direct")   return f.direct;
-  if (e.relation_class === "indirect") return f.indirect;
+  const t = edgeType(e);
+  if (t === "biochemical") return f.biochemical;
+  if (t === "biology")     return f.biology;
+  if (t === "both")        return f.both;
   return false;
 }
 
@@ -308,12 +324,15 @@ function pinSection(label, text){
 function showPin(ev, n){
   pinnedNode = n.node_id;
   const confLabel = n.confidence_label ? n.confidence_label + " confidence" : "";
+  const cl = clusterId(n);
+  const clLabel = cl === UNCLUSTERED ? cl : `${cl}: ${clusterTheme[cl] || cl}`;
   pinned.innerHTML =
     `<div class="pin-hdr">
        <div>
          <span class="pin-id">${esc(n.node_id)}</span>
          <div class="pin-pills">
            ${confLabel ? `<span class="pin-pill">${esc(confLabel)}</span>` : ""}
+           <span class="pin-pill">${esc(clLabel)}</span>
            ${n.hypothesis_type ? `<span class="pin-pill ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type)}</span>` : ""}
          </div>
        </div>
@@ -377,7 +396,7 @@ svg.addEventListener("mousemove", ev => {
       }
     }
     if (hitEdge) {
-      tooltip.textContent = hitEdge.relation_class + "  ·  " + (hitEdge.subtype || "");
+      tooltip.textContent = edgeType(hitEdge);
       tooltip.style.display = "block";
       positionTooltip(ev);
     } else {
@@ -462,7 +481,7 @@ function computeLayout(){
       const a = e.source, b = e.target;
       let dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.sqrt(dx*dx + dy*dy) + 0.01;
-      const target = e.relation_class === "direct" ? 140 : 180;
+      const target = edgeType(e) === "both" ? 140 : 180;
       if (d > target){
         const pull = (d - target) * 0.04;
         dx /= d; dy /= d;
@@ -498,7 +517,7 @@ function render(){
     const line = document.createElementNS("http://www.w3.org/2000/svg","line");
     line.setAttribute("x1", e.source.x); line.setAttribute("y1", e.source.y);
     line.setAttribute("x2", e.target.x); line.setAttribute("y2", e.target.y);
-    line.setAttribute("class", `edge ${e.relation_class}`);
+    line.setAttribute("class", `edge ${edgeType(e)}`);
     gEdges.appendChild(line);
   }
 
@@ -538,6 +557,7 @@ nodes.forEach(n => {
   tr.innerHTML =
     `<td class="tbl-id">${esc(n.node_id)}</td>` +
     `<td class="tbl-mod">${esc(n.module_id)}</td>` +
+    `<td class="tbl-mod">${esc(clusterId(n))}</td>` +
     `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "—")}</span></td>` +
     `<td class="tbl-conf">${esc(n.confidence_label || "—")}</td>` +
     `<td>${esc(n.title || "—")}</td>`;
@@ -548,13 +568,15 @@ nodes.forEach(n => {
 const etbody = document.getElementById("etbl-body");
 data.edges.forEach(e => {
   const tr = document.createElement("tr");
-  const pillCls = e.relation_class === "direct" ? "tbl-direct" : "tbl-indirect";
+  const rel = edgeType(e);
+  const pillCls = rel === "both" ? "tbl-both" :
+    rel === "biochemical" ? "tbl-biochemical" : "tbl-biology";
   tr.innerHTML =
     `<td class="tbl-id">${esc(e.node_1)}</td>` +
     `<td class="tbl-id">${esc(e.node_2)}</td>` +
-    `<td><span class="tbl-pill ${pillCls}">${esc(e.relation_class)}</span></td>` +
-    `<td>${esc(e.subtype || "—")}</td>` +
-    `<td class="tbl-rat">${esc(e.rationale || "—")}</td>`;
+    `<td><span class="tbl-pill ${pillCls}">${esc(rel)}</span></td>` +
+    `<td class="tbl-rat">${esc(e.biochemical_evidence_detail || "—")}</td>` +
+    `<td class="tbl-rat">${esc(e.biology_rationale || "—")}</td>`;
   etbody.appendChild(tr);
 });
 
@@ -613,9 +635,12 @@ generate_synthesis_network_html <- function(synthesis,
   if (is.null(relationships) || !is.data.frame(relationships)) {
     relationships <- data.frame(
       node_1 = character(), node_2 = character(),
-      relation_class = character(), subtype = character(),
+      relation_type = character(), relation_class = character(), subtype = character(),
       rationale = character(), stringsAsFactors = FALSE
     )
+  }
+  if (!"relation_type" %in% colnames(relationships)) {
+    relationships$relation_type <- relationships$relation_class %||% NA_character_
   }
 
   nodes <- nodes[nodes$verdict_status == "accepted", , drop = FALSE]
@@ -623,13 +648,14 @@ generate_synthesis_network_html <- function(synthesis,
   relationships <- relationships[
     relationships$node_1 %in% vn &
     relationships$node_2 %in% vn &
-    relationships$relation_class %in% c("direct","indirect"),
+    relationships$relation_type %in% c("biochemical", "biology", "both"),
     , drop = FALSE
   ]
 
   graph_json <- jsonlite::toJSON(
     list(nodes   = .syn_json_records(nodes),
          edges   = .syn_json_records(relationships),
+         clusters = .syn_json_records(synthesis$clusters),
          summary = .syn_scalar(synthesis$summary, "")),
     auto_unbox = TRUE, dataframe = "rows", na = "null"
   )
@@ -651,19 +677,21 @@ generate_synthesis_network_html <- function(synthesis,
   <!-- network -->
   <div class="panel">
     <div class="toolbar">
-      <label><input type="checkbox" id="fDirect"   checked> Direct edges</label>
-      <label><input type="checkbox" id="fIndirect" checked> Indirect edges</label>
-      <input type="text" id="search" placeholder="Search module, hypothesis, title&hellip;">
+      <label><input type="checkbox" id="fBiochemical" checked> Biochemical links</label>
+      <label><input type="checkbox" id="fBiology" checked> Biology links</label>
+      <label><input type="checkbox" id="fBoth" checked> Both</label>
+      <input type="text" id="search" placeholder="Search module, cluster, hypothesis, title&hellip;">
     </div>
     <div class="legend">
-      <span><i class="leg-circle" style="background:#667085"></i>Node</span>
+      <span><i class="leg-circle" style="background:#667085"></i>Node color&nbsp;&rarr;&nbsp;cluster</span>
       <i class="leg-sep"></i>
       <span>Size&nbsp;&rarr;&nbsp;confidence</span>
       <i class="leg-sep"></i>
-      <span><i class="leg-edge-d"></i>Direct</span>
-      <span><i class="leg-edge-i"></i>Indirect</span>
+      <span><i class="leg-edge-biochem"></i>Biochemical</span>
+      <span><i class="leg-edge-biology"></i>Biology</span>
+      <span><i class="leg-edge-both"></i>Both</span>
       <i class="leg-sep"></i>
-      <div id="module-legend"></div>
+      <div id="cluster-legend"></div>
     </div>
     <div class="network-wrap">
       <svg id="network"><g id="edges"></g><g id="nodes"></g></svg>
@@ -693,6 +721,7 @@ generate_synthesis_network_html <- function(synthesis,
         <tr>
           <th>Hypothesis</th>
           <th>Module</th>
+          <th>Cluster</th>
           <th>Type</th>
           <th>Confidence</th>
           <th>Title</th>
@@ -709,8 +738,8 @@ generate_synthesis_network_html <- function(synthesis,
           <th>Node 1</th>
           <th>Node 2</th>
           <th>Relation</th>
-          <th>Subtype</th>
-          <th>Rationale</th>
+          <th>Biochemical Evidence</th>
+          <th>Biology Rationale</th>
         </tr>
       </thead>
       <tbody id="etbl-body"></tbody>

@@ -8,8 +8,11 @@
 # Takes all accepted hypotheses from annotate_module() output
 # and produces:
 #   1. Thematic clusters  — grouping of hypotheses by shared biology
-#   2. Sparse relationship table — only direct / indirect pairs;
-#      pairs not listed are completed as unrelated (not_identified)
+#   2. Evidence-backed relationship tables:
+#      - biochemical links are computed deterministically from direct MRN
+#        anchor-metabolite edges and top pathway ID overlap
+#      - biology links are inferred by the synthesis LLM from title/summary
+#      - final relation_type is biochemical / biology / both / none
 #   3. Overall summary narrative — dominant themes, cross-module
 #      connections, and integrated phenotype interpretation
 #
@@ -20,12 +23,10 @@
 #   hypothesis is more central in the network.
 #
 # Relationship taxonomy:
-#   direct   / shared_pathway      — same or tightly adjacent pathway
-#   direct   / containment         — one is a sub-process of the other
-#   direct   / cross_talk          — explicit substrate/product/regulatory link
-#   indirect / parallel_under_theme — same higher-level theme, different routes
-#   indirect / phenotype_convergent — different mechanisms, same phenotype target
-#   (unrelated pairs are completed by R, not listed by the LLM)
+#   biochemical — direct anchor-metabolite edge in MRN and/or top pathway ID overlap
+#   biology     — LLM-inferred functional relationship from hypothesis titles/summaries
+#   both        — both evidence sources support the pair
+#   none        — no biochemical or biology link identified
 # ============================================================
 
 
@@ -78,7 +79,7 @@ prepare_synthesis_nodes <- function(module_df) {
 
   optional_cols <- c(
     "hypothesis_type", "confidence_label", "rationale", "anchor_metabolites",
-    "top_kegg_pathways", "top_hmdb_pathways",
+    "anchor_metabolite_ids", "top_kegg_pathways", "top_hmdb_pathways",
     "phenotype_literature_support", "phenotype_evidence_note"
   )
   for (nm in optional_cols) {
@@ -103,9 +104,8 @@ Your task is to synthesize a set of annotated metabolic module hypotheses from o
 into an integrated biological picture.
 
 You will receive:
-- A list of hypothesis nodes, each with: node_id, module_id, verdict_status,
-  hypothesis type, title, functional_summary, phenotype_relationship, confidence/rationale,
-  core driver metabolites, pathway evidence, and phenotype literature support
+- A list of accepted hypothesis nodes, each with: node_id, module_id,
+  hypothesis type, title, and functional_summary
 - Study context: species, biospecimen, phenotype
 
 Your output has three parts:
@@ -123,47 +123,33 @@ For each cluster provide:
 - node_ids      : list of node_ids in this cluster
 
 ────────────────────────────────────────
-PART 2 — RELATIONSHIPS (cross-module only, sparse)
+PART 2 — BIOLOGY LINKS (cross-module only, sparse)
 ────────────────────────────────────────
-List node pairs that have a direct or indirect biological relationship.
-
-Relationship taxonomy (use exactly one subtype):
-  direct   | shared_pathway      : same or tightly adjacent pathway
-  direct   | containment         : one node is a sub-process of the other
-  direct   | cross_talk          : explicit substrate/product/regulatory biochemical link
-  indirect | parallel_under_theme: different routes under the same biological theme
-  indirect | phenotype_convergent: different mechanisms converging on the same phenotype process
+List cross-module node pairs that have a clear functional or biological relationship
+based only on their titles and functional summaries.
 
 For each relationship provide:
 - node_1         : node_id
 - node_2         : node_id
-- relation_class : \"direct\" | \"indirect\"
-- subtype        : one of the five subtypes above
-- rationale      : 1-2 sentences citing specific metabolites, pathways, or phenotype evidence.
-                   Do not claim metabolite overlap unless the exact same metabolite names are
-                   visible in both node records.
+- rationale      : 1-2 sentences explaining the shared functional theme or biological
+                   dependency implied by the two titles/summaries.
 
 ────────────────────────────────────────
 PART 3 — SUMMARY
 ────────────────────────────────────────
 Write a 4-7 sentence narrative integrating the findings. Structure it as:
   Sentence 1-2 : Dominant biological themes (reference cluster names)
-  Sentence 3-4 : Key cross-module connections (reference specific node titles and relations)
+  Sentence 3-4 : Key cross-module biology links (reference specific node titles)
   Sentence 5-6 : Integrated phenotype interpretation (tie the modules to the study phenotype)
   Sentence 7   : (optional) Caveats or unresolved questions across modules
 
 RULES:
 - Base all statements on the provided node information only
-- Do NOT invent metabolites, pathways, or literature not present in the inputs
-- Treat modules as distinct community-detected modules. Do NOT describe two modules as
-  having \"overlapping\" or \"shared\" metabolites unless the exact same metabolite
-  name is explicitly present in both nodes' Core drivers or pathway evidence.
-- For shared_pathway relationships, cite shared or adjacent pathway evidence,
-  biochemical class, or process similarity. Same pathway evidence is not the same
-  as overlapping metabolites.
-- Use core drivers and pathway evidence when deciding shared pathways, containment, or cross-talk
-- Use phenotype relationship and literature support when deciding phenotype_convergent relationships
-- Do NOT rank accepted nodes by verdict status in the summary (treat all accepted nodes equally)
+- Do NOT infer biochemical adjacency, pathway overlap, substrate/product edges, or MRN links;
+  those are computed separately by R code.
+- Do NOT invent metabolites, pathways, or literature.
+- Do NOT rank accepted nodes by verdict status; treat all accepted nodes equally.
+- Only list a biology link when the titles/summaries imply a meaningful functional connection.
 
 Return STRICT JSON only:
 {{
@@ -178,8 +164,6 @@ Return STRICT JSON only:
     {{
       \"node_1\": \"...\",
       \"node_2\": \"...\",
-      \"relation_class\": \"direct | indirect\",
-      \"subtype\": \"...\",
       \"rationale\": \"...\"
     }}
   ],
@@ -212,7 +196,9 @@ build_synthesis_user_prompt <- function(nodes_df, study_context = NULL) {
     ctx_text <- "Study context: not provided."
   }
 
-  # Node blocks — group same-module nodes together
+  # Node blocks — group same-module nodes together.  Biology-link inference
+  # intentionally sees only title/summary-level semantics; deterministic
+  # biochemical evidence is computed separately in R.
   nodes_df <- nodes_df[order(nodes_df$module_id, nodes_df$node_id), ]
   modules  <- unique(nodes_df$module_id)
 
@@ -221,26 +207,14 @@ build_synthesis_user_prompt <- function(nodes_df, study_context = NULL) {
     lapply(seq_len(nrow(rows)), function(i) {
       r <- rows[i, ]
       fs <- scalar(r$functional_summary)
-      pr <- scalar(r$phenotype_relationship)
-      rat <- scalar(r$rationale)
       # Truncate to keep prompt manageable
       if (nchar(fs) > 500) fs <- paste0(substr(fs, 1, 500), "...")
-      if (nchar(pr) > 300) pr <- paste0(substr(pr, 1, 300), "...")
-      if (nchar(rat) > 300) rat <- paste0(substr(rat, 1, 300), "...")
       glue::glue(
         "Node: {r$node_id}
-  Module: {r$module_id}  |  Status: {scalar(r$verdict_status)}
+  Module: {r$module_id}
   Type: {scalar(r$hypothesis_type)}
   Title: {scalar(r$title)}
-  Confidence: {scalar(r$confidence_label)}
-  Confidence rationale: {rat}
-  Anchor metabolites: {scalar(r$anchor_metabolites)}
-  Top KEGG pathways: {scalar(r$top_kegg_pathways)}
-  Top HMDB pathways: {scalar(r$top_hmdb_pathways)}
-  Functional summary: {fs}
-  Phenotype relationship: {pr}
-  Phenotype literature support: {scalar(r$phenotype_literature_support)}
-  Phenotype evidence note: {scalar(r$phenotype_evidence_note)}"
+  Functional summary: {fs}"
       )
     })
   }), recursive = FALSE)
@@ -289,15 +263,9 @@ synth_gemini_schema <- function() {
           properties = list(
             node_1         = list(type = "STRING"),
             node_2         = list(type = "STRING"),
-            relation_class = list(type = "STRING",
-                                  enum = c("direct", "indirect")),
-            subtype        = list(type = "STRING",
-                                  enum = c("shared_pathway", "containment",
-                                           "cross_talk", "parallel_under_theme",
-                                           "phenotype_convergent")),
             rationale      = list(type = "STRING")
           ),
-          required = c("node_1", "node_2", "relation_class", "subtype", "rationale")
+          required = c("node_1", "node_2", "rationale")
         )
       ),
       summary = list(type = "STRING")
@@ -308,35 +276,259 @@ synth_gemini_schema <- function() {
 
 
 # ============================================================
-# SECTION 4a – Relationship table completion
+# SECTION 4a – Deterministic biochemical evidence
 # ============================================================
 
-# After the LLM returns sparse cross-module direct/indirect pairs, this
-# function completes the full N*(N-1)/2 pairwise table by:
-#
-#   1. same_module pairs  → relation_class = "same_module"
-#                           subtype        = "same_module_hypotheses"
-#                           rationale      = (auto-generated note)
-#
-#   2. LLM direct/indirect pairs → kept as-is (cross-module only)
-#
-#   3. Remaining cross-module pairs → relation_class = "unrelated"
-#                                     subtype        = "not_identified"
-#                                     rationale      = NA
-#
-# Returns a complete data frame with one row per unique pair.
-complete_relationship_table <- function(llm_relationships, nodes_df) {
+.syn_split_field <- function(x) {
+  if (is.null(x) || length(x) == 0L) return(character(0))
+  x <- as.character(x[1])
+  if (is.na(x) || !nzchar(trimws(x)) || toupper(trimws(x)) %in% c("NA", "NULL")) {
+    return(character(0))
+  }
+  out <- trimws(strsplit(x, ";\\s*")[[1]])
+  out[!is.na(out) & nzchar(out) & toupper(out) != "NA"]
+}
+
+.syn_pair_key <- function(a, b) {
+  paste(pmin(a, b), pmax(a, b), sep = "|||")
+}
+
+.syn_empty_biochemical_links <- function() {
+  data.frame(
+    node_1 = character(), node_2 = character(),
+    module_id_1 = character(), module_id_2 = character(),
+    biochemical_mrn_edge = logical(),
+    biochemical_mrn_pairs = character(),
+    biochemical_pathway_overlap = logical(),
+    biochemical_pathway_ids = character(),
+    biochemical_pathway_names = character(),
+    biochemical_evidence_type = character(),
+    biochemical_evidence_detail = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+.syn_empty_biology_links <- function() {
+  data.frame(
+    node_1 = character(), node_2 = character(),
+    module_id_1 = character(), module_id_2 = character(),
+    same_module = logical(),
+    has_biochemical_link = logical(),
+    biochemical_evidence_type = character(),
+    biochemical_evidence_detail = character(),
+    biochemical_mrn_edge = logical(),
+    biochemical_mrn_pairs = character(),
+    biochemical_pathway_overlap = logical(),
+    biochemical_pathway_ids = character(),
+    biochemical_pathway_names = character(),
+    has_biology_link = logical(),
+    biology_rationale = character(),
+    relation_type = character(),
+    relation_class = character(),
+    subtype = character(),
+    rationale = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+.syn_extract_mrn_edge_keys <- function(mrn) {
+  if (is.null(mrn)) return(character(0))
+  edge_df <- tryCatch(igraph::as_data_frame(mrn, what = "edges"), error = function(e) NULL)
+  if (is.null(edge_df) || !is.data.frame(edge_df) || nrow(edge_df) == 0L) {
+    return(character(0))
+  }
+
+  keys <- character(0)
+  add_keys <- function(from, to) {
+    from <- trimws(as.character(from))
+    to   <- trimws(as.character(to))
+    ok <- !is.na(from) & !is.na(to) & nzchar(from) & nzchar(to)
+    .syn_pair_key(from[ok], to[ok])
+  }
+
+  if (all(c("INCHI_From", "INCHI_To") %in% colnames(edge_df))) {
+    keys <- c(keys, add_keys(edge_df$INCHI_From, edge_df$INCHI_To))
+  }
+  if (all(c("from", "to") %in% colnames(edge_df))) {
+    keys <- c(keys, add_keys(edge_df$from, edge_df$to))
+  }
+
+  unique(keys)
+}
+
+.syn_pathway_records <- function(pathway_coverage) {
+  if (is.null(pathway_coverage) || !is.list(pathway_coverage)) {
+    return(data.frame(
+      module_id = character(), db = character(),
+      pathway_id = character(), pathway_name = character(),
+      pathway_key = character(), stringsAsFactors = FALSE
+    ))
+  }
+
+  rows <- lapply(c("kegg", "hmdb"), function(db) {
+    df <- pathway_coverage[[db]]
+    if (is.null(df) || !is.data.frame(df) || nrow(df) == 0L ||
+        !"module_id" %in% colnames(df) || !"pathway_id" %in% colnames(df)) {
+      return(NULL)
+    }
+    pathway_name <- if ("pathway_name" %in% colnames(df)) df$pathway_name else NA_character_
+    out <- data.frame(
+      module_id = trimws(as.character(df$module_id)),
+      db = db,
+      pathway_id = trimws(as.character(df$pathway_id)),
+      pathway_name = trimws(as.character(pathway_name)),
+      stringsAsFactors = FALSE
+    )
+    ok <- !is.na(out$module_id) & nzchar(out$module_id) &
+      !is.na(out$pathway_id) & nzchar(out$pathway_id) &
+      toupper(out$pathway_id) != "NA"
+    out <- out[ok, , drop = FALSE]
+    if (nrow(out) == 0L) return(NULL)
+    out$pathway_key <- paste(out$db, out$pathway_id, sep = ":")
+    out
+  })
+
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0L) {
+    return(data.frame(
+      module_id = character(), db = character(),
+      pathway_id = character(), pathway_name = character(),
+      pathway_key = character(), stringsAsFactors = FALSE
+    ))
+  }
+  unique(do.call(rbind, rows))
+}
+
+#' Build deterministic biochemical links for synthesis nodes
+#'
+#' A pair has a biochemical link if the two nodes come from different modules
+#' and either their anchor metabolites have a direct MRN edge, or their modules
+#' share at least one top pathway ID.
+build_synthesis_biochemical_links <- function(nodes_df,
+                                              mrn = NULL,
+                                              pathway_coverage = NULL) {
+  out_empty <- .syn_empty_biochemical_links()
+  if (is.null(nodes_df) || !is.data.frame(nodes_df) || nrow(nodes_df) < 2L) {
+    return(out_empty)
+  }
+
+  node_ids <- nodes_df$node_id
+  edge_keys <- .syn_extract_mrn_edge_keys(mrn)
+  pathway_df <- .syn_pathway_records(pathway_coverage)
+  pathways_by_module <- split(pathway_df, pathway_df$module_id)
+
+  anchors_by_node <- setNames(lapply(seq_len(nrow(nodes_df)), function(i) {
+    ids <- .syn_split_field(nodes_df$anchor_metabolite_ids[i])
+    nms <- .syn_split_field(nodes_df$anchor_metabolites[i])
+    n <- max(length(ids), length(nms), 0L)
+    if (n == 0L) {
+      return(data.frame(id = character(), name = character(), stringsAsFactors = FALSE))
+    }
+    anchor_df <- data.frame(
+      id = vapply(seq_len(n), function(j) if (j <= length(ids)) ids[[j]] else NA_character_, character(1)),
+      name = vapply(seq_len(n), function(j) if (j <= length(nms)) nms[[j]] else NA_character_, character(1)),
+      stringsAsFactors = FALSE
+    )
+    anchor_df[!is.na(anchor_df$id) & nzchar(anchor_df$id) &
+                toupper(anchor_df$id) != "NA", , drop = FALSE]
+  }), node_ids)
+
+  mid_lookup <- setNames(nodes_df$module_id, nodes_df$node_id)
+  pairs <- combn(sort(node_ids), 2, simplify = FALSE)
+
+  rows <- lapply(pairs, function(p) {
+    n1 <- p[[1]]; n2 <- p[[2]]
+    m1 <- unname(mid_lookup[n1] %||% NA_character_)
+    m2 <- unname(mid_lookup[n2] %||% NA_character_)
+    if (is.na(m1) || is.na(m2) || identical(m1, m2)) return(NULL)
+
+    a1 <- anchors_by_node[[n1]]
+    a2 <- anchors_by_node[[n2]]
+    mrn_pairs <- character(0)
+    if (nrow(a1) > 0L && nrow(a2) > 0L && length(edge_keys) > 0L) {
+      for (i in seq_len(nrow(a1))) {
+        for (j in seq_len(nrow(a2))) {
+          key <- .syn_pair_key(a1$id[i], a2$id[j])
+          if (key %in% edge_keys) {
+            left <- if (!is.na(a1$name[i]) && nzchar(a1$name[i])) {
+              paste0(a1$name[i], " [", a1$id[i], "]")
+            } else a1$id[i]
+            right <- if (!is.na(a2$name[j]) && nzchar(a2$name[j])) {
+              paste0(a2$name[j], " [", a2$id[j], "]")
+            } else a2$id[j]
+            mrn_pairs <- c(mrn_pairs, paste(left, right, sep = " -- "))
+          }
+        }
+      }
+    }
+
+    p1 <- pathways_by_module[[as.character(m1)]] %||% pathway_df[0, , drop = FALSE]
+    p2 <- pathways_by_module[[as.character(m2)]] %||% pathway_df[0, , drop = FALSE]
+    overlap_keys <- intersect(p1$pathway_key, p2$pathway_key)
+    overlap <- unique(rbind(
+      p1[p1$pathway_key %in% overlap_keys, , drop = FALSE],
+      p2[p2$pathway_key %in% overlap_keys, , drop = FALSE]
+    ))
+    pathway_ids <- unique(overlap$pathway_key)
+    pathway_names <- unique(ifelse(
+      is.na(overlap$pathway_name) | !nzchar(overlap$pathway_name),
+      overlap$pathway_key,
+      paste0(overlap$pathway_name, " [", overlap$pathway_key, "]")
+    ))
+
+    has_mrn <- length(mrn_pairs) > 0L
+    has_pw  <- length(pathway_ids) > 0L
+    if (!has_mrn && !has_pw) return(NULL)
+
+    evidence_type <- if (has_mrn && has_pw) {
+      "both"
+    } else if (has_mrn) {
+      "mrn_anchor_edge"
+    } else {
+      "pathway_overlap"
+    }
+    details <- c(
+      if (has_mrn) paste0("Direct MRN anchor edge(s): ", paste(unique(mrn_pairs), collapse = "; ")),
+      if (has_pw) paste0("Top pathway ID overlap: ", paste(pathway_ids, collapse = "; "))
+    )
+
+    data.frame(
+      node_1 = n1,
+      node_2 = n2,
+      module_id_1 = m1,
+      module_id_2 = m2,
+      biochemical_mrn_edge = has_mrn,
+      biochemical_mrn_pairs = if (has_mrn) paste(unique(mrn_pairs), collapse = "; ") else NA_character_,
+      biochemical_pathway_overlap = has_pw,
+      biochemical_pathway_ids = if (has_pw) paste(pathway_ids, collapse = "; ") else NA_character_,
+      biochemical_pathway_names = if (has_pw) paste(pathway_names, collapse = "; ") else NA_character_,
+      biochemical_evidence_type = evidence_type,
+      biochemical_evidence_detail = paste(details, collapse = " | "),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0L) return(out_empty)
+  do.call(rbind, rows)
+}
+
+
+# ============================================================
+# SECTION 4b – Relationship table completion
+# ============================================================
+
+# After the LLM returns sparse cross-module biology links and R computes
+# biochemical links, this function completes the full N*(N-1)/2 pairwise table.
+# Final relation_type is derived, never directly assigned by the LLM.
+complete_relationship_table <- function(biology_relationships,
+                                        nodes_df,
+                                        biochemical_links = NULL) {
 
   node_ids <- nodes_df$node_id
   n        <- length(node_ids)
 
-  empty_complete <- data.frame(
-    node_1 = character(), node_2 = character(),
-    module_id_1 = character(), module_id_2 = character(),
-    same_module = logical(), relation_class = character(),
-    subtype = character(), rationale = character(),
-    stringsAsFactors = FALSE
-  )
+  empty_complete <- .syn_empty_biology_links()
   if (n < 2) return(empty_complete)
 
   # All unique pairs (lexicographic order)
@@ -345,11 +537,16 @@ complete_relationship_table <- function(llm_relationships, nodes_df) {
   # Module lookup
   mid_lookup <- setNames(nodes_df$module_id, nodes_df$node_id)
 
-  # LLM relationship lookup: "node_1|||node_2" → row index
-  if (!is.null(llm_relationships) && nrow(llm_relationships) > 0) {
-    llm_key <- paste(llm_relationships$node_1, llm_relationships$node_2, sep = "|||")
+  # Relationship lookups: "node_1|||node_2" -> row index
+  if (!is.null(biology_relationships) && nrow(biology_relationships) > 0) {
+    bio_key <- paste(biology_relationships$node_1, biology_relationships$node_2, sep = "|||")
   } else {
-    llm_key <- character(0)
+    bio_key <- character(0)
+  }
+  if (!is.null(biochemical_links) && nrow(biochemical_links) > 0) {
+    biochem_key <- paste(biochemical_links$node_1, biochemical_links$node_2, sep = "|||")
+  } else {
+    biochem_key <- character(0)
   }
 
   rows <- lapply(pairs, function(p) {
@@ -367,37 +564,73 @@ complete_relationship_table <- function(llm_relationships, nodes_df) {
         module_id_1    = m1,
         module_id_2    = m2,
         same_module    = TRUE,
+        has_biochemical_link = FALSE,
+        biochemical_evidence_type = NA_character_,
+        biochemical_evidence_detail = NA_character_,
+        biochemical_mrn_edge = FALSE,
+        biochemical_mrn_pairs = NA_character_,
+        biochemical_pathway_overlap = FALSE,
+        biochemical_pathway_ids = NA_character_,
+        biochemical_pathway_names = NA_character_,
+        has_biology_link = FALSE,
+        biology_rationale = NA_character_,
+        relation_type = "same_module",
         relation_class = "same_module",
-        subtype        = "same_module_hypotheses",
-        rationale      = paste0("Both nodes are hypotheses for module ", m1,
-                                " generated in the same module-level debate."),
-        stringsAsFactors = FALSE
-      )
-    } else if (key %in% llm_key) {
-      # LLM-labeled direct or indirect relationship
-      r <- llm_relationships[llm_key == key, , drop = FALSE][1, ]
-      data.frame(
-        node_1         = n1,
-        node_2         = n2,
-        module_id_1    = m1,
-        module_id_2    = m2,
-        same_module    = FALSE,
-        relation_class = r$relation_class,
-        subtype        = r$subtype,
-        rationale      = r$rationale,
+        subtype = "same_module_hypotheses",
+        rationale = paste0("Both nodes are hypotheses for module ", m1,
+                           " generated in the same module-level debate."),
         stringsAsFactors = FALSE
       )
     } else {
-      # Cross-module, not mentioned by LLM → unrelated
+      bio <- if (key %in% bio_key) {
+        biology_relationships[bio_key == key, , drop = FALSE][1, ]
+      } else NULL
+      biochem <- if (key %in% biochem_key) {
+        biochemical_links[biochem_key == key, , drop = FALSE][1, ]
+      } else NULL
+
+      has_bio <- !is.null(bio)
+      has_biochem <- !is.null(biochem)
+      relation_type <- if (has_bio && has_biochem) {
+        "both"
+      } else if (has_biochem) {
+        "biochemical"
+      } else if (has_bio) {
+        "biology"
+      } else {
+        "none"
+      }
+
+      biochem_detail <- if (has_biochem) biochem$biochemical_evidence_detail else NA_character_
+      bio_rationale <- if (has_bio) bio$biology_rationale %||% bio$rationale else NA_character_
+      rationale <- paste(c(
+        if (has_biochem) biochem_detail,
+        if (has_bio) bio_rationale
+      ), collapse = " | ")
+      if (!nzchar(rationale)) {
+        rationale <- "No biochemical or biology link was identified."
+      }
+
       data.frame(
         node_1         = n1,
         node_2         = n2,
         module_id_1    = m1,
         module_id_2    = m2,
         same_module    = FALSE,
-        relation_class = "unrelated",
-        subtype        = "not_identified",
-        rationale      = "No direct or indirect relationship was identified by the synthesis agent.",
+        has_biochemical_link = has_biochem,
+        biochemical_evidence_type = if (has_biochem) biochem$biochemical_evidence_type else NA_character_,
+        biochemical_evidence_detail = biochem_detail,
+        biochemical_mrn_edge = if (has_biochem) biochem$biochemical_mrn_edge else FALSE,
+        biochemical_mrn_pairs = if (has_biochem) biochem$biochemical_mrn_pairs else NA_character_,
+        biochemical_pathway_overlap = if (has_biochem) biochem$biochemical_pathway_overlap else FALSE,
+        biochemical_pathway_ids = if (has_biochem) biochem$biochemical_pathway_ids else NA_character_,
+        biochemical_pathway_names = if (has_biochem) biochem$biochemical_pathway_names else NA_character_,
+        has_biology_link = has_bio,
+        biology_rationale = bio_rationale,
+        relation_type = relation_type,
+        relation_class = relation_type,
+        subtype = relation_type,
+        rationale = rationale,
         stringsAsFactors = FALSE
       )
     }
@@ -406,18 +639,115 @@ complete_relationship_table <- function(llm_relationships, nodes_df) {
   do.call(rbind, rows)
 }
 
+.syn_empty_module_relationships <- function() {
+  data.frame(
+    module_id_1 = character(), module_id_2 = character(),
+    has_biochemical_link = logical(),
+    has_biology_link = logical(),
+    relation_type = character(),
+    biochemical_mrn_edge = logical(),
+    biochemical_pathway_overlap = logical(),
+    biochemical_evidence_type = character(),
+    biochemical_evidence_detail = character(),
+    biology_rationale = character(),
+    contributing_node_pairs = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Summarize hypothesis-pair relationships to module-pair relationships
+#'
+#' The synthesis graph remains hypothesis-level, but this table gives one row
+#' per module pair for downstream module-level interpretation.
+summarize_module_relationships <- function(relationships) {
+  out_empty <- .syn_empty_module_relationships()
+  if (is.null(relationships) || !is.data.frame(relationships) ||
+      nrow(relationships) == 0L) {
+    return(out_empty)
+  }
+
+  rel <- relationships[
+    !is.na(relationships$module_id_1) &
+      !is.na(relationships$module_id_2) &
+      relationships$module_id_1 != relationships$module_id_2,
+    ,
+    drop = FALSE
+  ]
+  if (nrow(rel) == 0L) return(out_empty)
+
+  m1 <- pmin(as.character(rel$module_id_1), as.character(rel$module_id_2))
+  m2 <- pmax(as.character(rel$module_id_1), as.character(rel$module_id_2))
+  pair_key <- paste(m1, m2, sep = "|||")
+
+  rows <- lapply(unique(pair_key), function(key) {
+    idx <- pair_key == key
+    df <- rel[idx, , drop = FALSE]
+    mods <- strsplit(key, "|||", fixed = TRUE)[[1]]
+    has_biochem <- any(df$has_biochemical_link, na.rm = TRUE)
+    has_bio <- any(df$has_biology_link, na.rm = TRUE)
+    relation_type <- if (has_biochem && has_bio) {
+      "both"
+    } else if (has_biochem) {
+      "biochemical"
+    } else if (has_bio) {
+      "biology"
+    } else {
+      "none"
+    }
+
+    mrn_edge <- any(df$biochemical_mrn_edge, na.rm = TRUE)
+    pathway_overlap <- any(df$biochemical_pathway_overlap, na.rm = TRUE)
+    evidence_type <- if (mrn_edge && pathway_overlap) {
+      "both"
+    } else if (mrn_edge) {
+      "mrn_anchor_edge"
+    } else if (pathway_overlap) {
+      "pathway_overlap"
+    } else {
+      NA_character_
+    }
+
+    clean_join <- function(x) {
+      x <- unique(trimws(as.character(x)))
+      x <- x[!is.na(x) & nzchar(x) & toupper(x) != "NA"]
+      if (length(x) == 0L) NA_character_ else paste(x, collapse = " | ")
+    }
+
+    contributing <- paste0(df$node_1, " -- ", df$node_2, " [", df$relation_type, "]")
+
+    data.frame(
+      module_id_1 = mods[[1]],
+      module_id_2 = mods[[2]],
+      has_biochemical_link = has_biochem,
+      has_biology_link = has_bio,
+      relation_type = relation_type,
+      biochemical_mrn_edge = mrn_edge,
+      biochemical_pathway_overlap = pathway_overlap,
+      biochemical_evidence_type = evidence_type,
+      biochemical_evidence_detail = clean_join(df$biochemical_evidence_detail),
+      biology_rationale = clean_join(df$biology_rationale),
+      contributing_node_pairs = clean_join(contributing),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  do.call(rbind, rows)
+}
+
 
 # ============================================================
-# SECTION 4b – Output parsing & assembly
+# SECTION 4c – Output parsing & assembly
 # ============================================================
 
 #' Parse synthesis LLM output into tidy data frames
 #'
 #' @param parsed   Parsed list from \code{adv_parse_json_response()}.
 #' @param nodes_df Node data frame from \code{prepare_synthesis_nodes()}.
-#' @return List with \code{$clusters}, \code{$relationships_sparse},
-#'   \code{$relationships}, \code{$summary}, \code{$nodes}.
-parse_synthesis_output <- function(parsed, nodes_df) {
+#' @param biochemical_links Data frame from \code{build_synthesis_biochemical_links()}.
+#' @return List with \code{$clusters}, \code{$biology_links},
+#'   \code{$biochemical_links}, \code{$relationships},
+#'   \code{$module_relationships}, \code{$summary}, \code{$nodes}.
+parse_synthesis_output <- function(parsed, nodes_df, biochemical_links = NULL) {
 
   valid_nodes <- nodes_df$node_id
 
@@ -447,9 +777,11 @@ parse_synthesis_output <- function(parsed, nodes_df) {
   relationships_df <- tryCatch({
     rl <- parsed$relationships
     if (is.null(rl) || length(rl) == 0) {
-      data.frame(node_1 = character(), node_2 = character(),
-                 relation_class = character(), subtype = character(),
-                 rationale = character(), stringsAsFactors = FALSE)
+      data.frame(
+        node_1 = character(), node_2 = character(),
+        biology_rationale = character(),
+        stringsAsFactors = FALSE
+      )
     } else {
       do.call(rbind, lapply(rl, function(r) {
         n1 <- trimws(as.character(r$node_1 %||% ""))
@@ -457,33 +789,28 @@ parse_synthesis_output <- function(parsed, nodes_df) {
         # Enforce lexicographic ordering to avoid duplicate pairs
         if (n1 > n2) { tmp <- n1; n1 <- n2; n2 <- tmp }
         data.frame(
-          node_1         = n1,
-          node_2         = n2,
-          relation_class = trimws(tolower(as.character(r$relation_class %||% ""))),
-          subtype        = trimws(as.character(r$subtype        %||% "")),
-          rationale      = trimws(as.character(r$rationale      %||% "")),
+          node_1 = n1,
+          node_2 = n2,
+          biology_rationale = trimws(as.character(r$rationale %||% "")),
           stringsAsFactors = FALSE
         )
       }))
     }
   }, error = function(e) {
-    data.frame(node_1 = character(), node_2 = character(),
-               relation_class = character(), subtype = character(),
-               rationale = character(), stringsAsFactors = FALSE)
+    data.frame(
+      node_1 = character(), node_2 = character(),
+      biology_rationale = character(),
+      stringsAsFactors = FALSE
+    )
   })
 
   # Deduplicate pairs (same node_1/node_2)
   if (nrow(relationships_df) > 0) {
-    allowed_subtypes <- c(
-      "shared_pathway", "containment", "cross_talk",
-      "parallel_under_theme", "phenotype_convergent"
-    )
     relationships_df <- relationships_df[
       relationships_df$node_1 %in% valid_nodes &
         relationships_df$node_2 %in% valid_nodes &
         relationships_df$node_1 != relationships_df$node_2 &
-        relationships_df$relation_class %in% c("direct", "indirect") &
-        relationships_df$subtype %in% allowed_subtypes,
+        nzchar(relationships_df$biology_rationale),
       ,
       drop = FALSE
     ]
@@ -510,14 +837,30 @@ parse_synthesis_output <- function(parsed, nodes_df) {
     relationships_df$module_id_2 <- unname(mid_lookup[relationships_df$node_2])
     relationships_df$same_module  <- relationships_df$module_id_1 == relationships_df$module_id_2 &
       !is.na(relationships_df$module_id_1)
+    relationships_df$has_biology_link <- TRUE
+    relationships_df$relation_type <- "biology"
+    relationships_df$relation_class <- "biology"
+    relationships_df$subtype <- "biology_link"
+    relationships_df$rationale <- relationships_df$biology_rationale
   } else {
     relationships_df$module_id_1  <- character()
     relationships_df$module_id_2  <- character()
     relationships_df$same_module   <- logical()
+    relationships_df$has_biology_link <- logical()
+    relationships_df$relation_type <- character()
+    relationships_df$relation_class <- character()
+    relationships_df$subtype <- character()
+    relationships_df$rationale <- character()
   }
 
   relationships_sparse <- relationships_df
-  relationships_complete <- complete_relationship_table(relationships_sparse, nodes_df)
+  if (is.null(biochemical_links)) biochemical_links <- .syn_empty_biochemical_links()
+  relationships_complete <- complete_relationship_table(
+    biology_relationships = relationships_sparse,
+    nodes_df = nodes_df,
+    biochemical_links = biochemical_links
+  )
+  module_relationships <- summarize_module_relationships(relationships_complete)
 
   # Enrich nodes with cluster assignment
   nodes_out <- nodes_df
@@ -530,8 +873,11 @@ parse_synthesis_output <- function(parsed, nodes_df) {
   list(
     nodes                = nodes_out,
     clusters             = clusters_df,
+    biology_links        = relationships_sparse,
+    biochemical_links    = biochemical_links,
     relationships_sparse = relationships_sparse,
     relationships        = relationships_complete,
+    module_relationships = module_relationships,
     summary              = trimws(as.character(parsed$summary %||% ""))
   )
 }
@@ -547,7 +893,9 @@ parse_synthesis_output <- function(parsed, nodes_df) {
 #' result and runs a single LLM call to produce:
 #' \itemize{
 #'   \item Thematic clusters of hypotheses
-#'   \item A sparse pairwise relationship table (direct/indirect only)
+#'   \item LLM-inferred biology links from hypothesis titles/summaries
+#'   \item Deterministic biochemical links from direct MRN anchor edges and
+#'         top pathway ID overlap
 #'   \item An overall narrative summary
 #' }
 #'
@@ -564,7 +912,9 @@ parse_synthesis_output <- function(parsed, nodes_df) {
 #' @param sleep_sec      Seconds to pause after the API call (default 0).
 #' @return The input \code{res} object with a \code{module_synthesis} list
 #'   appended, containing \code{$nodes}, \code{$clusters},
+#'   \code{$biology_links}, \code{$biochemical_links},
 #'   \code{$relationships_sparse}, \code{$relationships},
+#'   \code{$module_relationships},
 #'   \code{$summary}, and \code{$raw_response}.
 #' @export
 synthesize_modules <- function(res,
@@ -627,6 +977,15 @@ synthesize_modules <- function(res,
 
   n_nodes   <- nrow(nodes_df)
   n_modules <- length(unique(nodes_df$module_id))
+  pathway_coverage <- NULL
+  if (!is.null(res$module_evidence) && !is.null(res$module_evidence$pathway_coverage)) {
+    pathway_coverage <- res$module_evidence$pathway_coverage
+  }
+  biochemical_links <- build_synthesis_biochemical_links(
+    nodes_df = nodes_df,
+    mrn = res$mrn %||% NULL,
+    pathway_coverage = pathway_coverage
+  )
 
   if (n_modules <= 1) {
     cli::cli_alert_info(
@@ -641,17 +1000,19 @@ synthesize_modules <- function(res,
         stringsAsFactors = FALSE
       ),
       relationships_sparse = data.frame(
-        node_1 = character(),
-        node_2 = character(),
-        relation_class = character(),
-        subtype = character(),
-        rationale = character(),
-        module_id_1 = character(),
-        module_id_2 = character(),
-        same_module = logical(),
-        stringsAsFactors = FALSE
+        node_1 = character(), node_2 = character(),
+        biology_rationale = character(), module_id_1 = character(),
+        module_id_2 = character(), same_module = logical(),
+        has_biology_link = logical(), relation_type = character(),
+        relation_class = character(), subtype = character(),
+        rationale = character(), stringsAsFactors = FALSE
       ),
-      relationships        = complete_relationship_table(NULL, nodes_df),
+      biology_links        = .syn_empty_biology_links()[0, , drop = FALSE],
+      biochemical_links    = biochemical_links,
+      relationships        = complete_relationship_table(NULL, nodes_df, biochemical_links),
+      module_relationships = summarize_module_relationships(
+        complete_relationship_table(NULL, nodes_df, biochemical_links)
+      ),
       summary              = NA_character_,
       raw_response         = NA_character_
     )
@@ -659,7 +1020,7 @@ synthesize_modules <- function(res,
   }
 
   cli::cli_alert_info(
-    "Synthesizing {.val {n_nodes}} hypothesis node(s) across {.val {n_modules}} module(s)."
+    "Synthesizing {.val {n_nodes}} hypothesis node(s) across {.val {n_modules}} module(s); precomputed {.val {nrow(biochemical_links)}} biochemical link(s)."
   )
 
   # ---- Build prompts ----
@@ -676,8 +1037,8 @@ synthesize_modules <- function(res,
     required_keys = c("clusters", "relationships", "summary"),
     schema        = schema,
     retry_instr   = paste(
-      "Return only valid JSON with keys \"clusters\" (array),",
-      "\"relationships\" (array), and \"summary\" (string)."
+        "Return only valid JSON with keys \"clusters\" (array),",
+        "\"relationships\" (array of biology links), and \"summary\" (string)."
     ),
     provider    = provider,
     llm_api_key = llm_api_key,
@@ -692,18 +1053,31 @@ synthesize_modules <- function(res,
   # ---- Parse output ----
   synthesis <- if (!is.null(result$parsed)) {
     tryCatch(
-      parse_synthesis_output(result$parsed, nodes_df),
+        parse_synthesis_output(result$parsed, nodes_df,
+                               biochemical_links = biochemical_links),
       error = function(e) {
         cli::cli_warn("synthesize_modules: output parsing failed — {e$message}")
-        list(nodes = nodes_df, clusters = NULL, relationships_sparse = NULL,
-             relationships = complete_relationship_table(NULL, nodes_df),
+        list(nodes = nodes_df, clusters = NULL,
+             biology_links = .syn_empty_biology_links()[0, , drop = FALSE],
+             biochemical_links = biochemical_links,
+             relationships_sparse = NULL,
+             relationships = complete_relationship_table(NULL, nodes_df, biochemical_links),
+             module_relationships = summarize_module_relationships(
+               complete_relationship_table(NULL, nodes_df, biochemical_links)
+             ),
              summary = NA_character_)
       }
     )
   } else {
     cli::cli_warn("synthesize_modules: LLM returned no parseable output.")
-    list(nodes = nodes_df, clusters = NULL, relationships_sparse = NULL,
-         relationships = complete_relationship_table(NULL, nodes_df),
+    list(nodes = nodes_df, clusters = NULL,
+         biology_links = .syn_empty_biology_links()[0, , drop = FALSE],
+         biochemical_links = biochemical_links,
+         relationships_sparse = NULL,
+         relationships = complete_relationship_table(NULL, nodes_df, biochemical_links),
+         module_relationships = summarize_module_relationships(
+           complete_relationship_table(NULL, nodes_df, biochemical_links)
+         ),
          summary = NA_character_)
   }
 
@@ -711,9 +1085,10 @@ synthesize_modules <- function(res,
 
   n_rel_sparse <- if (!is.null(synthesis$relationships_sparse)) nrow(synthesis$relationships_sparse) else 0L
   n_rel_full   <- if (!is.null(synthesis$relationships))        nrow(synthesis$relationships)        else 0L
+  n_rel_biochem <- if (!is.null(synthesis$biochemical_links))    nrow(synthesis$biochemical_links)    else 0L
   n_cl         <- if (!is.null(synthesis$clusters))             nrow(synthesis$clusters)             else 0L
   cli::cli_alert_success(
-    "Synthesis complete: {.val {n_cl}} cluster(s), {.val {n_rel_sparse}} LLM relationship(s), {.val {n_rel_full}} completed pair(s)."
+    "Synthesis complete: {.val {n_cl}} cluster(s), {.val {n_rel_sparse}} biology link(s), {.val {n_rel_biochem}} biochemical link(s), {.val {n_rel_full}} completed pair(s)."
   )
 
   res$module_synthesis <- synthesis

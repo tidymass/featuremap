@@ -272,18 +272,18 @@ compute_global_direction <- function(module_df, feature_table, anno_feature_tabl
 #'   KEGG_ID columns.
 #' @param pathway_hmdb Data frame loaded via
 #'   \code{featuremap_load_resource("pathway_hmdb")} with columns
-#'   pathway_id, pathway_name, HMDB_ID, n_metabolites. Pass \code{NULL} to
-#'   skip.
+#'   pathway_id, pathway_name, HMDB_ID, n_metabolites, and optionally
+#'   pathway_class. Pass \code{NULL} to skip.
 #' @param pathway_kegg Data frame loaded via
 #'   \code{featuremap_load_resource("pathway_kegg")} with columns
-#'   pathway_id, pathway_name, KEGG_ID, n_metabolites. Pass \code{NULL} to
-#'   skip.
+#'   pathway_id, pathway_name, KEGG_ID, n_metabolites, and optionally
+#'   pathway_class. Pass \code{NULL} to skip.
 #' @param top_n Integer. Maximum number of pathways to return per database
 #'   (default: 3).
 #'
 #' @return A named list with components \code{hmdb} and \code{kegg}, each a
 #'   tibble with columns pathway_id, pathway_name, n_hit, n_metabolites,
-#'   coverage.
+#'   coverage, plus pathway_class when available in the pathway database.
 #'   Empty tibble when the database is unavailable or no hits are found.
 compute_pathway_coverage <- function(module_df,
                                      pathway_hmdb = NULL,
@@ -297,15 +297,20 @@ compute_pathway_coverage <- function(module_df,
       return(tibble::tibble())
     if (length(module_ids) == 0)                           return(tibble::tibble())
 
-    # Per-pathway total size (one canonical value per pathway_id)
+    has_pathway_class <- "pathway_class" %in% colnames(pathway_db)
+    pathway_meta_cols <- c("pathway_id", "n_metabolites")
+    if (has_pathway_class) pathway_meta_cols <- c(pathway_meta_cols, "pathway_class")
+
+    # Per-pathway total size/class (one canonical value per pathway_id)
     pathway_sizes <- pathway_db[!duplicated(pathway_db$pathway_id),
-                                c("pathway_id", "n_metabolites"), drop = FALSE]
+                                pathway_meta_cols, drop = FALSE]
 
     hits <- pathway_db[pathway_db[[id_col]] %in% module_ids, , drop = FALSE]
     if (nrow(hits) == 0) return(tibble::tibble())
 
+    group_cols <- c("pathway_id", "pathway_name")
     agg <- aggregate(
-      as.formula(paste(id_col, "~ pathway_id + pathway_name")),
+      as.formula(paste(id_col, "~", paste(group_cols, collapse = " + "))),
       data = hits,
       FUN  = function(x) length(unique(x))
     )
@@ -315,8 +320,10 @@ compute_pathway_coverage <- function(module_df,
     agg$coverage <- round(agg$n_hit / pmax(agg$n_metabolites, 1L), 3)
     agg <- agg[order(-agg$coverage, -agg$n_hit), , drop = FALSE]
     agg <- agg[seq_len(min(top_n, nrow(agg))), , drop = FALSE]
-    tibble::as_tibble(agg[, c("pathway_id", "pathway_name", "n_hit",
-                              "n_metabolites", "coverage"), drop = FALSE])
+    out_cols <- c("pathway_id", "pathway_name")
+    if ("pathway_class" %in% colnames(agg)) out_cols <- c(out_cols, "pathway_class")
+    out_cols <- c(out_cols, "n_hit", "n_metabolites", "coverage")
+    tibble::as_tibble(agg[, out_cols, drop = FALSE])
   }
 
   hmdb_ids <- unique(module_df$HMDB_ID[

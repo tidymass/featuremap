@@ -17,20 +17,21 @@ KEGG_ID columns.}
 
 \item{pathway_hmdb}{Data frame loaded via
 \code{featuremap_load_resource("pathway_hmdb")} with columns
-pathway_id, pathway_name, HMDB_ID, n_metabolites. Pass \code{NULL} to
-skip.}
+pathway_id, pathway_name, HMDB_ID, n_metabolites, and optionally
+pathway_class. Pass \code{NULL} to skip.}
 
 \item{pathway_kegg}{Data frame loaded via
 \code{featuremap_load_resource("pathway_kegg")} with columns
-pathway_id, pathway_name, KEGG_ID, n_metabolites. Pass \code{NULL} to
-skip.}
+pathway_id, pathway_name, KEGG_ID, n_metabolites, and optionally
+pathway_class. Pass \code{NULL} to skip.}
 
 \item{top_n}{Integer. Maximum number of pathways to return per database
 (default: 3).}
 }
 \value{
 A named list with components \code{hmdb} and \code{kegg}, each a
-tibble with columns pathway_id, pathway_name, n_hit, n_metabolites, coverage.
+tibble with columns pathway_id, pathway_name, n_hit, n_metabolites,
+coverage, plus pathway_class when available in the pathway database.
 Empty tibble when the database is unavailable or no hits are found.
 }
 \description{

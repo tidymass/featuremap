@@ -21,6 +21,8 @@ Description:
     functional annotation. It is designed to support reproducible 
     systems-level interpretation of metabolomics studies.
 License: MIT + file LICENSE
+Depends:
+    R (>= 3.5.0)
 Encoding: UTF-8
 Imports:
     MASS,

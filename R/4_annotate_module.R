@@ -81,10 +81,10 @@
 #'   \item Annotate significant module metabolites via database lookup.
 #'   \item Compute per-module: Signal_concentration (HHI), pathway coverage
 #'         (KEGG + HMDB), global directionality, and origin profile.
-#'   \item LLM Call 1 — hypothesis_type + title + functional_summary (no study context).
+#'   \item LLM Call 1 - hypothesis_type + title + functional_summary (no study context).
 #'   \item Optional PubMed search using module title, anchor metabolites,
 #'         phenotype, and PMID deduplication.
-#'   \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
+#'   \item LLM Call 2 - phenotype_relationship + confidence_label + rationale.
 #' }
 #'
 #' \strong{Advanced Mode pipeline:}
@@ -160,7 +160,26 @@ annotate_module <- function(res                  = NULL,
     ref_df <- tibble::as_tibble(ref_df)
     for (nm in setdiff(c("name", "class", "synonyms"), colnames(ref_df)))
       ref_df[[nm]] <- NA_character_
+
+    # All-NA columns are often deserialized as logical vectors. Convert those
+    # columns before combining HMDB and KEGG references so dplyr does not fail
+    # when the corresponding column in the other reference is character.
+    for (nm in setdiff(colnames(ref_df), "id")) {
+      col <- ref_df[[nm]]
+      if (is.logical(col) && all(is.na(col))) ref_df[[nm]] <- NA_character_
+    }
     ref_df
+  }
+
+  coalesce_compat <- function(a, b) {
+    all_na_lgl <- function(x) is.logical(x) && all(is.na(x))
+    if (all_na_lgl(a) && !all_na_lgl(b)) a <- as.vector(a, mode = typeof(b))
+    if (all_na_lgl(b) && !all_na_lgl(a)) b <- as.vector(b, mode = typeof(a))
+    if (is.character(a) || is.character(b)) {
+      a <- as.character(a)
+      b <- as.character(b)
+    }
+    dplyr::coalesce(a, b)
   }
 
   combine_function_refs <- function(module_df, hmdb_ref, kegg_ref) {
@@ -176,7 +195,7 @@ annotate_module <- function(res                  = NULL,
         by = c("KEGG_ID" = "id")
       )
     for (nm in intersect(hmdb_cols, kegg_cols))
-      out[[nm]] <- dplyr::coalesce(out[[paste0(nm, ".hmdb")]], out[[paste0(nm, ".kegg")]])
+      out[[nm]] <- coalesce_compat(out[[paste0(nm, ".hmdb")]], out[[paste0(nm, ".kegg")]])
     for (nm in setdiff(hmdb_cols, kegg_cols))
       out[[nm]] <- out[[paste0(nm, ".hmdb")]]
     for (nm in setdiff(kegg_cols, hmdb_cols))
@@ -184,7 +203,7 @@ annotate_module <- function(res                  = NULL,
     out %>%
       dplyr::mutate(
         Compound_ID   = INCHI_ID,
-        Compound_name = dplyr::coalesce(Compound_name, name)
+        Compound_name = coalesce_compat(Compound_name, name)
       ) %>%
       dplyr::select(-dplyr::matches("\\.(hmdb|kegg)$"))
   }

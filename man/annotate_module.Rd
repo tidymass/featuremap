@@ -128,10 +128,10 @@ evidence, and large language model (LLM) functional interpretation.
 \item Annotate significant module metabolites via database lookup.
 \item Compute per-module: Signal_concentration (HHI), pathway coverage
 (KEGG + HMDB), global directionality, and origin profile.
-\item LLM Call 1 — hypothesis_type + title + functional_summary (no study context).
+\item LLM Call 1 - hypothesis_type + title + functional_summary (no study context).
 \item Optional PubMed search using module title, anchor metabolites,
 phenotype, and PMID deduplication.
-\item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
+\item LLM Call 2 - phenotype_relationship + confidence_label + rationale.
 }
 
 \strong{Advanced Mode pipeline:}

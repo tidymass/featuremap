@@ -7,9 +7,24 @@ bibentry(
     "dysregulated metabolic modules from untargeted metabolomics"
   ),
   author = c(
-    person("Yuting", "Wang"),
-    person("Xiaotao", "Shen")
+    person("Yuting", "Wang", comment = "+"),
+    person("Feifan", "Zhang", comment = "+"),
+    person("Guoping", "Peng"),
+    person("Zeng", "Li"),
+    person("Yijiang", "Liu"),
+    person("Jiramet", "Kinchagawat"),
+    person("Xicheng", "Yang"),
+    person("Tao", "Huan"),
+    person("Chang", "Liu"),
+    person("Caroline", "Johnson"),
+    person("Qi", "Su"),
+    person("Chuchu", "Wang"),
+    person("Xiaotao", "Shen", comment = "*")
   ),
   year = "2026",
-  note = "Manuscript in preparation"
+  note = paste(
+    "Manuscript in preparation.",
+    "Yuting Wang and Feifan Zhang contributed equally (+);",
+    "Xiaotao Shen is the corresponding author (*)."
+  )
 )

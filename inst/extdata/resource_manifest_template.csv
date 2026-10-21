@@ -1,7 +1,7 @@
 name,version,file,url,md5
-metabolite_database_hmdb,1.0.0,metabolite_database_hmdb_v1.0.0.rds,,
-metabolite_database_kegg,1.0.0,metabolite_database_kegg_v1.0.0.rds,,
-mrn_hmdb,1.0.0,mrn_hmdb_v1.0.0.rds,,
-mrn_kegg,1.0.0,mrn_kegg_v1.0.0.rds,,
-functional_reference_hmdb,1.0.0,functional_reference_hmdb_v1.0.0.rds,,
-functional_reference_kegg,1.0.0,functional_reference_kegg_v1.0.0.rds,,
+featuremap_compound,1.0.0,featuremap_compound.rda,,627f4b5de58c392c2204a03b004539ee
+mrn,1.0.0,metabolic_reaction_network.rda,,42662824ea7b141859bbc7d1cdb884af
+functional_reference_hmdb,1.0.0,hmdb_function.Rdata,,97bcd3058100a9d99a0fee88b726ec2d
+functional_reference_kegg,1.0.0,kegg_function.Rdata,,58a5a4a82a67b97e1f1b17f64ee744a6
+pathway_hmdb,1.0.0,hmdb_pathway.Rdata,,e8b075dace998fae5d2be67915e0aefa
+pathway_kegg,1.0.0,kegg_pathway.Rdata,,1ffef97dfc64e999335bb54c8e7607b9

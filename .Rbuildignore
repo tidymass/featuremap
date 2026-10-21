@@ -4,4 +4,5 @@
 ^\.gitignore$
 ^\.DS_Store$
 ^\.github$
-^\.{2}Rcheck$
+^.*\.Rcheck$
+^featuremap_.*\.tar\.gz$

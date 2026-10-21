@@ -13,17 +13,13 @@
   }
   options(featuremap.banner_shown = TRUE)
 
-  cli::cli_h1("featuremap v{version}")
-
-  cli::cli_alert_success("Decode metabolic signals, module by module")
-  cli::cli_alert_success("{.strong Follow pipeline below:}")
-  cli::cli_ul(c(
-    "annotate_feature()",
-    "extract_subnetwork()",
-    "identify_module()",
-    "annotate_module()"
+  cli::cli_h1("featuremap {version}")
+  cli::cli_verbatim(paste(
+    "Metabolite annotation",
+    "Network extraction",
+    "Module identification",
+    "Function interpretation",
+    sep = " \u2192 "
   ))
-  
-  cli::cli_alert_info("Type {.code ?featuremap} to get started!")
-  cli::cli_alert_info("Please cite us: Yuting Wang,..., Xiaotao Shen.")
+  cli::cli_alert_info("Run {.code ?featuremap} to get started.")
 }

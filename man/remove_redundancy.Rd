@@ -21,7 +21,8 @@ Redundancy is defined both at the compound level (\code{Lab.ID}) and the feature
 \details{
 The function performs the following steps iteratively:
 \itemize{
-\item For each compound (\code{Lab.ID}), if any annotation has a score > 100, annotations with score ≤ 20 are removed.
+\item For each compound (\code{Lab.ID}), if any annotation has a score above
+100, annotations with a score of 20 or less are removed.
 \item For each peak (\code{name}), the same rule is applied.
 \item After filtering, scores for each metabolite feature cluster are recalculated using \code{score_mfc()}.
 \item Redundancy is recalculated using \code{calculate_redundancy()}. The process repeats until no improvement.

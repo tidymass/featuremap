@@ -16,7 +16,8 @@ or fewer than 30 characters long.}
 
 \item{synonyms}{Character vector or \code{NULL}. Additional synonym
 strings to search for alongside \code{met_name}. \code{NA} entries
-and strings of length ≤ 1 are silently dropped before matching.}
+and strings with one character or fewer are silently dropped before
+matching.}
 }
 \value{
 Logical scalar. \code{TRUE} if at least one term produces a

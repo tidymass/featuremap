@@ -420,7 +420,8 @@ fetch_pubmed_records <- function(pmids, NCBI_api_key = NULL) {
 #'   (e.g. \code{"glucose"}).
 #' @param synonyms Character vector or \code{NULL}. Additional synonym
 #'   strings to search for alongside \code{met_name}. \code{NA} entries
-#'   and strings of length ≤ 1 are silently dropped before matching.
+#'   and strings with one character or fewer are silently dropped before
+#'   matching.
 #'
 #' @return Logical scalar. \code{TRUE} if at least one term produces a
 #'   whole-word match in the abstract; \code{FALSE} otherwise.
@@ -610,7 +611,7 @@ extract_metabolite_context <- function(abstract,
 #'   (e.g. \code{"obesity"}). Pass \code{NULL} (default) to omit.
 #' @param NCBI_api_key Character string or \code{NULL}. NCBI API key
 #'   shared across all requests. Pass \code{NULL} (default) for anonymous
-#'   access (≤ 3 requests/second).
+#'   access (no more than 3 requests per second).
 #' @param retmax Numeric scalar. Maximum number of PubMed hits to retrieve
 #'   per metabolite (default: \code{10}).
 #' @param years Numeric scalar. Number of years to look back for the
@@ -625,7 +626,7 @@ extract_metabolite_context <- function(abstract,
 #' Processing is intentionally sequential (via \code{lapply}) rather than
 #' parallel to respect NCBI rate limits. If parallel execution is required,
 #' supply a valid \code{NCBI_api_key} and implement appropriate throttling
-#' (≤ 10 requests/second per key).
+#' (no more than 10 requests per second per key).
 #'
 
 #'

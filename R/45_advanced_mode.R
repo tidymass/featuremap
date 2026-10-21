@@ -4,17 +4,17 @@
 # Multi-agent debate for metabolic module annotation.
 #
 # Agents (per module):
-#   P0  Proposer initial      – generates 1-3 candidate biochemical hypotheses
-#   S1  Skeptic round 1       – challenges each hypothesis
-#   P1  Proposer revision 1   – keep / modify / drop
-#   S2  Skeptic round 2       – (conditional) re-challenges revised set
-#   P2  Proposer revision 2   – (conditional) final keep / modify / drop
-#   A0  Arbiter               – accepted / rejected + confidence
+#   P0  Proposer initial      \u2013 generates 1-3 candidate biochemical hypotheses
+#   S1  Skeptic round 1       \u2013 challenges each hypothesis
+#   P1  Proposer revision 1   \u2013 keep / modify / drop
+#   S2  Skeptic round 2       \u2013 (conditional) re-challenges revised set
+#   P2  Proposer revision 2   \u2013 (conditional) final keep / modify / drop
+#   A0  Arbiter               \u2013 accepted / rejected + confidence
 #
 # Information visible per agent:
 #   P0  : full module data (metabolites, class, pathway, Signal_concentration)
-#          → outputs: hypothesis_id, type, title, summary, anchor_metabolites, tension_metabolites
-#          → NO claim field (removed; full summary serves as the mechanistic statement)
+#          \u2192 outputs: hypothesis_id, type, title, summary, anchor_metabolites, tension_metabolites
+#          \u2192 NO claim field (removed; full summary serves as the mechanistic statement)
 #
 #   S1/S2: module evidence (top metabolites, class, pathway coverage)
 #          + biological context: origin_profile, species, biospecimen (NO phenotype)
@@ -22,13 +22,13 @@
 #
 #   P1/P2: module evidence + biological context (same as S1/S2, no phenotype)
 #          + current full hypothesis text + Skeptic challenges
-#          → provides biochemical grounding for rebuttal decisions
+#          \u2192 provides biochemical grounding for rebuttal decisions
 #
 #   A0  : raw module evidence (top metabolites, class, pathway coverage)
 #         + surviving hypotheses (full) + debate history digest
 #         + origin_profile + species + biospecimen + phenotype
 #         + per-hypothesis PubMed phenotype summaries
-#         → does NOT receive global_direction (too complex to use as mechanistic constraint)
+#         \u2192 does NOT receive global_direction (too complex to use as mechanistic constraint)
 #
 # PubMed: two-layer search (deduplicated anchors + per-hypothesis title, each with phenotype),
 #   then anchor evidence is assigned back to the hypotheses that use those anchors.
@@ -40,7 +40,7 @@
 
 
 # ============================================================
-# SECTION 1 – JSON parsing utilities (top-level, advanced mode)
+# SECTION 1 \u2013 JSON parsing utilities (top-level, advanced mode)
 # ============================================================
 
 adv_normalize_parsed <- function(x) {
@@ -157,7 +157,7 @@ adv_request_json <- function(messages,
 
 
 # ============================================================
-# SECTION 2 – Module summary builders
+# SECTION 2 \u2013 Module summary builders
 # ============================================================
 
 # Build module evidence used by S1/S2.
@@ -284,8 +284,8 @@ Biospecimen: {bio}"
 # audience = "proposer" uses a lighter note for P0; audience = "reviewer" uses
 # stronger audit language for Skeptic, revision, and Arbiter prompts.
 # Used by:
-#   • annotate_one_module_advanced() — appended to P0's user prompt
-#   • build_skeptic_module_evidence() — appended to the evidence block
+#   \u2022 annotate_one_module_advanced() \u2014 appended to P0's user prompt
+#   \u2022 build_skeptic_module_evidence() \u2014 appended to the evidence block
 #     shown to S1/S2/P1/P2 and the Arbiter
 build_advanced_data_notes <- function(module_obj, audience = c("reviewer", "proposer")) {
   audience <- match.arg(audience)
@@ -297,14 +297,14 @@ build_advanced_data_notes <- function(module_obj, audience = c("reviewer", "prop
     names_str <- paste(gf$generic_names, collapse = ", ")
     if (identical(audience, "proposer")) {
       notes <- c(notes, glue::glue(
-        "[DATA NOTE — Shared cofactors among top metabolites]
+        "[DATA NOTE \u2014 Shared cofactors among top metabolites]
 Some top metabolites are ubiquitous energy/redox cofactors: {names_str}.
 They may provide biochemical context, but they are usually less specific for naming
 a module than pathway- or class-specific metabolites."
       ))
     } else {
       notes <- c(notes, glue::glue(
-        "[DATA NOTE — Generic cofactors among top metabolites]
+        "[DATA NOTE \u2014 Generic cofactors among top metabolites]
 The following top metabolites are ubiquitous energy/redox cofactors: {names_str}.
 These metabolites appear across many metabolic pathways and should not serve as
 primary naming evidence unless supported by non-generic metabolites, class coherence,
@@ -319,7 +319,7 @@ pathway evidence, or a clearly justified biochemical mechanism."
     names_str <- paste(iso$outlier_names, collapse = ", ")
     if (identical(audience, "proposer")) {
       notes <- c(notes, glue::glue(
-        "[DATA NOTE — Limited-context top metabolites]
+        "[DATA NOTE \u2014 Limited-context top metabolites]
 Some top metabolites have limited support from the current pathway/class context:
 {names_str}.
 They may still reflect cross-pathway biology, exposure-specific signals, or noise;
@@ -327,7 +327,7 @@ use them cautiously when naming hypotheses."
       ))
     } else {
       notes <- c(notes, glue::glue(
-        "[DATA NOTE — Isolated outlier metabolites]
+        "[DATA NOTE \u2014 Isolated outlier metabolites]
 The following top metabolites are absent from the top pathway hit sets and do not
 belong to the dominant chemical class: {names_str}.
 These metabolites have limited support from the current pathway/class context. They
@@ -344,7 +344,7 @@ coherence, pathway evidence, or biochemical plausibility."
 
 
 # ============================================================
-# SECTION 3 – Hypothesis state helpers
+# SECTION 3 \u2013 Hypothesis state helpers
 # ============================================================
 
 # Format hypotheses for display (title + full biochemical summary + anchor + tension).
@@ -377,7 +377,7 @@ format_hypotheses_full <- function(hypotheses) {
     typ <- h$type %||% "not specified"
     if (is.na(typ) || !nzchar(typ)) typ <- "not specified"
     glue::glue(
-      '{h$hypothesis_id} — "{h$title}"
+      '{h$hypothesis_id} \u2014 "{h$title}"
   Type: {typ}
   Biochemical summary: {h$summary}
   Anchor metabolites: {anc}
@@ -399,7 +399,7 @@ apply_revisions <- function(hypotheses, revisions) {
   for (h in hypotheses) {
     rev <- rev_map[[h$hypothesis_id]]
     if (is.null(rev)) {
-      result[[length(result) + 1]] <- h  # no revision decision → keep as-is
+      result[[length(result) + 1]] <- h  # no revision decision \u2192 keep as-is
       next
     }
     action <- trimws(tolower(rev$action %||% "keep"))
@@ -437,7 +437,7 @@ normalize_hypothesis_type <- function(x) {
     "Microbiome-Derived",
     "Diet-Derived",
     "Xenobiotic / Exogenous",
-    "Host–Microbiome"
+    "Host\u2013Microbiome"
   )
   if (is.null(x) || length(x) == 0) return(NA_character_)
   raw <- trimws(as.character(x[1]))
@@ -451,7 +451,7 @@ normalize_hypothesis_type <- function(x) {
   if (key %in% tolower(allowed)) {
     return(allowed[match(key, tolower(allowed))])
   }
-  if (grepl("host", key) && grepl("microbiome|microbial", key)) return("Host–Microbiome")
+  if (grepl("host", key) && grepl("microbiome|microbial", key)) return("Host\u2013Microbiome")
   if (grepl("microbiome|microbial", key)) return("Microbiome-Derived")
   if (grepl("diet|food|nutr", key)) return("Diet-Derived")
   if (grepl("xenobiotic|exogenous|drug|pharma|environment|exposure", key)) {
@@ -611,7 +611,7 @@ parse_revision_output <- function(parsed,
 
 
 # ============================================================
-# SECTION 3b – Challenge routing helpers
+# SECTION 3b \u2013 Challenge routing helpers
 # ============================================================
 
 # Check whether a challenge object targets a given hypothesis_id.
@@ -638,7 +638,7 @@ format_challenge_line <- function(ch, current_hid) {
 
 
 # ============================================================
-# SECTION 4 – Round 2 decision logic
+# SECTION 4 \u2013 Round 2 decision logic
 # ============================================================
 
 #' Decide Whether to Run Skeptic 2 + Proposer 3
@@ -660,7 +660,7 @@ should_run_round2 <- function(surviving, s1_challenges, p1_revisions) {
 
   # For each surviving hypothesis, find its max severity in S1.
   # Uses challenge_targets_hid() defensively for older compound targets.
-  # "no_challenge" severity is treated the same as "none" — does not trigger round 2.
+  # "no_challenge" severity is treated the same as "none" \u2014 does not trigger round 2.
   max_sev <- function(hid) {
     relevant <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
     relevant_real <- Filter(
@@ -688,7 +688,7 @@ should_run_round2 <- function(surviving, s1_challenges, p1_revisions) {
 
 
 # ============================================================
-# SECTION 5 – Debate history formatters
+# SECTION 5 \u2013 Debate history formatters
 # ============================================================
 
 # Build the Round 1 history block shown to S2.
@@ -714,7 +714,7 @@ build_round1_history_for_s2 <- function(hypotheses_v0,
   blocks <- lapply(hypotheses_v0, function(h) {
     hid <- h$hypothesis_id
     lines <- c(
-      sprintf('%s — "%s" (P0 original)', hid, h$title),
+      sprintf('%s \u2014 "%s" (P0 original)', hid, h$title),
       sprintf("  Original type:     %s", h$type %||% "not specified"),
       sprintf("  Original summary:  %s", h$summary %||% ""),
       sprintf("  Original anchors:  %s", fmt_vec(h$anchor_metabolites)),
@@ -731,28 +731,28 @@ build_round1_history_for_s2 <- function(hypotheses_v0,
       lines <- c(lines, "  S1: (no challenge objects returned for this hypothesis)")
     }
 
-    # P1 decision — include full revised state
+    # P1 decision \u2014 include full revised state
     rev <- rev_map[[hid]]
     if (!is.null(rev)) {
       lines <- c(lines, sprintf("  P1 decision (%s): %s",
                                 toupper(rev$action), rev$justification))
       if (identical(rev$action, "modify")) {
         if (nzchar(rev$revised_type %||% ""))
-          lines <- c(lines, sprintf("    → Revised type:     %s", rev$revised_type))
+          lines <- c(lines, sprintf("    \u2192 Revised type:     %s", rev$revised_type))
         if (nzchar(rev$revised_title %||% ""))
-          lines <- c(lines, sprintf("    → Revised title:    \"%s\"", rev$revised_title))
+          lines <- c(lines, sprintf("    \u2192 Revised title:    \"%s\"", rev$revised_title))
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
         if (length(h_v1) > 0) {
           if (nzchar(h_v1[[1]]$summary %||% ""))
-            lines <- c(lines, sprintf("    → Revised summary:  %s", h_v1[[1]]$summary))
+            lines <- c(lines, sprintf("    \u2192 Revised summary:  %s", h_v1[[1]]$summary))
           rv_anc <- fmt_vec(h_v1[[1]]$anchor_metabolites)
           rv_ten <- fmt_vec(h_v1[[1]]$tension_metabolites)
           lines <- c(lines,
-                     sprintf("    → Revised anchors:  %s", rv_anc),
-                     sprintf("    → Revised tensions: %s", rv_ten))
+                     sprintf("    \u2192 Revised anchors:  %s", rv_anc),
+                     sprintf("    \u2192 Revised tensions: %s", rv_ten))
         }
       } else if (identical(rev$action, "drop")) {
-        lines <- c(lines, "    → DROPPED in Round 1")
+        lines <- c(lines, "    \u2192 DROPPED in Round 1")
       }
     } else {
       lines <- c(lines, "  P1: (no revision decision recorded)")
@@ -784,7 +784,7 @@ build_round1_history_for_p2 <- function(hypotheses_v0,
     anc   <- paste(h$anchor_metabolites %||% character(0), collapse = ", ")
     ten   <- paste(h$tension_metabolites %||% character(0), collapse = ", ")
     lines <- c(
-      sprintf('%s — "%s" (P0 original)', hid, h$title),
+      sprintf('%s \u2014 "%s" (P0 original)', hid, h$title),
       sprintf("  Original type: %s", h$type %||% "not specified"),
       sprintf("  Original summary: %s", h$summary %||% ""),
       sprintf("  Original anchors: %s", if (nzchar(anc)) anc else "none"),
@@ -805,20 +805,20 @@ build_round1_history_for_p2 <- function(hypotheses_v0,
       lines <- c(lines, sprintf("  P1 (%s): %s", toupper(rev$action), rev$justification))
       if (identical(rev$action, "modify")) {
         if (nzchar(rev$revised_type %||% ""))
-          lines <- c(lines, sprintf("    → Revised type: %s", rev$revised_type))
+          lines <- c(lines, sprintf("    \u2192 Revised type: %s", rev$revised_type))
         if (nzchar(rev$revised_title %||% ""))
-          lines <- c(lines, sprintf("    → Revised title: \"%s\"", rev$revised_title))
+          lines <- c(lines, sprintf("    \u2192 Revised title: \"%s\"", rev$revised_title))
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
         if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
-          lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+          lines <- c(lines, sprintf("    \u2192 Revised summary: %s", h_v1[[1]]$summary))
         anc_v1 <- paste(h_v1[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
         if (nzchar(anc_v1))
-          lines <- c(lines, sprintf("    → Revised anchors: %s", anc_v1))
+          lines <- c(lines, sprintf("    \u2192 Revised anchors: %s", anc_v1))
         ten_v1 <- paste(h_v1[[1]]$tension_metabolites %||% character(0), collapse = ", ")
         if (nzchar(ten_v1))
-          lines <- c(lines, sprintf("    → Revised tensions: %s", ten_v1))
+          lines <- c(lines, sprintf("    \u2192 Revised tensions: %s", ten_v1))
       } else if (identical(rev$action, "drop")) {
-        lines <- c(lines, "    → DROPPED in Round 1")
+        lines <- c(lines, "    \u2192 DROPPED in Round 1")
       }
     }
 
@@ -860,7 +860,7 @@ build_debate_history_digest <- function(hypotheses_v0,
   blocks <- lapply(hypotheses_for_digest, function(h) {
     hid <- h$hypothesis_id
     lines <- c(
-      sprintf('%s — "%s" [P0 original]', hid, h$title),
+      sprintf('%s \u2014 "%s" [P0 original]', hid, h$title),
       sprintf("  P0 type: %s", h$type %||% "not specified"),
       sprintf("  P0 summary: %s", h$summary %||% "")
     )
@@ -868,35 +868,35 @@ build_debate_history_digest <- function(hypotheses_v0,
     # Round 1 challenges for this hypothesis (compound targets included)
     r1_ch <- Filter(function(c) challenge_targets_hid(c, hid), s1_challenges)
     if (length(r1_ch) > 0) {
-      lines <- c(lines, "  Round 1 — Skeptic challenges:")
+      lines <- c(lines, "  Round 1 \u2014 Skeptic challenges:")
       for (c in r1_ch)
         lines <- c(lines, paste0("    ", format_challenge_line(c, hid)))
     } else {
-      lines <- c(lines, "  Round 1 — Skeptic: no challenges raised")
+      lines <- c(lines, "  Round 1 \u2014 Skeptic: no challenges raised")
     }
 
     # Round 1 Proposer revision decision
     r1_rev <- rev_map_r1[[hid]]
     if (!is.null(r1_rev)) {
       action_label <- toupper(r1_rev$action)
-      lines <- c(lines, sprintf("  Round 1 — Proposer (%s): %s",
+      lines <- c(lines, sprintf("  Round 1 \u2014 Proposer (%s): %s",
                                 action_label, r1_rev$justification))
       if (r1_rev$action == "modify") {
         if (nzchar(r1_rev$revised_type %||% ""))
-          lines <- c(lines, sprintf("    → Revised type: %s", r1_rev$revised_type))
+          lines <- c(lines, sprintf("    \u2192 Revised type: %s", r1_rev$revised_type))
         if (nzchar(r1_rev$revised_title %||% ""))
-          lines <- c(lines, sprintf("    → Revised title: \"%s\"", r1_rev$revised_title))
+          lines <- c(lines, sprintf("    \u2192 Revised title: \"%s\"", r1_rev$revised_title))
         # Retrieve P1-revised summary/anchors/tensions from hypotheses_v1 if available
         h_v1 <- Filter(function(x) x$hypothesis_id == hid, hypotheses_v1)
         if (length(h_v1) > 0 && nzchar(h_v1[[1]]$summary %||% ""))
-          lines <- c(lines, sprintf("    → Revised summary: %s", h_v1[[1]]$summary))
+          lines <- c(lines, sprintf("    \u2192 Revised summary: %s", h_v1[[1]]$summary))
         if (length(h_v1) > 0) {
           anc_v1 <- paste(h_v1[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
           if (nzchar(anc_v1))
-            lines <- c(lines, sprintf("    → Revised anchors: %s", anc_v1))
+            lines <- c(lines, sprintf("    \u2192 Revised anchors: %s", anc_v1))
           ten_v1 <- paste(h_v1[[1]]$tension_metabolites %||% character(0), collapse = ", ")
           if (nzchar(ten_v1))
-            lines <- c(lines, sprintf("    → Revised tensions: %s", ten_v1))
+            lines <- c(lines, sprintf("    \u2192 Revised tensions: %s", ten_v1))
         }
       }
     }
@@ -910,34 +910,34 @@ build_debate_history_digest <- function(hypotheses_v0,
     if (!is.null(s2_challenges)) {
       r2_ch <- Filter(function(c) challenge_targets_hid(c, hid), s2_challenges)
       if (length(r2_ch) > 0) {
-        lines <- c(lines, "  Round 2 — Skeptic challenges:")
+        lines <- c(lines, "  Round 2 \u2014 Skeptic challenges:")
         for (c in r2_ch)
           lines <- c(lines, paste0("    ", format_challenge_line(c, hid)))
       } else {
-        lines <- c(lines, "  Round 2 — Skeptic: no further challenges")
+        lines <- c(lines, "  Round 2 \u2014 Skeptic: no further challenges")
       }
 
       r2_rev <- rev_map_r2[[hid]]
       if (!is.null(r2_rev)) {
         action_label <- toupper(r2_rev$action)
-        lines <- c(lines, sprintf("  Round 2 — Proposer (%s): %s",
+        lines <- c(lines, sprintf("  Round 2 \u2014 Proposer (%s): %s",
                                   action_label, r2_rev$justification))
         if (r2_rev$action == "modify") {
           if (nzchar(r2_rev$revised_type %||% ""))
-            lines <- c(lines, sprintf("    → Revised type: %s", r2_rev$revised_type))
+            lines <- c(lines, sprintf("    \u2192 Revised type: %s", r2_rev$revised_type))
           if (nzchar(r2_rev$revised_title %||% ""))
-            lines <- c(lines, sprintf("    → Revised title: \"%s\"", r2_rev$revised_title))
+            lines <- c(lines, sprintf("    \u2192 Revised title: \"%s\"", r2_rev$revised_title))
           # Retrieve P2-revised summary/anchors/tensions from hypotheses_final if available
           h_fin <- Filter(function(x) x$hypothesis_id == hid, hypotheses_final %||% list())
           if (length(h_fin) > 0 && nzchar(h_fin[[1]]$summary %||% ""))
-            lines <- c(lines, sprintf("    → Revised summary: %s", h_fin[[1]]$summary))
+            lines <- c(lines, sprintf("    \u2192 Revised summary: %s", h_fin[[1]]$summary))
           if (length(h_fin) > 0) {
             anc_fin <- paste(h_fin[[1]]$anchor_metabolites %||% character(0), collapse = ", ")
             if (nzchar(anc_fin))
-              lines <- c(lines, sprintf("    → Revised anchors: %s", anc_fin))
+              lines <- c(lines, sprintf("    \u2192 Revised anchors: %s", anc_fin))
             ten_fin <- paste(h_fin[[1]]$tension_metabolites %||% character(0), collapse = ", ")
             if (nzchar(ten_fin))
-              lines <- c(lines, sprintf("    → Revised tensions: %s", ten_fin))
+              lines <- c(lines, sprintf("    \u2192 Revised tensions: %s", ten_fin))
           }
         }
         if (identical(r2_rev$action, "drop")) {
@@ -957,7 +957,7 @@ build_debate_history_digest <- function(hypotheses_v0,
 
 
 # ============================================================
-# SECTION 6 – Prompt builders
+# SECTION 6 \u2013 Prompt builders
 # ============================================================
 
 # ---- P0: Proposer initial generation ----
@@ -1000,10 +1000,10 @@ For each hypothesis provide:
 
 Type rules:
    - Choose exactly one:
-     Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
+     Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host\u2013Microbiome
    - Type is a broad interpretation scope. Do not over-optimize the title or mechanism around type.
    - Assign type by the biological origin of the module's core substrate, dominant metabolite class,
-     or central biochemical theme — not merely by the organism or enzyme performing a downstream step.
+     or central biochemical theme \u2014 not merely by the organism or enzyme performing a downstream step.
    - Host-Endogenous    : intrinsic host metabolites/processes such as central metabolism, redox,
                           lipid/amino acid/nucleotide metabolism, bile acids, steroids, or cofactors.
    - Microbiome-Derived : microbial products or transformations are the central signal.
@@ -1011,7 +1011,7 @@ Type rules:
                           modified by host enzymes.
    - Xenobiotic / Exogenous : drugs, pollutants, pesticides, industrial/consumer chemicals, heavy
                           metals, or other non-dietary external exposures.
-   - Host–Microbiome    : the core theme requires both host and microbial metabolism, e.g. host
+   - Host\u2013Microbiome    : the core theme requires both host and microbial metabolism, e.g. host
                           conjugation of microbial products or microbial remodeling of host compounds.
    - If multiple labels fit, choose the one that best explains the top anchor metabolites.
    - The type, title, and summary must describe the same central biochemical theme.
@@ -1048,7 +1048,7 @@ Title rules
 
 Summary rules:
    - Write 4-6 sentences as a factual biochemical annotation of the module.
-   - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions — as if writing an entry in a biochemical database.
+   - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions \u2014 as if writing an entry in a biochemical database.
    - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and pathway evidence to support, qualify, or separate competing hypotheses.
    - Keep origin/scope interpretation in the type field; in the summary, mention source or host/microbial
      processing only when it is necessary to explain the biochemical mechanism.
@@ -1086,7 +1086,7 @@ Return STRICT JSON only:
   \"hypotheses\": [
     {{
       \"hypothesis_id\": \"H1\",
-      \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
+      \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host\u2013Microbiome\",
       \"title\": \"...\",
       \"summary\": \"...\",
       \"anchor_top_ids\": [\"T1\", \"T2\"],
@@ -1104,7 +1104,7 @@ Return STRICT JSON only:
 
 build_skeptic_system_prompt <- function(round = 1L) {
   round2_addon <- if (round == 2L) glue::glue(
-    "\n\nADDITIONAL INSTRUCTION — ROUND 2:
+    "\n\nADDITIONAL INSTRUCTION \u2014 ROUND 2:
 You have access to Round 1 challenges and Proposer revision decisions.
 - Do NOT repeat a challenge that was adequately addressed by a modification in Round 1
 - If a Round 1 modification introduced new content, examine that new content for issues
@@ -1235,7 +1235,7 @@ build_proposer_revision_system_prompt <- function() {
 Your task is to respond to critical challenges against proposed biological hypotheses.
 
 You will receive:
-- Module evidence (top metabolites, class structure, pathway coverage) — biochemical grounding
+- Module evidence (top metabolites, class structure, pathway coverage) \u2014 biochemical grounding
 - Biological context: origin profile, species, biospecimen (no phenotype)
 - Current hypotheses with their type, full biochemical summaries, and anchor/tension metabolites
 - Skeptic challenges (with severity: major or minor)
@@ -1252,7 +1252,7 @@ Rules:
 - modify : revise P0-generated content to address reasonable Skeptic challenges; provide
            updated type, title, summary, anchor_top_ids, and tension_top_ids.
            A modification must change
-           either the type, title, OR the mechanism text — renaming alone is not valid.
+           either the type, title, OR the mechanism text \u2014 renaming alone is not valid.
            Choose a standardized KEGG/HMDB-style title at the most specific level supported
            by the full module evidence. Prefer short titles, usually 2-6 words; longer
            titles are allowed only when the best supported standardized pathway name is
@@ -1294,7 +1294,7 @@ You MUST respond to every major-severity challenge explicitly.
 Silence on a major challenge is not acceptable.
 Do not defend the original title merely because it is a plausible biochemical process.
 The revision must improve fit to the module evidence.
-You may drop all hypotheses if you judge them all to be fundamentally unsupported —
+You may drop all hypotheses if you judge them all to be fundamentally unsupported \u2014
 the Arbiter will handle the all-dropped case.
 
 Return STRICT JSON only:
@@ -1304,7 +1304,7 @@ Return STRICT JSON only:
       \"hypothesis_id\": \"H1\",
       \"action\": \"keep | modify | drop\",
       \"justification\": \"...\",
-      \"revised_type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
+      \"revised_type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host\u2013Microbiome\",
       \"revised_title\": \"...\",
       \"revised_summary\": \"...\",
       \"revised_anchor_top_ids\": [\"T1\"],
@@ -1329,7 +1329,7 @@ build_proposer_revision_user_prompt <- function(hypotheses,
   ch_blocks <- lapply(hypotheses, function(h) {
     hid  <- h$hypothesis_id
     chs  <- Filter(function(c) challenge_targets_hid(c, hid), challenges)
-    # Strip no_challenge entries — Proposer need not respond to "no issues found"
+    # Strip no_challenge entries \u2014 Proposer need not respond to "no issues found"
     real_chs <- Filter(function(c) !identical(c$severity, "no_challenge"), chs)
     if (length(real_chs) == 0) return(sprintf("  %s: no challenges requiring response", hid))
     ch_lines <- sapply(real_chs, function(c) format_challenge_line(c, hid))
@@ -1365,15 +1365,15 @@ Your task is to make final verdicts on candidate biological hypotheses for a met
 and to assign confidence for surviving hypotheses.
 
 You will receive:
-- Module evidence (top metabolites, class structure, pathway coverage) — raw biochemical grounding
+- Module evidence (top metabolites, class structure, pathway coverage) \u2014 raw biochemical grounding
 - Final surviving hypotheses in full (or all original hypotheses if all were dropped)
 - A complete debate history digest that includes for each hypothesis:
-    • P0 original type, title, and full biochemical summary
-    • All Skeptic challenges with severity and full challenge text (including no_challenge entries
+    \u2022 P0 original type, title, and full biochemical summary
+    \u2022 All Skeptic challenges with severity and full challenge text (including no_challenge entries
       which indicate the Skeptic explicitly found no issue)
-    • Proposer revision decisions with justifications, revised types, titles, and summaries
-    • Round 2 challenges and revisions (if the second round was triggered)
-    • Final survival status
+    \u2022 Proposer revision decisions with justifications, revised types, titles, and summaries
+    \u2022 Round 2 challenges and revisions (if the second round was triggered)
+    \u2022 Final survival status
 - Origin profile, species, biospecimen, and phenotype (full study context)
 - Pre-computed phenotype relationship summaries based on PubMed evidence
 
@@ -1386,7 +1386,7 @@ by the complete debate record. Specifically:
   substantive title, summary, anchor, or tension revision; superficial defense should lower
   confidence or lead to rejection.
 
-Note: global_direction is intentionally excluded — module-level direction is too complex to use
+Note: global_direction is intentionally excluded \u2014 module-level direction is too complex to use
 as a mechanistic constraint.
 
 Evidence hierarchy:
@@ -1544,7 +1544,7 @@ The following are the ORIGINAL proposed hypotheses for your consideration:
 
 
 # ============================================================
-# SECTION 7 – PubMed orchestration for advanced mode
+# SECTION 7 \u2013 PubMed orchestration for advanced mode
 # ============================================================
 
 # Two-scope PubMed search strategy:
@@ -1553,8 +1553,8 @@ The following are the ORIGINAL proposed hypotheses for your consideration:
 #   metabolism/pathway constraints for biochemical context.
 #
 # Searching and summarizing are kept separate:
-#   search_pubmed_advanced()              → fetches raw PubMed evidence per hypothesis
-#   summarize_pubmed_relationships_advanced() → LLM summarizes each hypothesis independently
+#   search_pubmed_advanced()              \u2192 fetches raw PubMed evidence per hypothesis
+#   summarize_pubmed_relationships_advanced() \u2192 LLM summarizes each hypothesis independently
 search_pubmed_advanced <- function(hypotheses_final,
                                     phenotype            = NULL,
                                     NCBI_api_key         = NULL,
@@ -1874,7 +1874,7 @@ serialize_pubmed_evidence_one_advanced <- function(hyp_pph) {
 
 
 # ============================================================
-# SECTION 8 – Gemini response schemas
+# SECTION 8 \u2013 Gemini response schemas
 # ============================================================
 
 adv_gemini_schema_proposer <- function() {
@@ -1891,7 +1891,7 @@ adv_gemini_schema_proposer <- function() {
             type                = list(
               type = "STRING",
               enum = c("Host-Endogenous", "Microbiome-Derived", "Diet-Derived",
-                       "Xenobiotic / Exogenous", "Host–Microbiome")
+                       "Xenobiotic / Exogenous", "Host\u2013Microbiome")
             ),
             title               = list(type = "STRING"),
             summary             = list(type = "STRING"),
@@ -1947,7 +1947,7 @@ adv_gemini_schema_revision <- function() {
             revised_type                = list(
               type = "STRING",
               enum = c("Host-Endogenous", "Microbiome-Derived", "Diet-Derived",
-                       "Xenobiotic / Exogenous", "Host–Microbiome")
+                       "Xenobiotic / Exogenous", "Host\u2013Microbiome")
             ),
             revised_title               = list(type = "STRING"),
             revised_summary             = list(type = "STRING"),
@@ -2005,7 +2005,7 @@ adv_gemini_schema_pubmed_relationship <- function() {
 
 
 # ============================================================
-# SECTION 9 – Output assembly
+# SECTION 9 \u2013 Output assembly
 # ============================================================
 
 assemble_advanced_output_row <- function(module_obj,
@@ -2168,7 +2168,7 @@ assemble_advanced_output_row <- function(module_obj,
   if (length(accepted) > 0) {
     do.call(rbind, lapply(accepted, make_row))
   } else {
-    # All hypotheses rejected → one summary row (no per-hypothesis PubMed)
+    # All hypotheses rejected \u2192 one summary row (no per-hypothesis PubMed)
     module_rel <- list(
       phenotype_relationship = NA_character_,
       literature_support     = NA_character_,
@@ -2240,7 +2240,7 @@ assemble_advanced_output_row <- function(module_obj,
 
 
 # ============================================================
-# SECTION 10 – Main orchestrator: one module
+# SECTION 10 \u2013 Main orchestrator: one module
 # ============================================================
 
 #' Annotate a Single Module Using the Advanced Multi-Agent Debate Pipeline
@@ -2248,6 +2248,8 @@ assemble_advanced_output_row <- function(module_obj,
 #' @param module_obj  List from \code{prepare_module()}.
 #' @param study_context List with \code{species}, \code{biospecimen}, \code{phenotype}.
 #' @param provider,llm_api_key,model  LLM configuration.
+#' @param base_url Character or NULL. Optional API base URL for an
+#'   OpenAI-compatible provider.
 #' @param max_tokens  Max tokens per LLM response (default 2000; Gemini auto-expanded).
 #' @param temperature  Temperature for Skeptic / Proposer revision / Arbiter (default 0).
 #' @param pubmed  Logical. Whether to search PubMed before Arbiter.
@@ -2297,7 +2299,7 @@ annotate_one_module_advanced <- function(module_obj,
   top_metabolite_df <- module_obj$topN_metabolites
 
   # ----------------------------------------------------------------
-  # P0 – Proposer: initial hypothesis generation
+  # P0 \u2013 Proposer: initial hypothesis generation
   # ----------------------------------------------------------------
   message("[advanced] Module ", mid, " | P0 Proposer...")
 
@@ -2356,7 +2358,7 @@ annotate_one_module_advanced <- function(module_obj,
   }
 
   # ----------------------------------------------------------------
-  # S1 – Skeptic round 1
+  # S1 \u2013 Skeptic round 1
   # ----------------------------------------------------------------
   message("[advanced] Module ", mid, " | S1 Skeptic (round 1)...")
 
@@ -2378,7 +2380,7 @@ annotate_one_module_advanced <- function(module_obj,
   s1_challenges <- parse_skeptic_output(s1_res$parsed, valid_hypothesis_ids = hids_v0)
 
   # ----------------------------------------------------------------
-  # P1 – Proposer revision 1
+  # P1 \u2013 Proposer revision 1
   # ----------------------------------------------------------------
   message("[advanced] Module ", mid, " | P1 Proposer revision (round 1)...")
 
@@ -2435,7 +2437,7 @@ annotate_one_module_advanced <- function(module_obj,
       hypotheses_v1  = hypotheses_after_r1
     )
 
-    # S2 – Skeptic round 2
+    # S2 \u2013 Skeptic round 2
     message("[advanced] Module ", mid, " | S2 Skeptic (round 2)...")
 
     s2_sys <- build_skeptic_system_prompt(round = 2L)
@@ -2456,7 +2458,7 @@ annotate_one_module_advanced <- function(module_obj,
     raw_texts$s2 <- s2_res$raw_text
     s2_challenges <- parse_skeptic_output(s2_res$parsed, valid_hypothesis_ids = hids_r1)
 
-    # P2 – Proposer revision 2
+    # P2 \u2013 Proposer revision 2
     message("[advanced] Module ", mid, " | P2 Proposer revision (round 2)...")
 
     p2_sys <- build_proposer_revision_system_prompt()
@@ -2559,7 +2561,7 @@ annotate_one_module_advanced <- function(module_obj,
   )
 
   # ----------------------------------------------------------------
-  # A0 – Arbiter
+  # A0 \u2013 Arbiter
   # ----------------------------------------------------------------
   message("[advanced] Module ", mid, " | A0 Arbiter (final verdict)...")
 
@@ -2678,7 +2680,7 @@ annotate_one_module_advanced <- function(module_obj,
 
 
 # ============================================================
-# SECTION 11 – Loop over all modules
+# SECTION 11 \u2013 Loop over all modules
 # ============================================================
 
 #' Annotate All Modules Using the Advanced Multi-Agent Debate Pipeline
@@ -2686,6 +2688,8 @@ annotate_one_module_advanced <- function(module_obj,
 #' @param all_modules_ready Named list of module objects from \code{prepare_module()}.
 #' @param study_context  List with \code{species}, \code{biospecimen}, \code{phenotype}.
 #' @param provider,llm_api_key,model  LLM configuration.
+#' @param base_url Character or NULL. Optional API base URL for an
+#'   OpenAI-compatible provider.
 #' @param max_tokens  Default 2000.
 #' @param temperature  Default 0.
 #' @param pubmed  Logical.

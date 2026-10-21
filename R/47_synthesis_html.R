@@ -36,7 +36,7 @@
   }))
 }
 
-# ── CSS ───────────────────────────────────────────────────────
+# -- CSS -------------------------------------------------------
 .syn_css <- function() {
 '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
@@ -113,7 +113,7 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .unlinked-node-dot{display:inline-block;border-radius:50%;flex:0 0 auto;
                    border:1.5px solid #fff;box-shadow:0 0 0 1px #dfe3e8}
 
-/* hover tooltip — lightweight, title only, no pointer-events */
+/* hover tooltip -- lightweight, title only, no pointer-events */
 #tooltip{position:absolute;pointer-events:none;display:none;z-index:30;
          background:rgba(28,31,38,.82);color:#fff;
          padding:5px 10px;border-radius:6px;
@@ -121,7 +121,7 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
          max-width:260px;overflow:hidden;text-overflow:ellipsis;
          line-height:1.4}
 
-/* pinned card — click to open, scrollable, pointer-events:auto */
+/* pinned card -- click to open, scrollable, pointer-events:auto */
 #pinned{position:absolute;display:none;z-index:40;
         background:#fff;border:1px solid #d1d5db;border-radius:10px;
         box-shadow:0 6px 24px rgba(0,0,0,.16);
@@ -192,7 +192,7 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 .tbl-conf{color:#6b7280;font-size:.74rem}
 .tbl-rat{font-size:.76rem;color:#6b7280;line-height:1.55}
 
-/* hypothesis type pills — pinned card + table */
+/* hypothesis type pills -- pinned card + table */
 .type-endo {background:#eaf7ef;color:#21643a;border:1px solid #bddfc9}
 .type-micro {background:#fff6e6;color:#80551b;border:1px solid #f2d29a}
 .type-diet  {background:#eef4fb;color:#3966a2;border:1px solid #cfe0f2}
@@ -210,7 +210,7 @@ svg{width:100%;height:100%;display:block;background:#fbfcfe}
 }'
 }
 
-# ── JavaScript ────────────────────────────────────────────────
+# -- JavaScript ------------------------------------------------
 .syn_js <- function() {
 'const data = GRAPH_DATA;
 const svg    = document.getElementById("network");
@@ -228,7 +228,7 @@ let pinnedNode = null;
 let activeCluster = null;
 let unlinkedOpen = false;
 
-/* ── colour / size maps ── */
+/* -- colour / size maps -- */
 const PALETTE = [
   "#3966a2","#519d9e","#c1602e","#2f9e6a",
   "#b5892f","#7a5ea0","#4a7c8c","#a24a6b",
@@ -258,7 +258,7 @@ function nodeSize(n) { return SIZE[n.confidence_label] || DEF_SIZE; }
 function nodeColor(n){ return clusterColor[clusterId(n)] || "#667085"; }
 function edgeType(e){ return e.relation_type || e.relation_class || ""; }
 
-/* ── cluster colour legend ── */
+/* -- cluster colour legend -- */
 const clusterLeg = document.getElementById("cluster-legend");
 clusterIds.forEach(c => {
   const sp = document.createElement("button");
@@ -279,7 +279,7 @@ clusterIds.forEach(c => {
   clusterLeg.appendChild(sp);
 });
 
-/* ── node / edge data ── */
+/* -- node / edge data -- */
 let nodes = data.nodes.map(d => ({...d, x: 0, y: 0}));
 const nodeById = Object.fromEntries(nodes.map(d => [d.node_id, d]));
 let edges = data.edges
@@ -292,7 +292,7 @@ edges.forEach(e => {
 });
 nodes.forEach(n => { n.isIsolated = !structurallyConnectedIds.has(n.node_id); });
 
-/* ── helpers ── */
+/* -- helpers -- */
 function esc(s){
   return String(s ?? "")
     .replace(/&/g,"&amp;")
@@ -340,14 +340,14 @@ function edgeVisible(e, visIds, f){
   return false;
 }
 
-/* ── hit test: all nodes are circles ── */
+/* -- hit test: all nodes are circles -- */
 function isOver(n, mx, my){
   const sz = nodeSize(n);
   const dx = n.x - mx, dy = n.y - my;
   return dx*dx + dy*dy <= sz*sz;
 }
 
-/* ── hit test: point-to-segment distance for edge tooltips ── */
+/* -- hit test: point-to-segment distance for edge tooltips -- */
 function ptSegDist(px, py, x1, y1, x2, y2){
   const dx = x2-x1, dy = y2-y1;
   const lenSq = dx*dx + dy*dy;
@@ -356,7 +356,7 @@ function ptSegDist(px, py, x1, y1, x2, y2){
   return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
 }
 
-/* ── hover tooltip — title only, follows mouse, no pointer-events ── */
+/* -- hover tooltip -- title only, follows mouse, no pointer-events -- */
 function showTooltip(ev, n){
   tooltip.textContent = n.title || n.node_id;
   tooltip.style.display = "block";
@@ -374,7 +374,7 @@ function positionTooltip(ev){
   tooltip.style.top  = Math.max(4, ty) + "px";
 }
 
-/* ── pinned card — click to open, scrollable ── */
+/* -- pinned card -- click to open, scrollable -- */
 function pinSection(label, text){
   if (!text || !text.trim()) return "";
   return `<div class="pin-section">
@@ -431,7 +431,7 @@ function hidePin(){
   render();
 }
 
-/* ── SVG-level mouse tracking (survives DOM re-renders every tick) ── */
+/* -- SVG-level mouse tracking (survives DOM re-renders every tick) -- */
 svg.addEventListener("mousemove", ev => {
   const r  = svg.getBoundingClientRect();
   const mx = ev.clientX - r.left;
@@ -490,7 +490,7 @@ svg.addEventListener("click", ev => {
   }
 });
 
-/* ── static layout ── */
+/* -- static layout -- */
 function connectedComponents(connectedNodes){
   const adjacency = new Map(connectedNodes.map(n => [n.node_id, []]));
   edges.forEach(e => {
@@ -615,7 +615,7 @@ function computeLayout(){
   }
 }
 
-/* ── render ── */
+/* -- render -- */
 function render(){
   const f      = filters();
   const vis    = nodes.filter(n => !n.isIsolated && nodeVisible(n, f));
@@ -667,7 +667,7 @@ function render(){
   }
 }
 
-/* ── compact index for hypotheses without relationships ── */
+/* -- compact index for hypotheses without relationships -- */
 function renderUnlinked(){
   const wrap = document.getElementById("unlinked");
   const body = document.getElementById("unlinked-body");
@@ -737,7 +737,7 @@ function renderUnlinked(){
   });
 }
 
-/* ── node table ── */
+/* -- node table -- */
 const tbody = document.getElementById("tbl-body");
 [...nodes]
   .sort((a, b) => clusterCompare(clusterId(a), clusterId(b)) ||
@@ -748,13 +748,13 @@ const tbody = document.getElementById("tbl-body");
       `<td class="tbl-id">${esc(n.node_id)}</td>` +
       `<td class="tbl-mod">${esc(n.module_id)}</td>` +
       `<td class="tbl-mod">${esc(clusterId(n))}</td>` +
-      `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "—")}</span></td>` +
-      `<td class="tbl-conf">${esc(n.confidence_label || "—")}</td>` +
-      `<td>${esc(n.title || "—")}</td>`;
+      `<td><span class="tbl-type ${typeCls(n.hypothesis_type)}">${esc(n.hypothesis_type || "--")}</span></td>` +
+      `<td class="tbl-conf">${esc(n.confidence_label || "--")}</td>` +
+      `<td>${esc(n.title || "--")}</td>`;
     tbody.appendChild(tr);
   });
 
-/* ── edge table ── */
+/* -- edge table -- */
 const etbody = document.getElementById("etbl-body");
 data.edges.forEach(e => {
   const tr = document.createElement("tr");
@@ -765,12 +765,12 @@ data.edges.forEach(e => {
     `<td class="tbl-id">${esc(e.node_1)}</td>` +
     `<td class="tbl-id">${esc(e.node_2)}</td>` +
     `<td><span class="tbl-pill ${pillCls}">${esc(rel)}</span></td>` +
-    `<td class="tbl-rat">${esc(e.biochemical_evidence_detail || "—")}</td>` +
-    `<td class="tbl-rat">${esc(e.biology_rationale || "—")}</td>`;
+    `<td class="tbl-rat">${esc(e.biochemical_evidence_detail || "--")}</td>` +
+    `<td class="tbl-rat">${esc(e.biology_rationale || "--")}</td>`;
   etbody.appendChild(tr);
 });
 
-/* ── tab switching ── */
+/* -- tab switching -- */
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -780,7 +780,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
   });
 });
 
-/* ── summary ── */
+/* -- summary -- */
 const sumEl = document.getElementById("sum-text");
 if (data.summary && data.summary.trim()) {
   sumEl.textContent = data.summary;
@@ -788,7 +788,7 @@ if (data.summary && data.summary.trim()) {
   sumEl.innerHTML = `<span class="sum-empty">No integrated summary available.</span>`;
 }
 
-/* ── wire controls ── */
+/* -- wire controls -- */
 for (const el of Object.values(controls)) el.addEventListener("change", render);
 for (const el of Object.values(controls)) {
   el.addEventListener("change", renderUnlinked);
@@ -809,7 +809,7 @@ window.addEventListener("load", function(){
 });'
 }
 
-# ── R public function ─────────────────────────────────────────
+# -- R public function -----------------------------------------
 
 #' Generate an interactive hypothesis-level synthesis network HTML
 #'

@@ -4,9 +4,33 @@
 \name{featuremap-package}
 \alias{featuremap}
 \alias{featuremap-package}
-\title{featuremap package}
+\title{Network-Based Functional Module Identification in Metabolomics}
 \description{
-featuremap provides a network-based framework for identifying and interpreting functional metabolic modules from metabolomics data. The package integrates feature-level statistical scoring, prize-collecting Steiner forest (PCSF) network optimization, community detection, permutation-based module significance testing, and optional literature- and large language model (LLM)-assisted functional annotation. It is designed to support reproducible systems-level interpretation of metabolomics studies.
+The featuremap package provides a staged workflow for annotating metabolite
+features, extracting a network-supported subnetwork, identifying functional
+modules, and assigning biological interpretations to those modules.
+}
+\details{
+The main workflow is:
+\itemize{
+\item \code{\link[=annotate_feature]{annotate_feature()}} annotates metabolite features.
+\item \code{\link[=extract_subnetwork]{extract_subnetwork()}} builds a robust metabolic subnetwork.
+\item \code{\link[=identify_module]{identify_module()}} detects and tests functional modules.
+\item \code{\link[=annotate_module]{annotate_module()}} generates module-level interpretations.
+}
+
+Optional literature retrieval and large language model services are used
+only when requested by the annotation workflow.
+}
+\section{Startup message}{
+
+The startup message is shown once per interactive R session. Set
+\code{options(featuremap.quiet = TRUE)} before calling \code{\link[=library]{library()}} to suppress it.
+}
+
+\seealso{
+\code{\link[=annotate_feature]{annotate_feature()}}, \code{\link[=extract_subnetwork]{extract_subnetwork()}}, \code{\link[=identify_module]{identify_module()}},
+\code{\link[=annotate_module]{annotate_module()}}
 }
 \author{
 \strong{Maintainer}: Yuting Wang \email{ytwangzero@outlook.com}

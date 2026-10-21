@@ -7,31 +7,31 @@
 #
 # Takes all accepted hypotheses from annotate_module() output
 # and produces:
-#   1. Thematic clusters  — grouping of hypotheses by shared biology
+#   1. Thematic clusters  \u2014 grouping of hypotheses by shared biology
 #   2. Evidence-backed relationship tables:
 #      - biochemical links are computed deterministically from direct MRN
 #        top-metabolite edges plus metabolic pathway ID overlap
 #      - biology links are inferred by the synthesis LLM from title/summary
 #      - final relation_type is biochemical / biology / both / none
-#   3. Overall summary narrative — dominant themes, cross-module
+#   3. Overall summary narrative \u2014 dominant themes, cross-module
 #      connections, and integrated phenotype interpretation
 #
 # Node unit: individual hypothesis (hypothesis_id within a module).
-#   Fast-mode output  → node_id = module_id
-#   Advanced-mode     → node_id = "module_id::hypothesis_id"
+#   Fast-mode output  \u2192 node_id = module_id
+#   Advanced-mode     \u2192 node_id = "module_id::hypothesis_id"
 #   Same-module hypotheses share module_id; readers can see which
 #   hypothesis is more central in the network.
 #
 # Relationship taxonomy:
-#   biochemical — direct top-metabolite edge in MRN and metabolic pathway ID overlap
-#   biology     — LLM-inferred functional relationship from hypothesis titles/summaries
-#   both        — both evidence sources support the pair
-#   none        — no biochemical or biology link identified
+#   biochemical \u2014 direct top-metabolite edge in MRN and metabolic pathway ID overlap
+#   biology     \u2014 LLM-inferred functional relationship from hypothesis titles/summaries
+#   both        \u2014 both evidence sources support the pair
+#   none        \u2014 no biochemical or biology link identified
 # ============================================================
 
 
 # ============================================================
-# SECTION 1 – Input preparation
+# SECTION 1 \u2013 Input preparation
 # ============================================================
 
 #' Prepare node list from module_function data frame
@@ -48,7 +48,7 @@
 #'   and phenotype literature support fields when available.
 prepare_synthesis_nodes <- function(module_df) {
   if (is.null(module_df) || nrow(module_df) == 0)
-    stop("module_df is empty — run annotate_module(mode = \"advanced\") first.")
+    stop("module_df is empty \u2014 run annotate_module(mode = \"advanced\") first.")
 
   # Require advanced mode output
   if (!"verdict_status" %in% colnames(module_df))
@@ -95,7 +95,7 @@ prepare_synthesis_nodes <- function(module_df) {
 
 
 # ============================================================
-# SECTION 2 – Prompt builders
+# SECTION 2 \u2013 Prompt builders
 # ============================================================
 
 build_synthesis_system_prompt <- function() {
@@ -111,9 +111,9 @@ You will receive:
 
 Your output has three parts:
 
-────────────────────────────────────────
-PART 1 — CLUSTERS
-────────────────────────────────────────
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+PART 1 \u2014 CLUSTERS
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 Group nodes into thematic clusters based on shared or closely related biology.
 A cluster must have at least 2 nodes; singleton nodes belong to their own cluster only
 if they represent a clearly distinct biological theme.
@@ -125,9 +125,9 @@ For each cluster provide:
 - cluster_theme : concise biological theme name (e.g., \"Aromatic amino acid catabolism\")
 - node_ids      : list of node_ids in this cluster
 
-────────────────────────────────────────
-PART 2 — BIOLOGY LINKS (cross-module only, sparse)
-────────────────────────────────────────
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+PART 2 \u2014 BIOLOGY LINKS (cross-module only, sparse)
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 List cross-module node pairs that have a clear functional or biological relationship
 based only on their titles and functional summaries.
 
@@ -137,9 +137,9 @@ For each relationship provide:
 - rationale      : 1-2 sentences explaining the shared functional theme or biological
                    dependency implied by the two titles/summaries.
 
-────────────────────────────────────────
-PART 3 — SUMMARY
-────────────────────────────────────────
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+PART 3 \u2014 SUMMARY
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 Write a 4-7 sentence narrative integrating the findings. Structure it as:
   Sentence 1-2 : Dominant biological themes (reference cluster names)
   Sentence 3-4 : Key cross-module biology links (reference specific node titles)
@@ -205,7 +205,7 @@ build_synthesis_user_prompt <- function(nodes_df, study_context = NULL) {
     ctx_text <- "Study context: not provided."
   }
 
-  # Node blocks — group same-module nodes together.  Biology-link inference
+  # Node blocks \u2014 group same-module nodes together.  Biology-link inference
   # intentionally sees only title/summary-level semantics; deterministic
   # biochemical evidence is computed separately in R.
   nodes_df <- nodes_df[order(nodes_df$module_id, nodes_df$node_id), ]
@@ -246,7 +246,7 @@ Total nodes: {n_nodes} hypothesis/module entries across {n_modules} modules.
 
 
 # ============================================================
-# SECTION 3 – Gemini response schema
+# SECTION 3 \u2013 Gemini response schema
 # ============================================================
 
 synth_gemini_schema <- function() {
@@ -285,7 +285,7 @@ synth_gemini_schema <- function() {
 
 
 # ============================================================
-# SECTION 4a – Deterministic biochemical evidence
+# SECTION 4a \u2013 Deterministic biochemical evidence
 # ============================================================
 
 .syn_split_field <- function(x) {
@@ -415,6 +415,7 @@ synth_gemini_schema <- function() {
 #' A pair has a biochemical link if the two nodes come from different modules
 #' and their top metabolites have a direct MRN edge while their modules also
 #' share at least one metabolic pathway ID in the pathway-coverage evidence.
+#' @noRd
 build_synthesis_biochemical_links <- function(nodes_df,
                                               mrn = NULL,
                                               pathway_coverage = NULL) {
@@ -535,7 +536,7 @@ build_synthesis_biochemical_links <- function(nodes_df,
 
 
 # ============================================================
-# SECTION 4b – Relationship table completion
+# SECTION 4b \u2013 Relationship table completion
 # ============================================================
 
 # After the LLM returns sparse cross-module biology links and R computes
@@ -577,7 +578,7 @@ complete_relationship_table <- function(biology_relationships,
     m2 <- unname(mid_lookup[n2] %||% NA_character_)
 
     if (!is.na(m1) && !is.na(m2) && identical(m1, m2)) {
-      # Same module — hypotheses from the same debate; may be complementary or alternative.
+      # Same module \u2014 hypotheses from the same debate; may be complementary or alternative.
       data.frame(
         node_1         = n1,
         node_2         = n2,
@@ -679,6 +680,7 @@ complete_relationship_table <- function(biology_relationships,
 #'
 #' The synthesis graph remains hypothesis-level, but this table gives one row
 #' per module pair for downstream module-level interpretation.
+#' @noRd
 summarize_module_relationships <- function(relationships) {
   out_empty <- .syn_empty_module_relationships()
   if (is.null(relationships) || !is.data.frame(relationships) ||
@@ -746,7 +748,7 @@ summarize_module_relationships <- function(relationships) {
 
 
 # ============================================================
-# SECTION 4c – Output parsing & assembly
+# SECTION 4c \u2013 Output parsing & assembly
 # ============================================================
 
 #' Parse synthesis LLM output into tidy data frames
@@ -906,7 +908,7 @@ parse_synthesis_output <- function(parsed, nodes_df, biochemical_links = NULL) {
 
 
 # ============================================================
-# SECTION 5 – Main orchestrator
+# SECTION 5 \u2013 Main orchestrator
 # ============================================================
 
 #' Synthesize All Annotated Module Hypotheses
@@ -929,6 +931,8 @@ parse_synthesis_output <- function(parsed, nodes_df, biochemical_links = NULL) {
 #' @param provider       LLM provider: \code{"openai"} or \code{"gemini"}.
 #' @param llm_api_key    API key string.
 #' @param llm_model      Model name (e.g. \code{"gpt-4.1-mini"}).
+#' @param base_url       Character or NULL. Optional API base URL for an
+#'   OpenAI-compatible provider.
 #' @param max_tokens     Max tokens for the LLM response (default 4000).
 #' @param temperature    Sampling temperature (default 0).
 #' @param sleep_sec      Seconds to pause after the API call (default 0).
@@ -993,7 +997,7 @@ synthesize_modules <- function(res,
   nodes_df <- tryCatch(
     prepare_synthesis_nodes(module_function_for_synthesis),
     error = function(e) {
-      cli::cli_abort("synthesize_modules: failed to prepare nodes — {e$message}")
+      cli::cli_abort("synthesize_modules: failed to prepare nodes \u2014 {e$message}")
     }
   )
 
@@ -1078,7 +1082,7 @@ synthesize_modules <- function(res,
         parse_synthesis_output(result$parsed, nodes_df,
                                biochemical_links = biochemical_links),
       error = function(e) {
-        cli::cli_warn("synthesize_modules: output parsing failed — {e$message}")
+        cli::cli_warn("synthesize_modules: output parsing failed \u2014 {e$message}")
         list(nodes = nodes_df, clusters = NULL,
              biology_links = .syn_empty_biology_links()[0, , drop = FALSE],
              biochemical_links = biochemical_links,

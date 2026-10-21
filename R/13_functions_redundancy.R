@@ -79,7 +79,8 @@ calculate_redundancy <-
 #' @details
 #' The function performs the following steps iteratively:
 #' \itemize{
-#'   \item For each compound (`Lab.ID`), if any annotation has a score > 100, annotations with score ≤ 20 are removed.
+#'   \item For each compound (`Lab.ID`), if any annotation has a score above
+#'     100, annotations with a score of 20 or less are removed.
 #'   \item For each peak (`name`), the same rule is applied.
 #'   \item After filtering, scores for each metabolite feature cluster are recalculated using `score_mfc()`.
 #'   \item Redundancy is recalculated using `calculate_redundancy()`. The process repeats until no improvement.

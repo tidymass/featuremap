@@ -15,8 +15,8 @@ parse_synthesis_output(parsed, nodes_df, biochemical_links = NULL)
 }
 \value{
 List with \code{$clusters}, \code{$biology_links},
-\code{$biochemical_links}, \code{$relationships_sparse},
-\code{$relationships}, \code{$summary}, \code{$nodes}.
+\code{$biochemical_links}, \code{$relationships},
+\code{$module_relationships}, \code{$summary}, \code{$nodes}.
 }
 \description{
 Parse synthesis LLM output into tidy data frames

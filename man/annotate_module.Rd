@@ -47,7 +47,8 @@ significance filtering (e.g. \code{"p"} or \code{"fdr"}).}
 with pathway coverage, origin profiling, and directed confidence scoring.
 \code{"advanced"} runs the multi-agent debate pipeline: Proposer generates
 1-3 candidate biochemical hypotheses, Skeptic challenges them (up to 2 rounds), and an
-Arbiter delivers final \code{accepted / rejected} verdicts with confidence scores.}
+Arbiter delivers final \code{accepted / rejected} verdicts with
+confidence scores.}
 
 \item{species}{Character. Species context for LLM confidence scoring.}
 
@@ -95,11 +96,12 @@ Defaults to \code{getwd()}.}
 The input \code{res} object updated with:
 \itemize{
 \item \code{module_function}: data frame with one row per annotated module
-or accepted hypothesis, containing the compact user-facing annotation fields.
-This includes \code{anchor_metabolites}, \code{anchor_metabolite_ids},
-\code{top_metabolites}, and \code{top_metabolite_ids}. Fast mode includes
-\code{annotation_mode = "fast"}. Advanced mode includes \code{verdict_status}
-when available.
+or accepted hypothesis, containing the compact user-facing
+annotation fields, including \code{anchor_metabolites},
+\code{anchor_metabolite_ids}, \code{top_metabolites}, and
+\code{top_metabolite_ids}. Fast mode includes
+\code{annotation_mode = "fast"}. Advanced mode includes
+\code{verdict_status} when available.
 \item \code{module_evidence}: list of computed evidence tables used for
 annotation, with components \code{class_coverage},
 \code{pathway_coverage$hmdb}, \code{pathway_coverage$kegg},
@@ -126,7 +128,7 @@ evidence, and large language model (LLM) functional interpretation.
 \item Annotate significant module metabolites via database lookup.
 \item Compute per-module: Signal_concentration (HHI), pathway coverage
 (KEGG + HMDB), global directionality, and origin profile.
-\item LLM Call 1 — title + functional_summary (no study context).
+\item LLM Call 1 — hypothesis_type + title + functional_summary (no study context).
 \item Optional PubMed search using module title, anchor metabolites,
 phenotype, and PMID deduplication.
 \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
@@ -142,17 +144,17 @@ species, and biospecimen grounds (no phenotype, no PubMed).
 \item P1 Proposer revision: keep / modify / drop each hypothesis.
 \item (Conditional) S2 + P2: second debate round if revisions were made
 or major challenges were kept without revision.
-\item Optional PubMed: per-hypothesis title search + shared metabolite
-search, results held for Arbiter only.
+\item Optional PubMed: deduplicated anchor-metabolite search plus
+per-hypothesis title search, results held for Arbiter only.
 \item Optional PubMed: phenotype relationships are summarized per
 hypothesis before Arbiter.
 \item A0 Arbiter: final accepted / rejected verdicts using
 the surviving hypotheses, debate digest, study context, and
 pre-computed phenotype relationship summaries.
 \item Optional synthesis agent: if \code{synthesize = TRUE}, accepted
-hypotheses across modules are integrated into thematic clusters, a completed
-relationship table, and an overall summary; an interactive synthesis network
-HTML is exported automatically.
+hypotheses across modules are integrated into thematic
+clusters, a completed relationship table, and an overall summary;
+an interactive synthesis network HTML is exported automatically.
 }
 }
 \examples{

@@ -24,7 +24,7 @@ constraint applied uniformly to every metabolite query
 
 \item{NCBI_api_key}{Character string or \code{NULL}. NCBI API key
 shared across all requests. Pass \code{NULL} (default) for anonymous
-access (≤ 3 requests/second).}
+access (no more than 3 requests per second).}
 
 \item{retmax}{Numeric scalar. Maximum number of PubMed hits to retrieve
 per metabolite (default: \code{10}).}
@@ -47,7 +47,7 @@ into a single named list.
 Processing is intentionally sequential (via \code{lapply}) rather than
 parallel to respect NCBI rate limits. If parallel execution is required,
 supply a valid \code{NCBI_api_key} and implement appropriate throttling
-(≤ 10 requests/second per key).
+(no more than 10 requests per second per key).
 }
 \examples{
 \dontrun{

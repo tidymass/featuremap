@@ -24,7 +24,7 @@ The scoring logic is based on heuristic rules:
 user-supplied MS2-backed confirmation
 \item +50 for canonical adducts: \verb{(M+H)+} in positive mode or \verb{(M-H)-} in negative mode
 \item +20 if isotopic peaks are observed for canonical adducts
-\item +20–10 for secondary adducts or isotopic forms
+\item +10 to +20 for secondary adducts or their isotopic forms
 }
 These rules help prioritize well-supported MFCs and can be refined in future implementations.
 }

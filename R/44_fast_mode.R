@@ -3,21 +3,21 @@
 # LLM Prompt Builders  (Fast Mode)
 #
 # Call 1:  build_system_prompt()  +  build_module_prompt()
-#          → {type, title, functional_summary}
+#          \u2192 {type, title, functional_summary}
 #          Inputs: Signal_concentration, top metabolites, class structure,
 #                  pathway coverage (KEGG + HMDB)
 #          No study context; no confidence assessment
 #
 # Call 2:  build_phenotype_confidence_system_prompt()
 #          + build_phenotype_confidence_prompt()
-#          → {phenotype_relationship, confidence_label, rationale}
+#          \u2192 {phenotype_relationship, confidence_label, rationale}
 #          Inputs: module type/title/summary, origin profile, study context,
 #                  PubMed abstracts (optional)
 # ============================================================
 
 
 # ============================================================
-# CALL 1 – system prompt
+# CALL 1 \u2013 system prompt
 # ============================================================
 
 build_system_prompt <- function() {
@@ -39,7 +39,7 @@ Using only the provided information, return four fields:
 
 1) TYPE
    - Choose exactly one:
-     Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome
+     Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host\u2013Microbiome
    - Type is an interpretation scope for the module annotation, not a confidence score.
    - Assign type from the module evidence, especially top-ranked high-priority metabolites;
      use chemical class and KEGG/HMDB pathway evidence as support.
@@ -53,7 +53,7 @@ Using only the provided information, return four fields:
      by host enzymes.
    - Xenobiotic / Exogenous: drugs, pollutants, pesticides, industrial/consumer chemicals,
      heavy metals, or other non-dietary external exposures.
-   - Host–Microbiome: the core theme requires both host and microbial metabolism, e.g. host
+   - Host\u2013Microbiome: the core theme requires both host and microbial metabolism, e.g. host
      conjugation of microbial products or microbial remodeling of host compounds.
    - If multiple labels fit, choose the one that best explains the top anchor metabolites.
    - The type, title, and functional_summary must describe the same central biochemical theme.
@@ -77,7 +77,7 @@ Using only the provided information, return four fields:
 
 3) FUNCTIONAL_SUMMARY
    - Write 4-6 sentences as a factual biochemical annotation of the module.
-   - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions — as if writing an entry in a biochemical database.
+   - Describe what the metabolites do biochemically: enzymatic conversions, pathway steps, metabolite roles, and physiological functions \u2014 as if writing an entry in a biochemical database.
    - Base the explanation mainly on early-ranked high-priority metabolites; use class structure and pathway evidence only to support or qualify.
    - Keep origin/scope interpretation in the type field; in the summary, mention source or host/microbial
      processing only when it is necessary to explain the biochemical mechanism.
@@ -100,7 +100,7 @@ Using only the provided information, return four fields:
 
 Return STRICT JSON only:
 {{
-  \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host–Microbiome\",
+  \"type\": \"Host-Endogenous | Microbiome-Derived | Diet-Derived | Xenobiotic / Exogenous | Host\u2013Microbiome\",
   \"title\": \"...\",
   \"functional_summary\": \"...\",
   \"anchor_top_ids\": [\"T1\", \"T2\"]
@@ -112,7 +112,7 @@ Do not invent metabolites, unsupported pathways, or unsupported mechanisms."
 
 
 # ============================================================
-# CALL 1 – module user prompt
+# CALL 1 \u2013 module user prompt
 # ============================================================
 
 build_module_prompt <- function(module_obj) {
@@ -226,7 +226,7 @@ build_pathway_text <- function(pathway_coverage) {
         paste0(round(as.numeric(r$coverage) * 100, 1), "%")
       } else "NA"
       pname <- trimws(as.character(r$pathway_name %||% "Unknown"))
-      sprintf("  %s — %d of %d module metabolites (coverage: %s)",
+      sprintf("  %s \u2014 %d of %d module metabolites (coverage: %s)",
               pname, n_hit, n_tot, cov_pct)
     })
     paste0(label, ":\n", paste(rows, collapse = "\n"))
@@ -242,7 +242,7 @@ build_pathway_text <- function(pathway_coverage) {
 
 
 # ============================================================
-# CALL 2 – system prompt
+# CALL 2 \u2013 system prompt
 # ============================================================
 
 build_phenotype_confidence_system_prompt <- function() {
@@ -323,7 +323,7 @@ evidence is provided."
 
 
 # ============================================================
-# CALL 2 – module user prompt
+# CALL 2 \u2013 module user prompt
 # ============================================================
 
 build_phenotype_confidence_prompt <- function(module_obj,
@@ -466,6 +466,8 @@ Functional summary: {summary_str}
 #'   \code{"gemini"}).
 #' @param llm_api_key Character. API key for the LLM service.
 #' @param model Character. Model identifier (e.g. \code{"gpt-4.1-mini"}).
+#' @param base_url Character or NULL. Optional API base URL for an
+#'   OpenAI-compatible provider.
 #' @param max_tokens Integer. Maximum response tokens (default: 5000).
 #' @param temperature Numeric. Sampling temperature, 0 for deterministic
 #'   (default: 0).
@@ -501,7 +503,7 @@ annotate_one_module <- function(module_obj,
       "Microbiome-Derived",
       "Diet-Derived",
       "Xenobiotic / Exogenous",
-      "Host–Microbiome"
+      "Host\u2013Microbiome"
     )
     if (is.null(x) || length(x) == 0) return(NA_character_)
     raw <- trimws(as.character(x[1]))
@@ -515,7 +517,7 @@ annotate_one_module <- function(module_obj,
     if (key %in% tolower(allowed)) {
       return(allowed[match(key, tolower(allowed))])
     }
-    if (grepl("host", key) && grepl("microbiome|microbial", key)) return("Host–Microbiome")
+    if (grepl("host", key) && grepl("microbiome|microbial", key)) return("Host\u2013Microbiome")
     if (grepl("microbiome|microbial", key)) return("Microbiome-Derived")
     if (grepl("diet|food|nutr", key)) return("Diet-Derived")
     if (grepl("xenobiotic|exogenous|drug|pharma|environment|exposure", key)) {
@@ -712,7 +714,7 @@ annotate_one_module <- function(module_obj,
         type               = list(
           type = "STRING",
           enum = c("Host-Endogenous", "Microbiome-Derived", "Diet-Derived",
-                   "Xenobiotic / Exogenous", "Host–Microbiome")
+                   "Xenobiotic / Exogenous", "Host\u2013Microbiome")
         ),
         title              = list(type = "STRING"),
         functional_summary = list(type = "STRING"),
@@ -734,7 +736,7 @@ annotate_one_module <- function(module_obj,
   }
   
   # ==================================================================
-  # CALL 1 – Biochemical annotation (type + title + functional_summary)
+  # CALL 1 \u2013 Biochemical annotation (type + title + functional_summary)
   # No study context, no confidence judgment
   # ==================================================================
   sys1  <- build_system_prompt()
@@ -781,7 +783,7 @@ annotate_one_module <- function(module_obj,
   }
   
   # ==================================================================
-  # PUBMED SEARCH (optional) – module title plus anchor metabolites
+  # PUBMED SEARCH (optional) \u2013 module title plus anchor metabolites
   # ==================================================================
   pubmed_context <- NULL
 
@@ -815,7 +817,7 @@ annotate_one_module <- function(module_obj,
   }
   
   # ==================================================================
-  # CALL 2 – Phenotype relationship + confidence + rationale
+  # CALL 2 \u2013 Phenotype relationship + confidence + rationale
   # Uses origin profile, study context, PubMed evidence
   # ==================================================================
   sys2 <- build_phenotype_confidence_system_prompt()
@@ -934,6 +936,8 @@ annotate_one_module <- function(module_obj,
 #' @param provider Character. LLM provider.
 #' @param llm_api_key Character. API key.
 #' @param model Character. Model name.
+#' @param base_url Character or NULL. Optional API base URL for an
+#'   OpenAI-compatible provider.
 #' @param max_tokens Integer. Max response tokens (default: 2000).
 #' @param temperature Numeric. Sampling temperature (default: 0).
 #' @param sleep_sec Numeric. Pause between modules in seconds (default: 0).

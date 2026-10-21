@@ -40,7 +40,7 @@
 #' @param phenotype Character. Phenotype/disease string used in PubMed retrieval
 #'   (when \code{pubmed = TRUE}) and confidence assessment.
 #' @param pubmed Logical. Whether to retrieve PubMed evidence after LLM Call 1.
-#'   When \code{TRUE}, the module title and every top metabolite are searched
+#'   When \code{TRUE}, the module title and each anchor metabolite selected in Call 1 are searched
 #'   separately; up to three papers are retained per query and deduplicated by
 #'   PMID before LLM Call 2.
 #' @param years Integer. PubMed look-back years when \code{pubmed = TRUE}.
@@ -82,7 +82,7 @@
 #'   \item Compute per-module: Signal_concentration (HHI), pathway coverage
 #'         (KEGG + HMDB), global directionality, and origin profile.
 #'   \item LLM Call 1 — hypothesis_type + title + functional_summary (no study context).
-#'   \item Optional PubMed search using module title, all top metabolites,
+#'   \item Optional PubMed search using module title, anchor metabolites,
 #'         phenotype, and PMID deduplication.
 #'   \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
 #' }
@@ -699,7 +699,8 @@ annotate_module <- function(res                  = NULL,
       )
     } else {
       list(direction_label = NA_character_,
-           weighted_mean_condition = NA_real_, n_features = 0L)
+           weighted_mean_condition = NA_real_, up_fraction = NA_real_,
+           n_features = 0L)
     }
 
     origin_profile_list[[mod_name]] <- compute_origin_profile(

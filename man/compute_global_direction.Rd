@@ -4,7 +4,12 @@
 \alias{compute_global_direction}
 \title{Compute Global Directionality for a Metabolic Module}
 \usage{
-compute_global_direction(module_df, feature_table, anno_feature_table2)
+compute_global_direction(
+  module_df,
+  feature_table,
+  anno_feature_table2,
+  consistency = 2/3
+)
 }
 \arguments{
 \item{module_df}{Data frame of module metabolites. Must contain HMDB_ID and
@@ -16,16 +21,25 @@ condition (numeric: log2FC or correlation/regression coefficient).}
 \item{anno_feature_table2}{Data frame linking features to compounds. Must
 contain variable_id, and at least one of HMDB.ID / HMDB_ID, KEGG.ID /
 KEGG_ID, plus \code{weighted_anno_score}.}
+
+\item{consistency}{Numeric in (0.5, 1]. Minimum weighted fraction of
+features sharing the sign of the weighted mean for a module to be
+labelled "up" or "down". Default 2/3.}
 }
 \value{
 A named list:
 \item{direction_label}{Character: "up", "down", or "mixed". NA if input
 is unavailable.}
 \item{weighted_mean_condition}{Numeric weighted mean of condition, or NA.}
+\item{up_fraction}{Numeric. Weighted fraction of features with condition > 0.}
 \item{n_features}{Integer. Number of matched features used.}
 }
 \description{
 Matches module metabolites to features via anno_feature_table2 and computes
-a weighted mean of condition values (log2FC or correlation coefficients).
+a weighted mean of condition values (log2FC or correlation coefficients),
+using weighted_anno_score as weights. A module is labelled "up" ("down")
+only when the weighted mean is positive (negative) AND at least
+\code{consistency} of the total weight comes from features changing in that
+direction; otherwise it is labelled "mixed".
 The result is stored as an output label only — it does NOT enter LLM prompts.
 }

@@ -57,7 +57,7 @@ Arbiter delivers final \code{accepted / rejected} verdicts with confidence score
 (when \code{pubmed = TRUE}) and confidence assessment.}
 
 \item{pubmed}{Logical. Whether to retrieve PubMed evidence after LLM Call 1.
-When \code{TRUE}, the module title and every top metabolite are searched
+When \code{TRUE}, the module title and each anchor metabolite selected in Call 1 are searched
 separately; up to three papers are retained per query and deduplicated by
 PMID before LLM Call 2.}
 
@@ -127,7 +127,7 @@ evidence, and large language model (LLM) functional interpretation.
 \item Compute per-module: Signal_concentration (HHI), pathway coverage
 (KEGG + HMDB), global directionality, and origin profile.
 \item LLM Call 1 — title + functional_summary (no study context).
-\item Optional PubMed search using module title, all top metabolites,
+\item Optional PubMed search using module title, anchor metabolites,
 phenotype, and PMID deduplication.
 \item LLM Call 2 — phenotype_relationship + confidence_label + rationale.
 }

@@ -171,7 +171,11 @@ resolve_top_metabolite_refs <- function(top_ids = NULL,
 #' Compute Global Directionality for a Metabolic Module
 #'
 #' Matches module metabolites to features via anno_feature_table2 and computes
-#' a weighted mean of condition values (log2FC or correlation coefficients).
+#' a weighted mean of condition values (log2FC or correlation coefficients),
+#' using weighted_anno_score as weights. A module is labelled "up" ("down")
+#' only when the weighted mean is positive (negative) AND at least
+#' \code{consistency} of the total weight comes from features changing in that
+#' direction; otherwise it is labelled "mixed".
 #' The result is stored as an output label only — it does NOT enter LLM prompts.
 #'
 #' @param module_df Data frame of module metabolites. Must contain HMDB_ID and
@@ -181,16 +185,22 @@ resolve_top_metabolite_refs <- function(top_ids = NULL,
 #' @param anno_feature_table2 Data frame linking features to compounds. Must
 #'   contain variable_id, and at least one of HMDB.ID / HMDB_ID, KEGG.ID /
 #'   KEGG_ID, plus \code{weighted_anno_score}.
+#' @param consistency Numeric in (0.5, 1]. Minimum weighted fraction of
+#'   features sharing the sign of the weighted mean for a module to be
+#'   labelled "up" or "down". Default 2/3.
 #'
 #' @return A named list:
 #'   \item{direction_label}{Character: "up", "down", or "mixed". NA if input
 #'     is unavailable.}
 #'   \item{weighted_mean_condition}{Numeric weighted mean of condition, or NA.}
+#'   \item{up_fraction}{Numeric. Weighted fraction of features with condition > 0.}
 #'   \item{n_features}{Integer. Number of matched features used.}
-compute_global_direction <- function(module_df, feature_table, anno_feature_table2) {
+compute_global_direction <- function(module_df, feature_table, anno_feature_table2,
+                                     consistency = 2 / 3) {
 
   na_result <- list(direction_label = NA_character_,
                     weighted_mean_condition = NA_real_,
+                    up_fraction = NA_real_,
                     n_features = 0L)
 
   if (is.null(feature_table) || !is.data.frame(feature_table) ||
@@ -252,11 +262,22 @@ compute_global_direction <- function(module_df, feature_table, anno_feature_tabl
 
   wmean <- sum(combined$condition * combined$score) / sum(combined$score)
 
-  direction_label <- if (wmean > 0) "up" else if (wmean < 0) "down" else "mixed"
+  w_total   <- sum(combined$score)
+  frac_up   <- sum(combined$score[combined$condition > 0]) / w_total
+  frac_down <- sum(combined$score[combined$condition < 0]) / w_total
+
+  direction_label <- if (wmean > 0 && frac_up >= consistency) {
+    "up"
+  } else if (wmean < 0 && frac_down >= consistency) {
+    "down"
+  } else {
+    "mixed"
+  }
 
   list(
     direction_label         = direction_label,
     weighted_mean_condition = round(wmean, 4),
+    up_fraction             = round(frac_up, 3),
     n_features              = nrow(combined)
   )
 }
@@ -706,7 +727,7 @@ compute_isolated_outliers <- function(
   }
 
   # ---- Classify each topN metabolite ----
-  in_hmdb_top  <- top_ids %in% top_hmdb_members
+  in_hmdb_top  <- nzchar(top_hmdb_ids) & (top_hmdb_ids %in% top_hmdb_members)
   in_kegg_top  <- nzchar(top_kegg_for_top) & (top_kegg_for_top %in% top_kegg_members)
 
   in_dom_class <- rep(FALSE, n_top)

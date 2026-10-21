@@ -51,6 +51,8 @@ Imports:
     tidyr,
     tidygraph,
     xml2
+Suggests:
+    digest
 Remotes:
     tidymass/massdataset,
     tidymass/metid,

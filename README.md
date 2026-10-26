@@ -64,7 +64,7 @@ keys are not required for the first three functions.
 ## Tutorial
 
 For input formats, complete examples, output interpretation, and the Shiny
-workflow, see the [FeatureMAP tutorial](https://tidymass.github.io/featuremap_tutorial/).
+workflow, see the [FeatureMAP tutorial](https://www.tidymass.org/featuremap_tutorial).
 
 ## Getting help
 

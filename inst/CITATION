@@ -3,18 +3,18 @@ citHeader("To cite featuremap in publications, please use:")
 bibentry(
   bibtype = "Unpublished",
   title = paste(
-    "FeatureMAP enables network-guided discovery and interpretation of",
-    "dysregulated metabolic modules from untargeted metabolomics"
+    "FeatureMAP enables network-guided interpretation of",
+    "untargeted metabolomics"
   ),
   author = c(
     person("Yuting", "Wang", comment = "+"),
     person("Feifan", "Zhang", comment = "+"),
     person("Guoping", "Peng"),
-    person("Zeng", "Li"),
+    person("Lifeng", "Qiu"),
+    person("Li", "Zeng"),
     person("Yijiang", "Liu"),
     person("Jiramet", "Kinchagawat"),
     person("Xicheng", "Yang"),
-    person("Tao", "Huan"),
     person("Chang", "Liu"),
     person("Caroline", "Johnson"),
     person("Qi", "Su"),

@@ -471,20 +471,23 @@ extract_subnetwork = function(res = NULL,
       ) %>%
       dplyr::arrange(variable_id, dplyr::desc(score_norm))
 
-    from_is_inchi <- all(grepl("^InChI", edge_frequency$from))
-    to_is_inchi   <- all(grepl("^InChI", edge_frequency$to))
+    # Feature-metabolite edge frequencies, resolved per edge: edge endpoints are
+    # stored in string order, so the metabolite (InChI) may sit in either column
+    # depending on the feature ID format.
+    fm_edge_frequency <- edge_frequency %>%
+      dplyr::mutate(
+        from_is_inchi = grepl("^InChI", from),
+        to_is_inchi   = grepl("^InChI", to)
+      ) %>%
+      dplyr::filter(xor(from_is_inchi, to_is_inchi)) %>%
+      dplyr::transmute(
+        variable_id = dplyr::if_else(from_is_inchi, to, from),
+        INCHI_ID    = dplyr::if_else(from_is_inchi, from, to),
+        freq        = freq
+      )
 
-    if(from_is_inchi){
-      anno_feature_table2_extra <- anno_feature_table2_extra %>%
-        dplyr::left_join(edge_frequency %>%
-                           dplyr::filter(to %in% anno_feature_table2_extra$variable_id),
-                         by = c("variable_id" = "to", "INCHI_ID" = "from"))
-    }else if(to_is_inchi){
-      anno_feature_table2_extra <- anno_feature_table2_extra %>%
-        dplyr::left_join(edge_frequency %>%
-                           dplyr::filter(from %in% anno_feature_table2_extra$variable_id),
-                         by = c("variable_id" = "from", "INCHI_ID" = "to"))
-    }
+    anno_feature_table2_extra <- anno_feature_table2_extra %>%
+      dplyr::left_join(fm_edge_frequency, by = c("variable_id", "INCHI_ID"))
 
     anno_feature_table2_extra <- anno_feature_table2_extra %>%
       dplyr::select(

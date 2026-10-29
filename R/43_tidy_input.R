@@ -466,7 +466,7 @@ compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
   "HMDB0001341",  # ADP
   "HMDB0000045",  # AMP
   "HMDB0001273",  # GTP
-  "HMDB0000244",  # GDP
+  "HMDB0001201",  # GDP
   "HMDB0001429",  # Inorganic phosphate (Pi)
   "HMDB0000250",  # Pyrophosphate (PPi)
   "HMDB0000902",  # NAD+
@@ -475,8 +475,8 @@ compute_origin_profile <- function(module_df, hmdb_function_ref = NULL) {
   "HMDB0000221",  # NADPH
   "HMDB0001248",  # FAD
   "HMDB0001197",  # FADH2
-  "HMDB0001301",  # Coenzyme A (CoA)
-  "HMDB0001353",  # CO2
+  "HMDB0001423",  # Coenzyme A (CoA)
+  "HMDB0001967",  # CO2
   "HMDB0002111"   # H2O
 )
 
